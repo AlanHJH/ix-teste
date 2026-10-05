@@ -1,0 +1,19 @@
+{
+  "name": "ondaluz-ops",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "build": "npm run build -w @ondaluz/api && npm run build -w @ondaluz/web",
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm run start:dev -w @ondaluz/api\" \"npm run dev -w @ondaluz/web\"",
+    "test": "npm run test -w @ondaluz/api && npm run test -w @ondaluz/web",
+    "lint": "npm run lint -w @ondaluz/api && npm run lint -w @ondaluz/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
+

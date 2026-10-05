@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.DS_Store
+coverage/
+tmp/
+*.tsbuildinfo
+
+# O pacote do desafio deve ser fornecido separadamente.
+ondaluz-pack/
+teste-tecnico DEV-sr.zip
+enunciado.pdf
