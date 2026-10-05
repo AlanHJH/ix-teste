@@ -10,10 +10,12 @@
     "build": "npm run build -w @ondaluz/api && npm run build -w @ondaluz/web",
     "dev": "concurrently -n api,web -c cyan,magenta \"npm run start:dev -w @ondaluz/api\" \"npm run dev -w @ondaluz/web\"",
     "test": "npm run test -w @ondaluz/api && npm run test -w @ondaluz/web",
-    "lint": "npm run lint -w @ondaluz/api && npm run lint -w @ondaluz/web"
+    "lint": "npm run lint -w @ondaluz/api && npm run lint -w @ondaluz/web",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,css,json}\" \"*.{json,md}\" \"docs/*.md\"",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,css,json}\" \"*.{json,md}\" \"docs/*.md\""
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "prettier": "^3.9.9"
   }
 }
-

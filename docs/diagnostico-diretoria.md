@@ -39,12 +39,12 @@ O teste TR-143 pode retornar velocidade adequada no caminho entre a CPE e o serv
 
 ## O que fazer com as propostas existentes
 
-| Proposta | Decisão | Motivo |
-|---|---|---|
-| Trocar todos os Tuim por R$ 1,2 milhão | **Não aprovar** | As taxas de chamados por mil clientes são praticamente iguais: Tuim 470, Kestrel 475 e Norvik 478 no recorte de clientes ativos. O aparente problema Tuim é parcialmente geográfico: muitos estão no Jardim Aurora. |
-| Reiniciar todo o parque às 4h | **Não executar** | Reinícios diários criam indisponibilidade, escondem a regressão de firmware e não corrigem fibra nem limitação de porta. Usar reboot apenas como mitigação registrada em caso específico. |
-| Considerar todo teste de velocidade aprovado como Wi-Fi | **Revisar** | O teste é útil para separar falha WAN, mas não prova a entrega ponta a ponta nem detecta porta LAN a 100 Mbps. |
-| Enviar técnico para todo caso persistente | **Priorizar por evidência** | Visita residencial não corrige incidente compartilhado nem firmware. Reservar campo para Rx fora de faixa, drop/conector e troca incompatível. |
+| Proposta                                                | Decisão                     | Motivo                                                                                                                                                                                                              |
+| ------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Trocar todos os Tuim por R$ 1,2 milhão                  | **Não aprovar**             | As taxas de chamados por mil clientes são praticamente iguais: Tuim 470, Kestrel 475 e Norvik 478 no recorte de clientes ativos. O aparente problema Tuim é parcialmente geográfico: muitos estão no Jardim Aurora. |
+| Reiniciar todo o parque às 4h                           | **Não executar**            | Reinícios diários criam indisponibilidade, escondem a regressão de firmware e não corrigem fibra nem limitação de porta. Usar reboot apenas como mitigação registrada em caso específico.                           |
+| Considerar todo teste de velocidade aprovado como Wi-Fi | **Revisar**                 | O teste é útil para separar falha WAN, mas não prova a entrega ponta a ponta nem detecta porta LAN a 100 Mbps.                                                                                                      |
+| Enviar técnico para todo caso persistente               | **Priorizar por evidência** | Visita residencial não corrige incidente compartilhado nem firmware. Reservar campo para Rx fora de faixa, drop/conector e troca incompatível.                                                                      |
 
 ## Ordem proposta para as próximas 72 horas
 

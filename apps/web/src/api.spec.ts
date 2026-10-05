@@ -1,10 +1,15 @@
-import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
-import { api } from './api';
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { api } from "./api";
 
-describe('api client', () => {
-  it('consulta o endpoint consolidado do NOC', async () => {
-    const payload = { asOf: '2026-08-30', kpis: {}, incidents: [], weeklyTickets: [] };
+describe("api client", () => {
+  it("consulta o endpoint consolidado do NOC", async () => {
+    const payload = {
+      asOf: "2026-08-30",
+      kpis: {},
+      incidents: [],
+      weeklyTickets: [],
+    };
     const calls: string[] = [];
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (path: string | URL | Request) => {
@@ -13,7 +18,7 @@ describe('api client', () => {
     }) as typeof fetch;
     try {
       assert.deepEqual(await api.overview(), payload);
-      assert.deepEqual(calls, ['/api/network/overview']);
+      assert.deepEqual(calls, ["/api/network/overview"]);
     } finally {
       globalThis.fetch = originalFetch;
     }

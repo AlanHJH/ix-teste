@@ -2,15 +2,15 @@
 
 ## Hipóteses testadas
 
-| Hipótese | Resultado | Evidência/decisão |
-|---|---|---|
-| “Tuim é equipamento ruim e explica o aumento” | **Descartada como causa geral** | Chamados por mil clientes ativos ficaram próximos entre fabricantes. A concentração visível de Tuim no Jardim Aurora confundia fabricante com geografia. |
-| O crescimento da campanha Turbo 500 não tem relação técnica | **Parcialmente refutada** | A campanha em si não degrada a rede, mas expôs 377 Norvik revisão A com porta a 100 Mbps a um plano de 500 Mbps. |
+| Hipótese                                                    | Resultado                       | Evidência/decisão                                                                                                                                             |
+| ----------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| “Tuim é equipamento ruim e explica o aumento”               | **Descartada como causa geral** | Chamados por mil clientes ativos ficaram próximos entre fabricantes. A concentração visível de Tuim no Jardim Aurora confundia fabricante com geografia.      |
+| O crescimento da campanha Turbo 500 não tem relação técnica | **Parcialmente refutada**       | A campanha em si não degrada a rede, mas expôs 377 Norvik revisão A com porta a 100 Mbps a um plano de 500 Mbps.                                              |
 | Kestrel 2.4.1 melhorou memória, como dizem as release notes | **Refutada nos dados de campo** | Após o rollout surgem memória livre abaixo de 10% e muitos boots, ausentes em 2.3.8. Release note e homologação de 48h não substituem telemetria de produção. |
-| OLTs “verdes” descartam falha de rede | **Refutada** | Ping de OLT não observa degradação óptica/FEC em PONs específicas. OLT-2 permaneceu acessível enquanto 1/7 e 1/8 pioraram. |
-| Speed test aprovado prova que é Wi-Fi | **Descartada** | TR-143 mede a CPE contra o servidor; não cobre necessariamente a porta/cabo/dispositivo do cliente e mascara o Norvik A a 100 Mbps. |
-| Reinício resolve a causa | **Descartada** | No firmware, reinício alivia memória temporariamente; não corrige regressão. Também não corrige FEC compartilhado ou limite físico da LAN. |
-| Todo Rx ruim deve virar visita individual | **Refinada** | Rx persistente abaixo de -27 dBm fora de cluster indica visita; dentro de uma PON degradada deve ser agregado e tratado na rede. |
+| OLTs “verdes” descartam falha de rede                       | **Refutada**                    | Ping de OLT não observa degradação óptica/FEC em PONs específicas. OLT-2 permaneceu acessível enquanto 1/7 e 1/8 pioraram.                                    |
+| Speed test aprovado prova que é Wi-Fi                       | **Descartada**                  | TR-143 mede a CPE contra o servidor; não cobre necessariamente a porta/cabo/dispositivo do cliente e mascara o Norvik A a 100 Mbps.                           |
+| Reinício resolve a causa                                    | **Descartada**                  | No firmware, reinício alivia memória temporariamente; não corrige regressão. Também não corrige FEC compartilhado ou limite físico da LAN.                    |
+| Todo Rx ruim deve virar visita individual                   | **Refinada**                    | Rx persistente abaixo de -27 dBm fora de cluster indica visita; dentro de uma PON degradada deve ser agregado e tratado na rede.                              |
 
 ## Ambiguidades e decisões tomadas
 

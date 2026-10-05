@@ -72,14 +72,14 @@ As regras e seus limites são versionados. Cada incidente conserva a versão da 
 
 ## Decisões e alternativas descartadas
 
-| Decisão | Alternativa | Motivo para não usar agora |
-|---|---|---|
-| Agregado diário no protótipo | Consultar 5,5 milhões de linhas em toda tela | Latência e custo desnecessários para sinais que evoluem em horas/dias. |
-| Regras explicáveis | Modelo ML supervisionado | Não há rótulo confiável de causa; categoria e resolução dos chamados têm ruído. ML agora produziria precisão aparente e pouca auditabilidade. |
-| PostgreSQL local | MongoDB | As consultas são relacionais e multidimensionais; documentos duplicariam inventário/topologia. |
-| Barramento em produção | Gravar o Inform direto no banco | Acopla o ACS ao storage e não absorve tempestades de reconexão. |
-| Store analítico separado em produção | Escalar apenas PostgreSQL transacional | 3,6 milhões de eventos/dia e agregações por muitas dimensões favorecem armazenamento colunar/temporal. |
-| Alertar incidentes agregados | Alertar por CPE | Evita fadiga do único operador por turno e aponta onde agir. |
+| Decisão                              | Alternativa                                  | Motivo para não usar agora                                                                                                                    |
+| ------------------------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agregado diário no protótipo         | Consultar 5,5 milhões de linhas em toda tela | Latência e custo desnecessários para sinais que evoluem em horas/dias.                                                                        |
+| Regras explicáveis                   | Modelo ML supervisionado                     | Não há rótulo confiável de causa; categoria e resolução dos chamados têm ruído. ML agora produziria precisão aparente e pouca auditabilidade. |
+| PostgreSQL local                     | MongoDB                                      | As consultas são relacionais e multidimensionais; documentos duplicariam inventário/topologia.                                                |
+| Barramento em produção               | Gravar o Inform direto no banco              | Acopla o ACS ao storage e não absorve tempestades de reconexão.                                                                               |
+| Store analítico separado em produção | Escalar apenas PostgreSQL transacional       | 3,6 milhões de eventos/dia e agregações por muitas dimensões favorecem armazenamento colunar/temporal.                                        |
+| Alertar incidentes agregados         | Alertar por CPE                              | Evita fadiga do único operador por turno e aponta onde agir.                                                                                  |
 
 ## Confiabilidade, segurança e operação
 
@@ -102,4 +102,3 @@ As regras e seus limites são versionados. Cada incidente conserva a versão da 
 - alta disponibilidade, backup e disaster recovery locais.
 
 Esses itens são importantes para produção, mas não aumentariam a qualidade da decisão demonstrada no recorte atual. A primeira evolução seria transformar as consultas em detecção incremental e manter o mesmo contrato de incidente consumido pelas telas.
-

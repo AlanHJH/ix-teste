@@ -40,10 +40,10 @@ O retorno deve conter `"status":"ok"`. Em uma máquina comum, a primeira carga p
 
 Casos úteis para demonstração:
 
-| Cliente | Caso esperado |
-|---|---|
+| Cliente   | Caso esperado                                |
+| --------- | -------------------------------------------- |
 | `C545968` | incidente coletivo de fibra no Jardim Aurora |
-| `C373254` | instabilidade do firmware Kestrel 2.4.1 |
+| `C373254` | instabilidade do firmware Kestrel 2.4.1      |
 | `C171248` | Turbo 500 incompatível com porta de 100 Mbps |
 
 Para refazer a carga do zero:
@@ -81,6 +81,8 @@ Com Node.js 20+:
 npm install
 npm run build
 npm test
+npm run lint
+npm run format:check
 npm run dev
 ```
 
