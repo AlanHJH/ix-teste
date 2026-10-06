@@ -18,6 +18,7 @@ import type {
   DashboardBinding,
   DashboardRuntimeData,
   DashboardWidget,
+  InventoryFilter,
 } from "./types";
 import type { DashboardDrilldown } from "./DashboardDetailModal";
 
@@ -356,21 +357,37 @@ function tableValue(value: unknown) {
 export function TableWidget({
   widget,
   data,
-  search,
+  filters,
   onDrilldown,
 }: {
   widget: DashboardWidget;
   data: DashboardRuntimeData;
-  search: string;
+  filters: InventoryFilter[];
   onDrilldown: Drilldown;
 }) {
   const keys = columns(widget);
-  const normalized = search.trim().toLocaleLowerCase("pt-BR");
+  const filterKeys: Record<InventoryFilter["kind"], string> = {
+    customer: "customer_id",
+    serial: "serial",
+    vendor: "vendor",
+    model: "model",
+    firmware: "software_version",
+    plan: "plan_mbps",
+    olt: "olt",
+    cto: "cto",
+    city: "city",
+    neighborhood: "neighborhood",
+  };
   const rows = tableSource(widget, data)
-    .filter(
-      (row) =>
-        !normalized ||
-        JSON.stringify(row).toLocaleLowerCase("pt-BR").includes(normalized),
+    .filter((row) =>
+      filters.every(
+        (filter) =>
+          String(
+            (row as unknown as Record<string, unknown>)[
+              filterKeys[filter.kind]
+            ] ?? "",
+          ) === filter.value,
+      ),
     )
     .slice(0, widget.config?.limit ?? 5) as Array<Record<string, unknown>>;
   return (

@@ -112,6 +112,14 @@ export class McpGatewayService implements OnModuleDestroy {
           network.closeDetectedGrouping(id, "resolved"),
         customerSupport: (customerId) =>
           customers.getSupportProfile(customerId),
+        customerFilterOptions: (input) =>
+          customers.filterOptions(
+            input.query,
+            input.status,
+            input.page,
+            input.pageSize,
+            input.sort,
+          ),
         n1Chat: (input) =>
           n1Advisor.chat(input.customerId, input.message, input.history),
         nocQueue: (input) =>
@@ -157,6 +165,9 @@ export class McpGatewayService implements OnModuleDestroy {
             input.note,
           ),
         composeDashboard: (input) => dashboard.compose(input),
+        dashboardPreference: (userId) => dashboard.getPreference(userId),
+        saveDashboardPreference: (userId, composition) =>
+          dashboard.savePreference(userId, composition),
       },
     );
   }

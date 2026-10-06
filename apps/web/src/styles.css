@@ -194,7 +194,8 @@ textarea {
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.76);
 }
-.ai-dashboard-filters label {
+.ai-dashboard-filters label,
+.ai-dashboard-filter-group {
   display: grid;
   gap: 4px;
   color: #6c8186;
@@ -202,7 +203,7 @@ textarea {
   font-weight: 800;
   text-transform: uppercase;
 }
-.ai-dashboard-filters label:last-child {
+.ai-dashboard-filter-group {
   width: min(340px, 100%);
 }
 .ai-dashboard-filters select,
@@ -900,7 +901,7 @@ textarea {
     align-items: stretch;
     flex-direction: column;
   }
-  .ai-dashboard-filters label:last-child {
+  .ai-dashboard-filter-group {
     width: 100%;
   }
   .ai-topology-flow {
@@ -4233,6 +4234,12 @@ h3 {
   margin-top: 8px;
   padding: 6px 9px;
 }
+.inventory-filter-select {
+  position: relative;
+  width: 100%;
+  text-align: left;
+  text-transform: none;
+}
 .inventory-filter-input-row {
   display: flex;
   align-items: center;
@@ -4261,6 +4268,34 @@ h3 {
 }
 .inventory-filter-combobox input {
   flex: 1 1 240px;
+}
+.inventory-filter-select.compact .inventory-filter-input-row {
+  min-height: 34px;
+  gap: 6px;
+  padding: 3px 5px 3px 9px;
+  border-radius: 9px;
+}
+.ai-dashboard-filters .inventory-filter-select.compact input {
+  min-width: 90px;
+  min-height: 24px;
+  flex-basis: 120px;
+  padding: 2px 3px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+}
+.inventory-filter-select.compact .inventory-filter-chip {
+  padding: 3px 4px 3px 7px;
+  font-size: 9px;
+}
+.inventory-filter-select.compact .inventory-filter-chip > button {
+  width: 16px;
+  height: 16px;
+}
+.inventory-filter-select.compact .inventory-filter-clear {
+  padding: 5px 7px;
+  font-size: 9px;
 }
 .inventory-filter-chip {
   display: inline-flex;

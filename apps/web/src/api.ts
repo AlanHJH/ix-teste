@@ -75,15 +75,17 @@ export const api = {
       ...(targetWidgetId ? { targetWidgetId } : {}),
     }),
   overview: () => request<Overview>("/api/network/overview"),
-  dashboardInventory: (query = "") => {
+  dashboardInventory: (filters: InventoryFilter[] = []) => {
     const params = new URLSearchParams({
-      q: query,
       status: "active",
       page: "1",
-      pageSize: "15",
+      pageSize: "100",
       sort: "customer_id_asc",
     });
-    return request<InventoryPage>(`/api/inventory?${params}`);
+    filters.forEach((filter) =>
+      params.append("filter", `${filter.kind}:${filter.value}`),
+    );
+    return request<InventoryPage>(`/api/customers?${params}`);
   },
   dashboardTelemetry: (fromDay = "") => {
     const params = new URLSearchParams({

@@ -14,6 +14,26 @@ export class OpenApiCatalogService {
     this.document = document;
   }
 
+  restOperations() {
+    if (!this.document) return [];
+    const methods = new Set(["get", "post", "put", "patch", "delete"]);
+    return Object.entries(this.document.paths).flatMap(([path, pathItem]) =>
+      Object.entries(pathItem)
+        .filter(([method]) => methods.has(method))
+        .map(([method, operationValue]) => {
+          const operation = operationValue as CatalogOperation;
+          return {
+            method: method.toUpperCase(),
+            path,
+            operationId: operation.operationId,
+            summary: operation.summary,
+            readOnly: operation["x-read-only"] === true,
+            dashboardResource: operation["x-dashboard-resource"] === true,
+          };
+        }),
+    );
+  }
+
   dashboardResources() {
     if (!this.document) return [];
     return Object.entries(this.document.paths).flatMap(([path, pathItem]) =>

@@ -56,6 +56,19 @@ function catalogService() {
 }
 
 describe("catálogo OpenAPI do dashboard", () => {
+  it("deriva o catálogo REST do mesmo documento gerado pelos controllers", () => {
+    const operations = catalogService().restOperations();
+    assert.equal(operations.length, 3);
+    assert.deepEqual(
+      operations.map(({ method, path }) => `${method} ${path}`),
+      [
+        "GET /api/inventory",
+        "PATCH /api/investigations/{investigationId}/review",
+        "POST /api/tickets",
+      ],
+    );
+  });
+
   it("expõe apenas recursos marcados para descoberta", () => {
     const catalog = catalogService().dashboardResources();
     assert.equal(catalog.length, 1);

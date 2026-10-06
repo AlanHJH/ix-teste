@@ -2,10 +2,13 @@ import { Controller, Get } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { MCP_ENDPOINTS } from "./mcp/catalog";
 import { ApiRead } from "./openapi";
+import { OpenApiCatalogService } from "./openapi-catalog.service";
 
 @ApiTags("Sistema")
 @Controller()
 export class CatalogController {
+  constructor(private readonly openApiCatalog: OpenApiCatalogService) {}
+
   @ApiRead({
     summary: "Obter catálogo das interfaces REST e MCP",
     description:
@@ -19,39 +22,14 @@ export class CatalogController {
   })
   @Get()
   catalog() {
+    const operations = this.openApiCatalog.restOperations();
     return {
       name: "Ondaluz API",
       rest: {
         basePath: "/api",
-        endpoints: [
-          "/api/network/overview",
-          "/api/dashboard/compose",
-          "/api/network/incidents",
-          "/api/network/topology/devices",
-          "/api/customers",
-          "/api/customers/search",
-          "/api/customers/:customerId",
-          "/api/customers/:customerId/support",
-          "/api/tickets",
-          "/api/tickets/:ticketId",
-          "/api/tickets/noc-queue",
-          "/api/incidents",
-          "/api/incidents/options",
-          "/api/diagnostics",
-          "/api/inventory",
-          "/api/inventory/:serial",
-          "/api/inventory/topology",
-          "/api/telemetry/informs",
-          "/api/telemetry/daily-metrics",
-          "/api/operations/dataset-loads",
-          "/api/operations/grouping-candidates",
-          "/api/operations/active-groupings",
-          "/api/investigations",
-          "/api/investigations/config",
-          "/api/investigations/trigger/metrics",
-          "/api/investigations/:investigationId/retry",
-          "/api/investigations/:investigationId/review",
-        ],
+        operationCount: operations.length,
+        endpoints: [...new Set(operations.map(({ path }) => path))],
+        operations,
       },
       documentation: {
         swagger: "/api/docs",

@@ -46,6 +46,13 @@ export type ApplicationApi = {
   detectedGrouping(id: string): Promise<unknown>;
   closeDetectedGrouping(id: string): Promise<unknown>;
   customerSupport(customerId: string): Promise<unknown>;
+  customerFilterOptions(input: {
+    query: string;
+    status: "active" | "removed" | "all";
+    page: number;
+    pageSize: number;
+    sort: string;
+  }): Promise<unknown>;
   n1Chat(input: {
     customerId: string;
     message: string;
@@ -98,6 +105,11 @@ export type ApplicationApi = {
     note: string;
   }): Promise<unknown>;
   composeDashboard(input: Record<string, unknown>): Promise<unknown>;
+  dashboardPreference(userId: string): Promise<unknown>;
+  saveDashboardPreference(
+    userId: string,
+    composition: unknown,
+  ): Promise<unknown>;
 };
 
 export function createApplicationServer(api: ApplicationApi): McpServer {
@@ -120,6 +132,7 @@ export function createApplicationServer(api: ApplicationApi): McpServer {
       "network_list_detected_groupings",
       "network_get_detected_grouping",
       "customers_get_support",
+      "customers_list_filter_options",
       "customers_n1_chat",
       "tickets_list_noc_queue",
       "tickets_create",
@@ -134,6 +147,8 @@ export function createApplicationServer(api: ApplicationApi): McpServer {
       "investigations_trigger",
       "investigations_retry",
       "investigations_review",
+      "dashboard_get_preference",
+      "dashboard_save_preference",
     ],
   );
 
@@ -284,6 +299,20 @@ export function createApplicationServer(api: ApplicationApi): McpServer {
       annotations: readOnlyAnnotations,
     },
     async ({ customerId }) => mcpJson(await api.customerSupport(customerId)),
+  );
+  server.registerTool(
+    "customers_list_filter_options",
+    {
+      description:
+        "Lista opções paginadas para os filtros facetados de cliente, CPE, fabricante, modelo, firmware, plano e topologia.",
+      inputSchema: z.object({
+        query: z.string().max(80).default(""),
+        status: z.enum(["active", "removed", "all"]).default("active"),
+        ...pageInput,
+      }),
+      annotations: readOnlyAnnotations,
+    },
+    async (input) => mcpJson(await api.customerFilterOptions(input)),
   );
   server.registerTool(
     "customers_n1_chat",
@@ -490,6 +519,32 @@ export function createApplicationServer(api: ApplicationApi): McpServer {
       annotations: writeAnnotations,
     },
     async (input) => mcpJson(await api.reviewInvestigation(input)),
+  );
+  server.registerTool(
+    "dashboard_get_preference",
+    {
+      description:
+        "Recupera a composição de dashboard persistida para um usuário local.",
+      inputSchema: z.object({
+        userId: z.string().regex(/^[a-z0-9][a-z0-9-]{1,63}$/),
+      }),
+      annotations: readOnlyAnnotations,
+    },
+    async ({ userId }) => mcpJson(await api.dashboardPreference(userId)),
+  );
+  server.registerTool(
+    "dashboard_save_preference",
+    {
+      description:
+        "Valida e persiste uma composição completa de dashboard para um usuário local.",
+      inputSchema: z.object({
+        userId: z.string().regex(/^[a-z0-9][a-z0-9-]{1,63}$/),
+        composition: z.record(z.string(), z.unknown()),
+      }),
+      annotations: writeAnnotations,
+    },
+    async ({ userId, composition }) =>
+      mcpJson(await api.saveDashboardPreference(userId, composition)),
   );
 
   return server;

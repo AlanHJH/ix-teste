@@ -47,11 +47,13 @@ import {
 } from "./DashboardRichWidgets";
 import { DashboardDetailModal } from "./DashboardDetailModal";
 import type { DashboardDrilldown } from "./DashboardDetailModal";
+import { InventoryFilterSelect } from "./InventoryFilterSelect";
 import type {
   DashboardBinding,
   DashboardComposition,
   DashboardRuntimeData,
   DashboardWidget,
+  InventoryFilter,
   Overview,
 } from "./types";
 
@@ -409,7 +411,7 @@ function NarrativeWidget({
 function Widget({
   widget,
   data,
-  search,
+  filters,
   editMode,
   onEdit,
   onDrilldown,
@@ -421,7 +423,7 @@ function Widget({
 }: {
   widget: DashboardWidget;
   data: DashboardRuntimeData;
-  search: string;
+  filters: InventoryFilter[];
   editMode: boolean;
   onEdit: (widget: DashboardWidget) => void;
   onDrilldown: (drilldown: DashboardDrilldown) => void;
@@ -508,7 +510,7 @@ function Widget({
       <TableWidget
         widget={widget}
         data={data}
-        search={search}
+        filters={filters}
         onDrilldown={onDrilldown}
       />
     );
@@ -608,7 +610,8 @@ export function DynamicDashboard({
   const [editMode, setEditMode] = useState(false);
   const [editor, setEditor] = useState<DashboardEditor | null>(null);
   const [period, setPeriod] = useState("30");
-  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<InventoryFilter[]>([]);
+  const [filterQuery, setFilterQuery] = useState("");
   const [draggedWidgetId, setDraggedWidgetId] = useState<string | null>(null);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [saveState, setSaveState] = useState<
@@ -637,7 +640,7 @@ export function DynamicDashboard({
         api.operationalIncidents(),
         api.nocQueue(),
         api.topology(),
-        api.dashboardInventory(),
+        api.dashboardInventory(filters),
         api.dashboardTelemetry(from),
         api.dashboardDiagnostics(from),
       ]);
@@ -661,7 +664,7 @@ export function DynamicDashboard({
     } finally {
       setRefreshing(false);
     }
-  }, [period]);
+  }, [filters, period]);
 
   const compose = useCallback(
     async (
@@ -986,14 +989,19 @@ export function DynamicDashboard({
                 <option value="all">Todo o histórico</option>
               </select>
             </label>
-            <label>
+            <div className="ai-dashboard-filter-group">
               <span>Filtrar listas</span>
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
+              <InventoryFilterSelect
+                filters={filters}
+                onChange={setFilters}
+                query={filterQuery}
+                onQueryChange={setFilterQuery}
                 placeholder="Cliente, serial, cidade, OLT…"
+                ariaLabel="Adicionar filtros às listas do dashboard"
+                optionsId="dashboard-filter-options"
+                compact
               />
-            </label>
+            </div>
           </div>
           <div className="ai-dashboard-grid" aria-live="polite">
             {plan.widgets.map((widget) => (
@@ -1001,7 +1009,7 @@ export function DynamicDashboard({
                 key={widget.id}
                 widget={widget}
                 data={latestData}
-                search={search}
+                filters={filters}
                 editMode={editMode}
                 onEdit={openWidgetEditor}
                 onDrilldown={setDrilldown}

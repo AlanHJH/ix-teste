@@ -134,6 +134,50 @@ describe("api client", () => {
     }
   });
 
+  it("envia múltiplos filtros estruturados para as listas do dashboard", async () => {
+    const payload = {
+      data: [],
+      page: 1,
+      pageSize: 100,
+      totalItems: 0,
+      totalPages: 0,
+    };
+    let requestedPath = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (path: string | URL | Request) => {
+      requestedPath = String(path);
+      return { ok: true, json: async () => payload } as Response;
+    }) as typeof fetch;
+    try {
+      assert.deepEqual(
+        await api.dashboardInventory([
+          {
+            kind: "city",
+            value: "Serra Alta",
+            label: "Serra Alta",
+            detail: "Cidade",
+          },
+          {
+            kind: "neighborhood",
+            value: "Centro",
+            label: "Centro",
+            detail: "Bairro",
+          },
+        ]),
+        payload,
+      );
+      const url = new URL(requestedPath, "http://localhost");
+      assert.equal(url.pathname, "/api/customers");
+      assert.deepEqual(url.searchParams.getAll("filter"), [
+        "city:Serra Alta",
+        "neighborhood:Centro",
+      ]);
+      assert.equal(url.searchParams.get("pageSize"), "100");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("consulta opções dependentes para criar um agrupamento", async () => {
     const payload = {
       type: "pon",

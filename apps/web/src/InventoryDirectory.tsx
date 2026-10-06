@@ -1,12 +1,5 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import {
-  ChevronLeft,
-  ChevronRight,
-  MapPin,
-  Search,
-  Server,
-  X,
-} from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { ChevronLeft, ChevronRight, MapPin, Server } from "lucide-react";
 import { api } from "./api";
 import { HelpTooltip } from "./HelpTooltip";
 import {
@@ -15,11 +8,11 @@ import {
 } from "./InventoryContextModal";
 import { NetworkEntityModal } from "./NetworkEntityModal";
 import type { NetworkEntity } from "./NetworkEntityModal";
+import { InventoryFilterSelect } from "./InventoryFilterSelect";
 import { providerGlossary, TechnicalText } from "./ProviderGlossary";
 import type {
   EquipmentPath,
   InventoryFilter,
-  InventoryFilterOption,
   InventoryPage,
   InventoryRecord,
   TopologySnapshot,
@@ -51,11 +44,6 @@ export function InventoryDirectory({
   const [error, setError] = useState("");
   const [topologyError, setTopologyError] = useState("");
   const [filters, setFilters] = useState<InventoryFilter[]>([]);
-  const [filterOptions, setFilterOptions] = useState<InventoryFilterOption[]>(
-    [],
-  );
-  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [contextModal, setContextModal] = useState<InventoryContext | null>(
     null,
   );
@@ -64,19 +52,6 @@ export function InventoryDirectory({
   useEffect(() => {
     void load();
   }, [submittedQuery, page, status, filters]);
-
-  useEffect(() => {
-    if (!suggestionsOpen) return;
-    const timeout = window.setTimeout(() => {
-      setSuggestionsLoading(true);
-      api
-        .inventoryFilterOptions(query, status)
-        .then(setFilterOptions)
-        .catch(() => setFilterOptions([]))
-        .finally(() => setSuggestionsLoading(false));
-    }, 180);
-    return () => window.clearTimeout(timeout);
-  }, [query, status, suggestionsOpen]);
 
   useEffect(() => {
     api
@@ -135,30 +110,6 @@ export function InventoryDirectory({
     setPage(1);
   }
 
-  function selectFilter(option: InventoryFilterOption) {
-    setFilters((current) =>
-      current.some(
-        (filter) =>
-          filter.kind === option.kind && filter.value === option.value,
-      )
-        ? current
-        : [...current, option],
-    );
-    setQuery("");
-    setSubmittedQuery("");
-    setSuggestionsOpen(false);
-    setPage(1);
-  }
-
-  function removeFilter(filter: InventoryFilter) {
-    setFilters((current) =>
-      current.filter(
-        (item) => !(item.kind === filter.kind && item.value === filter.value),
-      ),
-    );
-    setPage(1);
-  }
-
   function asEquipmentPath(item: InventoryRecord): EquipmentPath {
     return {
       serial: item.serial,
@@ -207,18 +158,6 @@ export function InventoryDirectory({
       setTopologyError("Não foi possível carregar os detalhes desta CTO.");
     }
   }
-
-  const visibleFilterOptions = useMemo(
-    () =>
-      filterOptions.filter(
-        (option) =>
-          !filters.some(
-            (filter) =>
-              filter.kind === option.kind && filter.value === option.value,
-          ),
-      ),
-    [filterOptions, filters],
-  );
 
   const firstItem = data
     ? data.totalItems === 0
@@ -317,118 +256,27 @@ export function InventoryDirectory({
           <form
             className="inventory-search inventory-filter-search"
             onSubmit={submit}
-            onFocus={() => setSuggestionsOpen(true)}
-            onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-                setSuggestionsOpen(false);
-              }
-            }}
           >
-            <div className="inventory-filter-input-row">
-              <Search size={18} />
-              <div className="inventory-filter-combobox">
-                {filters.map((filter) => (
-                  <span
-                    className="inventory-filter-chip"
-                    key={`${filter.kind}:${filter.value}`}
-                  >
-                    {filter.label}
-                    <button
-                      type="button"
-                      onClick={() => removeFilter(filter)}
-                      aria-label={`Remover filtro ${filter.label}`}
-                    >
-                      <X size={12} />
-                    </button>
-                  </span>
-                ))}
-                <input
-                  value={query}
-                  onChange={(event) => {
-                    setQuery(event.target.value);
-                    setSuggestionsOpen(true);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Escape" && suggestionsOpen) {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setSuggestionsOpen(false);
-                      return;
-                    }
-                    if (
-                      event.key === "Enter" &&
-                      visibleFilterOptions.length > 0 &&
-                      query.trim()
-                    ) {
-                      event.preventDefault();
-                      selectFilter(visibleFilterOptions[0]);
-                    }
-                  }}
-                  placeholder={
-                    filters.length > 0
-                      ? "Adicionar outro filtro…"
-                      : "Cliente, serial, modelo, firmware, plano, OLT, CTO ou localidade"
-                  }
-                  aria-label="Adicionar filtros ao inventário"
-                  role="combobox"
-                  aria-expanded={suggestionsOpen}
-                  aria-controls="inventory-filter-options"
-                  aria-autocomplete="list"
-                />
-              </div>
-              {(filters.length > 0 || submittedQuery) && (
-                <button
-                  className="inventory-filter-clear"
-                  type="button"
-                  onClick={() => {
-                    setFilters([]);
-                    setQuery("");
-                    setSubmittedQuery("");
-                    setPage(1);
-                  }}
-                >
-                  Limpar
-                </button>
-              )}
-            </div>
-            {suggestionsOpen && (
-              <div
-                className="inventory-filter-options"
-                id="inventory-filter-options"
-                role="listbox"
-                aria-label="Sugestões de filtro"
-              >
-                {suggestionsLoading ? (
-                  <p>Buscando opções…</p>
-                ) : visibleFilterOptions.length > 0 ? (
-                  visibleFilterOptions.map((option) => (
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected="false"
-                      key={`${option.kind}:${option.value}`}
-                      onClick={() => selectFilter(option)}
-                    >
-                      <span>
-                        <strong>{option.label}</strong>
-                        <small>{option.detail}</small>
-                      </span>
-                      <span className="inventory-option-count">
-                        {number.format(option.count)}
-                      </span>
-                    </button>
-                  ))
-                ) : (
-                  <p>Nenhuma opção encontrada.</p>
-                )}
-                {query.trim() && (
-                  <button className="inventory-free-search" type="submit">
-                    <Search size={14} /> Buscar “{query.trim()}” em todos os
-                    campos
-                  </button>
-                )}
-              </div>
-            )}
+            <InventoryFilterSelect
+              filters={filters}
+              onChange={(nextFilters) => {
+                setFilters(nextFilters);
+                setSubmittedQuery("");
+                setPage(1);
+              }}
+              query={query}
+              onQueryChange={setQuery}
+              status={status}
+              placeholder="Cliente, serial, modelo, firmware, plano, OLT, CTO ou localidade"
+              ariaLabel="Adicionar filtros ao inventário"
+              optionsId="inventory-filter-options"
+              showFreeSearch
+              showClear={filters.length > 0 || Boolean(submittedQuery)}
+              onFreeSearch={(nextQuery) => {
+                setSubmittedQuery(nextQuery);
+                setPage(1);
+              }}
+            />
           </form>
           <div className="inventory-status" aria-label="Filtrar por situação">
             {(

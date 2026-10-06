@@ -38,7 +38,10 @@ export const apiErrorSchema: SchemaObject = {
   },
 };
 
-export function apiString(description: string, example?: string): SchemaObject {
+export function apiString(
+  description: string,
+  example?: string,
+): SchemaObject {
   return {
     type: "string",
     description,
@@ -57,7 +60,10 @@ export function apiInteger(
   };
 }
 
-export function apiNumber(description: string, example?: number): SchemaObject {
+export function apiNumber(
+  description: string,
+  example?: number,
+): SchemaObject {
   return {
     type: "number",
     description,
@@ -92,10 +98,7 @@ export function apiPageSchema(
     description,
     required: ["data", "page", "pageSize", "totalItems", "totalPages"],
     properties: {
-      data: apiArray(
-        item,
-        "Registros da página atual, já filtrados e ordenados.",
-      ),
+      data: apiArray(item, "Registros da página atual, já filtrados e ordenados."),
       page: apiInteger("Página atual, iniciando em 1.", 1),
       pageSize: apiInteger("Quantidade máxima de registros por página.", 25),
       totalItems: apiInteger(
@@ -200,19 +203,14 @@ export function ApiWrite(options: {
         schema: options.schema,
       });
   return applyDecorators(
-    ApiOperation({
-      summary: options.summary,
-      description: options.description,
-    }),
+    ApiOperation({ summary: options.summary, description: options.description }),
     success,
     ApiExtension("x-read-only", false),
     ApiExtension("x-dashboard-resource", false),
   );
 }
 
-export function ApiInvalidRequest(
-  description = "Parâmetro ou corpo inválido.",
-) {
+export function ApiInvalidRequest(description = "Parâmetro ou corpo inválido.") {
   return ApiBadRequestResponse({ description, schema: apiErrorSchema });
 }
 
@@ -228,10 +226,7 @@ export function configureOpenApi(app: INestApplication): OpenAPIObject {
     .addTag("Sistema", "Saúde, catálogo e descoberta da plataforma.")
     .addTag("Clientes", "Cadastro consolidado e histórico de CPEs por cliente.")
     .addTag("Atendimento N1", "Contexto e apoio ao primeiro nível de suporte.")
-    .addTag(
-      "Inventário",
-      "CPEs, hardware, firmware, plano e localização topológica.",
-    )
+    .addTag("Inventário", "CPEs, hardware, firmware, plano e localização topológica.")
     .addTag("Telemetria", "Informs brutos e agregados diários de CPEs.")
     .addTag("Diagnósticos", "Medições remotas TR-143.")
     .addTag("Chamados", "Histórico de suporte e fila operacional do NOC.")
@@ -240,18 +235,12 @@ export function configureOpenApi(app: INestApplication): OpenAPIObject {
       "Incidentes operacionais",
       "Agrupamentos ativos criados ou aprovados por operadores.",
     )
-    .addTag(
-      "Operação da plataforma",
-      "Carga do dataset e candidatos dos detectores.",
-    )
+    .addTag("Operação da plataforma", "Carga do dataset e candidatos dos detectores.")
     .addTag(
       "Investigações IA",
       "Investigações auditáveis com MCP somente leitura e revisão humana.",
     )
-    .addTag(
-      "Dashboard dinâmico",
-      "Composição e preferências do painel operacional.",
-    )
+    .addTag("Dashboard dinâmico", "Composição e preferências do painel operacional.")
     .addExtension("x-mcp-catalog", "/mcp")
     .addExtension("x-dashboard-contract", {
       discovery: "/api/openapi.json",
