@@ -3,6 +3,8 @@ import type {
   DashboardComposition,
   DailyMetricPage,
   DiagnosticsPage,
+  DiagnosticFilter,
+  DiagnosticFilterOption,
   InventoryPage,
   InventoryFilter,
   InventoryFilterOption,
@@ -15,12 +17,22 @@ import type {
   SupportProfile,
   N1AdvisorReply,
   N1ChatMessage,
+  TicketFilter,
+  TicketFilterOption,
   TicketPage,
   TopologySnapshot,
   AgentRuntimeConfiguration,
   AiConfigurationSnapshot,
   PlatformCatalog,
 } from "./types";
+
+type PaginatedResponse<T> = {
+  data: T[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+};
 
 async function request<T>(path: string): Promise<T> {
   const response = await fetch(path);
@@ -183,21 +195,28 @@ export const api = {
       (response) => response.data,
     );
   },
-  tickets: (
-    query = "",
-    page = 1,
-    filters: { category: string; resolution: string; channel: string },
-  ) => {
+  tickets: (query = "", page = 1, filters: TicketFilter[] = []) => {
     const params = new URLSearchParams({
       page: String(page),
       pageSize: "25",
       sort: "opened_at_desc",
-      category: filters.category,
-      resolution: filters.resolution,
-      channel: filters.channel,
     });
     if (query.trim()) params.set("q", query.trim());
+    filters.forEach((filter) =>
+      params.append("filter", `${filter.kind}:${filter.value}`),
+    );
     return request<TicketPage>(`/api/tickets?${params.toString()}`);
+  },
+  ticketFilterOptions: (query = "") => {
+    const params = new URLSearchParams({
+      q: query.trim(),
+      page: "1",
+      pageSize: "20",
+      sort: "relevance",
+    });
+    return request<PaginatedResponse<TicketFilterOption>>(
+      `/api/tickets/filter-options?${params.toString()}`,
+    ).then((response) => response.data);
   },
   createTicket: (input: {
     customerId: string;
@@ -276,20 +295,28 @@ export const api = {
       "PATCH",
       { status: "resolved" },
     ),
-  diagnostics: (
-    query = "",
-    page = 1,
-    filters: { state: string; requestedBy: string },
-  ) => {
+  diagnostics: (query = "", page = 1, filters: DiagnosticFilter[] = []) => {
     const params = new URLSearchParams({
       page: String(page),
       pageSize: "25",
       sort: "ts_desc",
-      state: filters.state,
-      requestedBy: filters.requestedBy,
     });
     if (query.trim()) params.set("q", query.trim());
+    filters.forEach((filter) =>
+      params.append("filter", `${filter.kind}:${filter.value}`),
+    );
     return request<DiagnosticsPage>(`/api/diagnostics?${params.toString()}`);
+  },
+  diagnosticFilterOptions: (query = "") => {
+    const params = new URLSearchParams({
+      q: query.trim(),
+      page: "1",
+      pageSize: "20",
+      sort: "relevance",
+    });
+    return request<PaginatedResponse<DiagnosticFilterOption>>(
+      `/api/diagnostics/filter-options?${params.toString()}`,
+    ).then((response) => response.data);
   },
   investigations: () =>
     request<InvestigationPage>(

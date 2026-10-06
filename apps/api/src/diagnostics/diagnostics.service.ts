@@ -42,6 +42,21 @@ type ListInput = {
   diagnostic: string;
   from: string;
   to: string;
+  filters: DiagnosticFilter[];
+};
+
+export type DiagnosticFilterKind =
+  | "serial"
+  | "customer"
+  | "vendor"
+  | "model"
+  | "state"
+  | "requestedBy"
+  | "diagnostic";
+
+export type DiagnosticFilter = {
+  kind: DiagnosticFilterKind;
+  value: string;
 };
 
 @Injectable()
@@ -58,7 +73,7 @@ export class DiagnosticsService {
     const from = input.from.trim();
     const to = input.to.trim();
     const search = query ? `%${query}%` : "";
-    const params = [
+    const params: unknown[] = [
       search,
       state,
       requestedBy,
@@ -68,7 +83,8 @@ export class DiagnosticsService {
       from,
       to,
     ];
-    const where = `
+    const conditions = [
+      `
       ($1 = '' OR d.serial ILIKE $1 OR i.customer_id ILIKE $1
         OR i.vendor ILIKE $1 OR i.model ILIKE $1)
       AND ($2 = '' OR d.state = $2)
@@ -77,7 +93,29 @@ export class DiagnosticsService {
       AND ($5 = '' OR i.customer_id = $5)
       AND ($6 = '' OR d.diagnostic = $6)
       AND ($7 = '' OR d.ts >= NULLIF($7, '')::timestamptz)
-      AND ($8 = '' OR d.ts <= NULLIF($8, '')::timestamptz)`;
+      AND ($8 = '' OR d.ts <= NULLIF($8, '')::timestamptz)`,
+    ];
+    const columns: Record<DiagnosticFilterKind, string> = {
+      serial: "d.serial",
+      customer: "i.customer_id",
+      vendor: "i.vendor",
+      model: "i.model",
+      state: "d.state",
+      requestedBy: "d.requested_by",
+      diagnostic: "d.diagnostic",
+    };
+    const groupedFilters = new Map<DiagnosticFilterKind, string[]>();
+    for (const filter of input.filters) {
+      groupedFilters.set(filter.kind, [
+        ...(groupedFilters.get(filter.kind) ?? []),
+        filter.value,
+      ]);
+    }
+    for (const [kind, values] of groupedFilters) {
+      params.push(values);
+      conditions.push(`${columns[kind]} = ANY($${params.length}::text[])`);
+    }
+    const where = conditions.join(" AND ");
     const offset = (input.page - 1) * input.pageSize;
     const orderBy: Record<string, string> = {
       ts_desc: "d.ts DESC, d.serial ASC",
@@ -110,7 +148,7 @@ export class DiagnosticsService {
           LEFT JOIN inventory i USING(serial)
           WHERE ${where}
           ORDER BY ${orderBy[input.sort] ?? orderBy.ts_desc}
-          LIMIT $9 OFFSET $10`,
+          LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
         [...params, input.pageSize, offset],
       ),
       this.database.query<{ states: string[]; requested_by: string[] }>(`
@@ -128,6 +166,83 @@ export class DiagnosticsService {
         summary: summaryResult.rows[0],
         filters: optionsResult.rows[0],
       },
+    );
+  }
+
+  async filterOptions(
+    query: string,
+    page: number,
+    pageSize: number,
+    sort: string,
+  ) {
+    const search = query.trim().slice(0, 120);
+    const result = await this.database.query<{
+      kind: DiagnosticFilterKind;
+      value: string;
+      label: string;
+      detail: string;
+      count: number;
+      total_items: number;
+    }>(
+      `WITH base AS (
+         SELECT d.serial, d.requested_by, d.diagnostic, d.state,
+           i.customer_id, i.vendor, i.model
+         FROM diagnostics d
+         LEFT JOIN inventory i USING(serial)
+       ), options AS (
+         SELECT 'serial'::text AS kind, serial::text AS value,
+           serial::text AS label, min(coalesce(vendor || ' ' || model, 'CPE')) AS detail,
+           count(*)::int AS count FROM base GROUP BY serial
+         UNION ALL
+         SELECT 'customer', customer_id, customer_id, 'Cliente', count(*)::int
+           FROM base WHERE customer_id IS NOT NULL GROUP BY customer_id
+         UNION ALL
+         SELECT 'vendor', vendor, vendor, 'Fabricante', count(*)::int
+           FROM base WHERE vendor IS NOT NULL GROUP BY vendor
+         UNION ALL
+         SELECT 'model', model, model, min(coalesce(vendor, 'Modelo')), count(*)::int
+           FROM base WHERE model IS NOT NULL GROUP BY model
+         UNION ALL
+         SELECT 'state', state,
+           CASE WHEN state = 'Completed' THEN 'Concluído' ELSE state END,
+           'Estado do teste', count(*)::int FROM base GROUP BY state
+         UNION ALL
+         SELECT 'requestedBy', requested_by, requested_by, 'Solicitado por', count(*)::int
+           FROM base GROUP BY requested_by
+         UNION ALL
+         SELECT 'diagnostic', diagnostic, diagnostic, 'Tipo de diagnóstico', count(*)::int
+           FROM base GROUP BY diagnostic
+       )
+       SELECT kind, value, label, detail, count,
+         count(*) OVER()::int AS total_items
+       FROM options
+       WHERE ($1 = '' AND kind IN ('state', 'requestedBy', 'diagnostic'))
+          OR ($1 <> '' AND (value ILIKE $1 OR label ILIKE $1 OR detail ILIKE $1))
+       ORDER BY ${
+         sort === "label_desc"
+           ? "label DESC, kind ASC"
+           : sort === "label_asc"
+             ? "label ASC, kind ASC"
+             : `CASE
+                 WHEN lower(label) = lower(trim(both '%' from $1)) THEN 0
+                 WHEN lower(label) LIKE lower(trim(both '%' from $1)) || '%' THEN 1
+                 WHEN label ILIKE $1 THEN 2
+                 ELSE 3 END,
+               CASE kind
+                 WHEN 'state' THEN 0 WHEN 'requestedBy' THEN 1
+                 WHEN 'diagnostic' THEN 2 WHEN 'customer' THEN 3
+                 WHEN 'serial' THEN 4 WHEN 'vendor' THEN 5 ELSE 6 END,
+               count DESC, label ASC`
+       }
+       LIMIT $2 OFFSET $3`,
+      [search ? `%${search}%` : "", pageSize, (page - 1) * pageSize],
+    );
+    const totalItems = result.rows[0]?.total_items ?? 0;
+    return paginate(
+      result.rows.map(({ total_items: _totalItems, ...row }) => row),
+      totalItems,
+      page,
+      pageSize,
     );
   }
 }

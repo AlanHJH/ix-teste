@@ -315,6 +315,18 @@ export type SupportTicket = {
   cto: string | null;
 };
 
+export type TicketFilterKind =
+  "ticket" | "customer" | "category" | "resolution" | "channel";
+
+export type TicketFilter = {
+  kind: TicketFilterKind;
+  value: string;
+  label: string;
+  detail: string;
+};
+
+export type TicketFilterOption = TicketFilter & { count: number };
+
 export type NocQueue = {
   data: SupportTicket[];
   page: number;
@@ -429,6 +441,24 @@ export type DiagnosticsPage = {
     filters: { states: string[]; requested_by: string[] };
   };
 };
+
+export type DiagnosticFilterKind =
+  | "serial"
+  | "customer"
+  | "vendor"
+  | "model"
+  | "state"
+  | "requestedBy"
+  | "diagnostic";
+
+export type DiagnosticFilter = {
+  kind: DiagnosticFilterKind;
+  value: string;
+  label: string;
+  detail: string;
+};
+
+export type DiagnosticFilterOption = DiagnosticFilter & { count: number };
 
 export type DailyMetricRecord = {
   day: string;

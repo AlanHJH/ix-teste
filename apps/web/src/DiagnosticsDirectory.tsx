@@ -1,25 +1,21 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity,
   AlertTriangle,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Filter,
   Gauge,
-  Search,
   ServerCog,
   Wifi,
 } from "lucide-react";
 import { api } from "./api";
+import { DiagnosticFilterSelect } from "./DiagnosticFilterSelect";
 import { HelpTooltip } from "./HelpTooltip";
 import { providerGlossary, TechnicalText } from "./ProviderGlossary";
-import type { DiagnosticsPage } from "./types";
+import type { DiagnosticFilter, DiagnosticsPage } from "./types";
 
 const number = new Intl.NumberFormat("pt-BR");
-
-type Filters = { state: string; requestedBy: string };
-const defaultFilters: Filters = { state: "all", requestedBy: "all" };
 
 function formatTimestamp(value: string) {
   return new Date(value).toLocaleString("pt-BR", {
@@ -70,7 +66,7 @@ export function DiagnosticsDirectory({
 }) {
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
-  const [filters, setFilters] = useState<Filters>(defaultFilters);
+  const [filters, setFilters] = useState<DiagnosticFilter[]>([]);
   const [page, setPage] = useState(1);
   const [result, setResult] = useState<DiagnosticsPage | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,17 +97,6 @@ export function DiagnosticsDirectory({
       canceled = true;
     };
   }, [submittedQuery, page, filters]);
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    setPage(1);
-    setSubmittedQuery(query);
-  }
-
-  function changeFilter(name: keyof Filters, value: string) {
-    setPage(1);
-    setFilters((current) => ({ ...current, [name]: value }));
-  }
 
   const totalPages = result ? Math.max(1, result.totalPages) : 1;
 
@@ -201,66 +186,21 @@ export function DiagnosticsDirectory({
           )}
         </header>
 
-        <form className="diagnostics-search" onSubmit={submit}>
-          <Search size={18} />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Serial, cliente, fabricante ou modelo"
-            aria-label="Pesquisar diagnósticos"
+        <div className="diagnostics-facet-search">
+          <DiagnosticFilterSelect
+            filters={filters}
+            onChange={(nextFilters) => {
+              setFilters(nextFilters);
+              setSubmittedQuery("");
+              setPage(1);
+            }}
+            query={query}
+            onQueryChange={setQuery}
+            onFreeSearch={(nextQuery) => {
+              setSubmittedQuery(nextQuery);
+              setPage(1);
+            }}
           />
-          <button type="submit" disabled={loading}>
-            {loading ? "Consultando…" : "Pesquisar"}
-          </button>
-        </form>
-
-        <div className="diagnostics-filters">
-          <Filter size={17} aria-hidden="true" />
-          <label>
-            Estado do teste
-            <select
-              value={filters.state}
-              onChange={(event) => changeFilter("state", event.target.value)}
-            >
-              <option value="all">Todos</option>
-              {result?.meta.filters.states.map((state) => (
-                <option key={state} value={state}>
-                  {state === "Completed" ? "Concluído" : state}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Solicitado por
-            <select
-              value={filters.requestedBy}
-              onChange={(event) =>
-                changeFilter("requestedBy", event.target.value)
-              }
-            >
-              <option value="all">Todos</option>
-              {result?.meta.filters.requested_by.map((requestedBy) => (
-                <option key={requestedBy} value={requestedBy}>
-                  {requestedBy}
-                </option>
-              ))}
-            </select>
-          </label>
-          {(submittedQuery ||
-            Object.values(filters).some((value) => value !== "all")) && (
-            <button
-              type="button"
-              className="diagnostics-clear"
-              onClick={() => {
-                setQuery("");
-                setSubmittedQuery("");
-                setFilters(defaultFilters);
-                setPage(1);
-              }}
-            >
-              Limpar filtros
-            </button>
-          )}
         </div>
 
         {error && <p className="diagnostics-error">{error}</p>}

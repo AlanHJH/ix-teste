@@ -1,35 +1,27 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
   Clock3,
-  Filter,
   Headphones,
   MessageSquare,
   Network,
-  Search,
   TicketCheck,
   Wrench,
 } from "lucide-react";
 import { api } from "./api";
 import { HelpTooltip } from "./HelpTooltip";
+import {
+  InventoryContextModal,
+  type InventoryContext,
+} from "./InventoryContextModal";
 import { providerGlossary } from "./ProviderGlossary";
-import type { TicketPage } from "./types";
+import { TicketDetailModal } from "./TicketDetailModal";
+import { TicketFilterSelect } from "./TicketFilterSelect";
+import type { SupportTicket, TicketFilter, TicketPage } from "./types";
 
 const number = new Intl.NumberFormat("pt-BR");
-
-type Filters = {
-  category: string;
-  resolution: string;
-  channel: string;
-};
-
-const defaultFilters: Filters = {
-  category: "all",
-  resolution: "all",
-  channel: "all",
-};
 
 function formatOpenedAt(value: string) {
   return new Date(value).toLocaleString("pt-BR", {
@@ -80,11 +72,19 @@ export function SupportTickets({
 }) {
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
-  const [filters, setFilters] = useState<Filters>(defaultFilters);
+  const [filters, setFilters] = useState<TicketFilter[]>([]);
   const [page, setPage] = useState(1);
   const [result, setResult] = useState<TicketPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(
+    null,
+  );
+  const [customerModal, setCustomerModal] = useState<InventoryContext | null>(
+    null,
+  );
+  const [customerLoadingId, setCustomerLoadingId] = useState("");
+  const customerRequest = useRef(0);
 
   useEffect(() => {
     let canceled = false;
@@ -112,43 +112,44 @@ export function SupportTickets({
     };
   }, [submittedQuery, page, filters]);
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    setPage(1);
-    setSubmittedQuery(query);
-  }
-
-  function changeFilter(name: keyof Filters, value: string) {
-    setPage(1);
-    setFilters((current) => ({ ...current, [name]: value }));
+  async function openCustomer(customerId: string) {
+    const request = ++customerRequest.current;
+    setCustomerLoadingId(customerId);
+    setError("");
+    try {
+      const inventory = await api.inventory("", 1, "all", [
+        {
+          kind: "customer",
+          value: customerId,
+          label: customerId,
+          detail: "Cliente",
+        },
+      ]);
+      if (request !== customerRequest.current) return;
+      const item =
+        inventory.data.find((entry) => entry.status === "active") ??
+        inventory.data[0];
+      if (!item) {
+        setError(`O cliente ${customerId} não foi localizado no inventário.`);
+        return;
+      }
+      setCustomerModal({ kind: "customer", item });
+    } catch (reason) {
+      if (request !== customerRequest.current) return;
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível carregar os dados do cliente.",
+      );
+    } finally {
+      if (request === customerRequest.current) setCustomerLoadingId("");
+    }
   }
 
   const totalPages = result ? Math.max(1, result.totalPages) : 1;
 
   return (
     <section className="tickets-page">
-      <section className="tickets-hero">
-        <div>
-          <span className="section-label">
-            Atendimento · chamados de clientes
-            <HelpTooltip
-              term="Ticket"
-              description="Registro de um contato de suporte, com motivo, tratamento e resolução."
-            />
-          </span>
-          <h1>Tickets de suporte.</h1>
-          <p>
-            Consulte os chamados individuais abertos pelo N1 e o histórico
-            importado. Incidentes do NOC aparecem como vínculo quando explicam o
-            problema de um cliente.
-          </p>
-        </div>
-        <div className="tickets-source">
-          <TicketCheck size={20} />
-          <span>Histórico importado + chamados do N1</span>
-        </div>
-      </section>
-
       {result && (
         <section
           className="metrics-grid tickets-metrics"
@@ -208,80 +209,21 @@ export function SupportTickets({
           )}
         </header>
 
-        <form className="tickets-search" onSubmit={submit}>
-          <Search size={18} />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Ticket, cliente, descrição ou resolução"
-            aria-label="Pesquisar tickets"
+        <div className="tickets-search">
+          <TicketFilterSelect
+            filters={filters}
+            onChange={(nextFilters) => {
+              setFilters(nextFilters);
+              setSubmittedQuery("");
+              setPage(1);
+            }}
+            query={query}
+            onQueryChange={setQuery}
+            onFreeSearch={(nextQuery) => {
+              setSubmittedQuery(nextQuery);
+              setPage(1);
+            }}
           />
-          <button type="submit" disabled={loading}>
-            {loading ? "Consultando…" : "Pesquisar"}
-          </button>
-        </form>
-
-        <div className="tickets-filters">
-          <Filter size={17} aria-hidden="true" />
-          <label>
-            Categoria
-            <select
-              value={filters.category}
-              onChange={(event) => changeFilter("category", event.target.value)}
-            >
-              <option value="all">Todas</option>
-              {result?.meta.filters.categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Resolução
-            <select
-              value={filters.resolution}
-              onChange={(event) =>
-                changeFilter("resolution", event.target.value)
-              }
-            >
-              <option value="all">Todas</option>
-              {result?.meta.filters.resolutions.map((resolution) => (
-                <option key={resolution} value={resolution}>
-                  {resolution}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Canal
-            <select
-              value={filters.channel}
-              onChange={(event) => changeFilter("channel", event.target.value)}
-            >
-              <option value="all">Todos</option>
-              {result?.meta.filters.channels.map((channel) => (
-                <option key={channel} value={channel}>
-                  {channel}
-                </option>
-              ))}
-            </select>
-          </label>
-          {(submittedQuery ||
-            Object.values(filters).some((value) => value !== "all")) && (
-            <button
-              type="button"
-              className="tickets-clear"
-              onClick={() => {
-                setQuery("");
-                setSubmittedQuery("");
-                setFilters(defaultFilters);
-                setPage(1);
-              }}
-            >
-              Limpar filtros
-            </button>
-          )}
         </div>
 
         {error && <p className="tickets-error">{error}</p>}
@@ -301,29 +243,39 @@ export function SupportTickets({
                 </th>
                 <th>Resolução</th>
                 <th>Tempo</th>
-                <th aria-label="Abrir atendimento" />
               </tr>
             </thead>
             <tbody>
               {result?.data.map((ticket) => (
                 <tr key={ticket.ticket_id}>
                   <td>
-                    <strong>{ticket.ticket_id}</strong>
-                    <small>{formatOpenedAt(ticket.opened_at)}</small>
-                    {ticket.source === "n1" && (
-                      <span className="ticket-source-n1">
-                        Aberto pelo N1
-                        {ticket.opened_by ? ` · ${ticket.opened_by}` : ""}
-                      </span>
-                    )}
+                    <button
+                      type="button"
+                      className="ticket-id-action"
+                      onClick={() => setSelectedTicket(ticket)}
+                      title={`Ver todos os detalhes do ticket ${ticket.ticket_id}`}
+                    >
+                      <strong>{ticket.ticket_id}</strong>
+                      <small>{formatOpenedAt(ticket.opened_at)}</small>
+                      {ticket.source === "n1" && (
+                        <span className="ticket-source-n1">
+                          Aberto pelo N1
+                          {ticket.opened_by ? ` · ${ticket.opened_by}` : ""}
+                        </span>
+                      )}
+                    </button>
                   </td>
                   <td>
                     <button
                       type="button"
                       className="ticket-customer"
-                      onClick={() => onOpenSupport(ticket.customer_id)}
+                      onClick={() => void openCustomer(ticket.customer_id)}
+                      disabled={customerLoadingId === ticket.customer_id}
+                      title="Ver informações gerais do cliente"
                     >
-                      {ticket.customer_id}
+                      {customerLoadingId === ticket.customer_id
+                        ? "Carregando…"
+                        : ticket.customer_id}
                     </button>
                     <small>
                       {ticket.neighborhood && ticket.city
@@ -363,16 +315,6 @@ export function SupportTickets({
                         : `${ticket.handling_minutes} min`}
                     </strong>
                   </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="ticket-open-support"
-                      title="Abre o roteiro do atendimento N1 para este cliente."
-                      onClick={() => onOpenSupport(ticket.customer_id)}
-                    >
-                      Abrir no N1
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -407,6 +349,21 @@ export function SupportTickets({
           </footer>
         )}
       </section>
+
+      {selectedTicket && (
+        <TicketDetailModal
+          ticket={selectedTicket}
+          onClose={() => setSelectedTicket(null)}
+        />
+      )}
+      {customerModal && (
+        <InventoryContextModal
+          context={customerModal}
+          canOpenSupport
+          onOpenSupport={onOpenSupport}
+          onClose={() => setCustomerModal(null)}
+        />
+      )}
     </section>
   );
 }

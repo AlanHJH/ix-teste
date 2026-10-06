@@ -14,7 +14,11 @@ import {
   ApiQuery,
   ApiTags,
 } from "@nestjs/swagger";
-import { TicketsService } from "./tickets.service";
+import {
+  TicketsService,
+  type TicketFilter,
+  type TicketFilterKind,
+} from "./tickets.service";
 import { parsePageQuery } from "../pagination";
 import {
   ApiInvalidRequest,
@@ -22,11 +26,36 @@ import {
   ApiRead,
   ApiWrite,
   apiErrorSchema,
+  apiInteger,
   apiNumber,
   apiNullableString,
   apiPageSchema,
   apiString,
 } from "../openapi";
+
+const ticketFilterKinds = new Set<TicketFilterKind>([
+  "ticket",
+  "customer",
+  "category",
+  "resolution",
+  "channel",
+]);
+
+export function parseTicketFilters(
+  input: string | string[] | undefined,
+): TicketFilter[] {
+  const values = Array.isArray(input) ? input : input ? [input] : [];
+  return values.slice(0, 12).flatMap((entry) => {
+    const separator = entry.indexOf(":");
+    if (separator < 1) return [];
+    const kind = entry.slice(0, separator) as TicketFilterKind;
+    const value = entry
+      .slice(separator + 1)
+      .trim()
+      .slice(0, 160);
+    return ticketFilterKinds.has(kind) && value ? [{ kind, value }] : [];
+  });
+}
 
 const ticketSchema = {
   type: "object" as const,
@@ -144,6 +173,18 @@ export class TicketsController {
     description: "Início em ISO 8601.",
   })
   @ApiQuery({ name: "to", required: false, description: "Fim em ISO 8601." })
+  @ApiQuery({
+    name: "filter",
+    required: false,
+    isArray: true,
+    description:
+      "Filtros facetados repetíveis no formato campo:valor. Valores do mesmo campo são combinados com OU; campos diferentes, com E.",
+    schema: {
+      type: "array",
+      items: { type: "string" },
+      example: ["category:Lentidão", "channel:WhatsApp"],
+    },
+  })
   @ApiInvalidRequest("Filtro ou paginação inválida.")
   @Get()
   list(
@@ -157,6 +198,7 @@ export class TicketsController {
     @Query("customerId") customerId = "",
     @Query("from") from = "",
     @Query("to") to = "",
+    @Query("filter") filter?: string | string[],
   ) {
     const pagination = parsePageQuery(page, pageSize, sort, {
       defaultSort: "opened_at_desc",
@@ -176,7 +218,56 @@ export class TicketsController {
       customerId,
       from,
       to,
+      filters: parseTicketFilters(filter),
     });
+  }
+
+  @ApiRead({
+    summary: "Listar opções para filtros facetados dos chamados",
+    description:
+      "Sugere identificadores, clientes, categorias, resoluções e canais para o autocomplete de múltipla escolha da tela de Tickets.",
+    responseDescription: "Página de opções de filtro com contagens.",
+    schema: apiPageSchema(
+      {
+        type: "object",
+        properties: {
+          kind: apiString("Campo filtrável.", "category"),
+          value: apiString("Valor exato enviado no filtro.", "Lentidão"),
+          label: apiString("Rótulo apresentado ao usuário.", "Lentidão"),
+          detail: apiString("Tipo da opção.", "Categoria"),
+          count: apiInteger("Quantidade de chamados.", 3944),
+        },
+      },
+      "Página de opções para os filtros de chamados.",
+    ),
+    dashboardResource: true,
+  })
+  @ApiPagination({
+    sorts: ["relevance", "label_asc", "label_desc"],
+    defaultSort: "relevance",
+    defaultPageSize: 20,
+    maximumPageSize: 50,
+  })
+  @ApiQuery({ name: "q", required: false, description: "Texto digitado." })
+  @Get("filter-options")
+  filterOptions(
+    @Query("q") query = "",
+    @Query("page") page = "1",
+    @Query("pageSize") pageSize = "20",
+    @Query("sort") sort = "relevance",
+  ) {
+    const pagination = parsePageQuery(page, pageSize, sort, {
+      defaultPageSize: 20,
+      maximumPageSize: 50,
+      defaultSort: "relevance",
+      allowedSorts: ["relevance", "label_asc", "label_desc"],
+    });
+    return this.tickets.filterOptions(
+      query,
+      pagination.page,
+      pagination.pageSize,
+      pagination.sort,
+    );
   }
 
   @ApiRead({

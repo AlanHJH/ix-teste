@@ -214,6 +214,164 @@ describe("api client", () => {
     }
   });
 
+  it("combina múltiplos filtros facetados na consulta de tickets", async () => {
+    const payload = {
+      data: [],
+      page: 1,
+      pageSize: 25,
+      totalItems: 0,
+      totalPages: 0,
+    };
+    let requestedPath = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (path: string | URL | Request) => {
+      requestedPath = String(path);
+      return { ok: true, json: async () => payload } as Response;
+    }) as typeof fetch;
+    try {
+      await api.tickets("", 2, [
+        {
+          kind: "category",
+          value: "Lentidão",
+          label: "Lentidão",
+          detail: "Categoria",
+        },
+        {
+          kind: "category",
+          value: "Sem conexão",
+          label: "Sem conexão",
+          detail: "Categoria",
+        },
+        {
+          kind: "channel",
+          value: "WhatsApp",
+          label: "WhatsApp",
+          detail: "Canal",
+        },
+      ]);
+      const url = new URL(requestedPath, "http://localhost");
+      assert.equal(url.pathname, "/api/tickets");
+      assert.equal(url.searchParams.get("page"), "2");
+      assert.deepEqual(url.searchParams.getAll("filter"), [
+        "category:Lentidão",
+        "category:Sem conexão",
+        "channel:WhatsApp",
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("consulta sugestões do autocomplete de tickets", async () => {
+    const payload = {
+      data: [
+        {
+          kind: "customer",
+          value: "C545968",
+          label: "C545968",
+          detail: "Cliente",
+          count: 3,
+        },
+      ],
+      page: 1,
+      pageSize: 20,
+      totalItems: 1,
+      totalPages: 1,
+    };
+    let requestedPath = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (path: string | URL | Request) => {
+      requestedPath = String(path);
+      return { ok: true, json: async () => payload } as Response;
+    }) as typeof fetch;
+    try {
+      assert.deepEqual(await api.ticketFilterOptions("C545"), payload.data);
+      const url = new URL(requestedPath, "http://localhost");
+      assert.equal(url.pathname, "/api/tickets/filter-options");
+      assert.equal(url.searchParams.get("q"), "C545");
+      assert.equal(url.searchParams.get("pageSize"), "20");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("combina múltiplos filtros facetados na consulta de diagnósticos", async () => {
+    const payload = {
+      data: [],
+      page: 1,
+      pageSize: 25,
+      totalItems: 0,
+      totalPages: 0,
+    };
+    let requestedPath = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (path: string | URL | Request) => {
+      requestedPath = String(path);
+      return { ok: true, json: async () => payload } as Response;
+    }) as typeof fetch;
+    try {
+      await api.diagnostics("", 3, [
+        {
+          kind: "state",
+          value: "Completed",
+          label: "Concluído",
+          detail: "Estado do teste",
+        },
+        {
+          kind: "requestedBy",
+          value: "NOC",
+          label: "NOC",
+          detail: "Solicitado por",
+        },
+      ]);
+      const url = new URL(requestedPath, "http://localhost");
+      assert.equal(url.pathname, "/api/diagnostics");
+      assert.equal(url.searchParams.get("page"), "3");
+      assert.deepEqual(url.searchParams.getAll("filter"), [
+        "state:Completed",
+        "requestedBy:NOC",
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("consulta sugestões do autocomplete de diagnósticos", async () => {
+    const payload = {
+      data: [
+        {
+          kind: "serial",
+          value: "KSTLD199FB78",
+          label: "KSTLD199FB78",
+          detail: "Kestrel KX-3000",
+          count: 8,
+        },
+      ],
+      page: 1,
+      pageSize: 20,
+      totalItems: 1,
+      totalPages: 1,
+    };
+    let requestedPath = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (path: string | URL | Request) => {
+      requestedPath = String(path);
+      return { ok: true, json: async () => payload } as Response;
+    }) as typeof fetch;
+    try {
+      assert.deepEqual(
+        await api.diagnosticFilterOptions("KSTLD"),
+        payload.data,
+      );
+      const url = new URL(requestedPath, "http://localhost");
+      assert.equal(url.pathname, "/api/diagnostics/filter-options");
+      assert.equal(url.searchParams.get("q"), "KSTLD");
+      assert.equal(url.searchParams.get("pageSize"), "20");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("consulta opções dependentes para criar um agrupamento", async () => {
     const payload = {
       type: "pon",

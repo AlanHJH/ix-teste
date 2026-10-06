@@ -1,15 +1,46 @@
 import { Controller, Get, Query } from "@nestjs/common";
 import { ApiQuery, ApiTags } from "@nestjs/swagger";
-import { DiagnosticsService } from "./diagnostics.service";
+import {
+  DiagnosticsService,
+  type DiagnosticFilter,
+  type DiagnosticFilterKind,
+} from "./diagnostics.service";
 import { parsePageQuery } from "../pagination";
 import {
   ApiInvalidRequest,
   ApiPagination,
   ApiRead,
+  apiInteger,
   apiNumber,
   apiPageSchema,
   apiString,
 } from "../openapi";
+
+const diagnosticFilterKinds = new Set<DiagnosticFilterKind>([
+  "serial",
+  "customer",
+  "vendor",
+  "model",
+  "state",
+  "requestedBy",
+  "diagnostic",
+]);
+
+export function parseDiagnosticFilters(
+  input: string | string[] | undefined,
+): DiagnosticFilter[] {
+  const values = Array.isArray(input) ? input : input ? [input] : [];
+  return values.slice(0, 12).flatMap((entry) => {
+    const separator = entry.indexOf(":");
+    if (separator < 1) return [];
+    const kind = entry.slice(0, separator) as DiagnosticFilterKind;
+    const value = entry
+      .slice(separator + 1)
+      .trim()
+      .slice(0, 160);
+    return diagnosticFilterKinds.has(kind) && value ? [{ kind, value }] : [];
+  });
+}
 
 const diagnosticSchema = {
   type: "object" as const,
@@ -82,6 +113,18 @@ export class DiagnosticsController {
     description: "Início em ISO 8601.",
   })
   @ApiQuery({ name: "to", required: false, description: "Fim em ISO 8601." })
+  @ApiQuery({
+    name: "filter",
+    required: false,
+    isArray: true,
+    description:
+      "Filtros facetados repetíveis no formato campo:valor. Valores do mesmo campo são combinados com OU; campos diferentes, com E.",
+    schema: {
+      type: "array",
+      items: { type: "string" },
+      example: ["state:Completed", "requestedBy:NOC"],
+    },
+  })
   @ApiInvalidRequest("Filtro ou paginação inválida.")
   @Get()
   list(
@@ -96,6 +139,7 @@ export class DiagnosticsController {
     @Query("diagnostic") diagnostic = "",
     @Query("from") from = "",
     @Query("to") to = "",
+    @Query("filter") filter?: string | string[],
   ) {
     const pagination = parsePageQuery(page, pageSize, sort, {
       defaultSort: "ts_desc",
@@ -111,6 +155,55 @@ export class DiagnosticsController {
       diagnostic,
       from,
       to,
+      filters: parseDiagnosticFilters(filter),
     });
+  }
+
+  @ApiRead({
+    summary: "Listar opções para filtros facetados dos diagnósticos",
+    description:
+      "Sugere seriais, clientes, fabricantes, modelos, estados, solicitantes e tipos para o autocomplete de múltipla escolha da tela de Diagnósticos.",
+    responseDescription: "Página de opções de filtro com contagens.",
+    schema: apiPageSchema(
+      {
+        type: "object",
+        properties: {
+          kind: apiString("Campo filtrável.", "state"),
+          value: apiString("Valor exato enviado no filtro.", "Completed"),
+          label: apiString("Rótulo apresentado ao usuário.", "Concluído"),
+          detail: apiString("Tipo da opção.", "Estado do teste"),
+          count: apiInteger("Quantidade de diagnósticos.", 6180),
+        },
+      },
+      "Página de opções para os filtros de diagnósticos.",
+    ),
+    dashboardResource: true,
+  })
+  @ApiPagination({
+    sorts: ["relevance", "label_asc", "label_desc"],
+    defaultSort: "relevance",
+    defaultPageSize: 20,
+    maximumPageSize: 50,
+  })
+  @ApiQuery({ name: "q", required: false, description: "Texto digitado." })
+  @Get("filter-options")
+  filterOptions(
+    @Query("q") query = "",
+    @Query("page") page = "1",
+    @Query("pageSize") pageSize = "20",
+    @Query("sort") sort = "relevance",
+  ) {
+    const pagination = parsePageQuery(page, pageSize, sort, {
+      defaultPageSize: 20,
+      maximumPageSize: 50,
+      defaultSort: "relevance",
+      allowedSorts: ["relevance", "label_asc", "label_desc"],
+    });
+    return this.diagnostics.filterOptions(
+      query,
+      pagination.page,
+      pagination.pageSize,
+      pagination.sort,
+    );
   }
 }

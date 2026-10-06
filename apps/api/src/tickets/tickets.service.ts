@@ -48,7 +48,13 @@ type ListInput = {
   customerId: string;
   from: string;
   to: string;
+  filters: TicketFilter[];
 };
+
+export type TicketFilterKind =
+  "ticket" | "customer" | "category" | "resolution" | "channel";
+
+export type TicketFilter = { kind: TicketFilterKind; value: string };
 
 type CreateInput = {
   customerId: string;
@@ -284,7 +290,7 @@ export class TicketsService {
     const from = input.from.trim();
     const to = input.to.trim();
     const search = query ? `%${query}%` : "";
-    const params = [
+    const params: unknown[] = [
       search,
       category,
       resolution,
@@ -293,7 +299,8 @@ export class TicketsService {
       from,
       to,
     ];
-    const where = `
+    const conditions = [
+      `
       ($1 = '' OR t.ticket_id ILIKE $1 OR t.customer_id ILIKE $1
         OR t.description ILIKE $1 OR t.resolution ILIKE $1)
       AND ($2 = '' OR t.category = $2)
@@ -301,7 +308,27 @@ export class TicketsService {
       AND ($4 = '' OR t.channel = $4)
       AND ($5 = '' OR t.customer_id = $5)
       AND ($6 = '' OR t.opened_at >= NULLIF($6, '')::timestamptz)
-      AND ($7 = '' OR t.opened_at <= NULLIF($7, '')::timestamptz)`;
+      AND ($7 = '' OR t.opened_at <= NULLIF($7, '')::timestamptz)`,
+    ];
+    const columns: Record<TicketFilterKind, string> = {
+      ticket: "t.ticket_id",
+      customer: "t.customer_id",
+      category: "t.category",
+      resolution: "t.resolution",
+      channel: "t.channel",
+    };
+    const groupedFilters = new Map<TicketFilterKind, string[]>();
+    for (const filter of input.filters) {
+      groupedFilters.set(filter.kind, [
+        ...(groupedFilters.get(filter.kind) ?? []),
+        filter.value,
+      ]);
+    }
+    for (const [kind, values] of groupedFilters) {
+      params.push(values);
+      conditions.push(`${columns[kind]} = ANY($${params.length}::text[])`);
+    }
+    const where = conditions.join(" AND ");
     const offset = (input.page - 1) * input.pageSize;
     const orderBy: Record<string, string> = {
       opened_at_desc: "t.opened_at DESC, t.ticket_id DESC",
@@ -341,7 +368,7 @@ export class TicketsService {
           ) equipment ON true
           WHERE ${where}
           ORDER BY ${orderBy[input.sort] ?? orderBy.opened_at_desc}
-          LIMIT $8 OFFSET $9`,
+          LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
         [...params, input.pageSize, offset],
       ),
       this.database.query<{
@@ -364,6 +391,70 @@ export class TicketsService {
         summary: summaryResult.rows[0],
         filters: optionsResult.rows[0],
       },
+    );
+  }
+
+  async filterOptions(
+    query: string,
+    page: number,
+    pageSize: number,
+    sort: string,
+  ) {
+    const search = query.trim().slice(0, 120);
+    const result = await this.database.query<{
+      kind: TicketFilterKind;
+      value: string;
+      label: string;
+      detail: string;
+      count: number;
+      total_items: number;
+    }>(
+      `WITH options AS (
+         SELECT 'ticket'::text AS kind, ticket_id::text AS value,
+           ticket_id::text AS label, min(category)::text AS detail,
+           count(*)::int AS count FROM tickets GROUP BY ticket_id
+         UNION ALL
+         SELECT 'customer', customer_id, customer_id, 'Cliente', count(*)::int
+           FROM tickets GROUP BY customer_id
+         UNION ALL
+         SELECT 'category', category, category, 'Categoria', count(*)::int
+           FROM tickets GROUP BY category
+         UNION ALL
+         SELECT 'resolution', resolution, resolution, 'Resolução', count(*)::int
+           FROM tickets GROUP BY resolution
+         UNION ALL
+         SELECT 'channel', channel, channel, 'Canal', count(*)::int
+           FROM tickets GROUP BY channel
+       )
+       SELECT kind, value, label, detail, count,
+         count(*) OVER()::int AS total_items
+       FROM options
+       WHERE ($1 = '' AND kind IN ('category', 'resolution', 'channel'))
+          OR ($1 <> '' AND (value ILIKE $1 OR label ILIKE $1))
+       ORDER BY ${
+         sort === "label_desc"
+           ? "label DESC, kind ASC"
+           : sort === "label_asc"
+             ? "label ASC, kind ASC"
+             : `CASE
+                 WHEN lower(label) = lower(trim(both '%' from $1)) THEN 0
+                 WHEN lower(label) LIKE lower(trim(both '%' from $1)) || '%' THEN 1
+                 WHEN label ILIKE $1 THEN 2
+                 ELSE 3 END,
+               CASE kind
+                 WHEN 'category' THEN 0 WHEN 'resolution' THEN 1
+                 WHEN 'channel' THEN 2 WHEN 'customer' THEN 3 ELSE 4 END,
+               count DESC, label ASC`
+       }
+       LIMIT $2 OFFSET $3`,
+      [search ? `%${search}%` : "", pageSize, (page - 1) * pageSize],
+    );
+    const totalItems = result.rows[0]?.total_items ?? 0;
+    return paginate(
+      result.rows.map(({ total_items: _totalItems, ...row }) => row),
+      totalItems,
+      page,
+      pageSize,
     );
   }
 }

@@ -6,6 +6,7 @@ export type EntityDetailItem = {
   label: string;
   value: ReactNode;
   hint?: string;
+  wide?: boolean;
 };
 
 export function EntityDetailModal({
@@ -74,7 +75,10 @@ export function EntityDetailModal({
           {details.length > 0 && (
             <dl>
               {details.map((detail) => (
-                <div key={detail.label}>
+                <div
+                  key={detail.label}
+                  className={detail.wide ? "entity-detail-wide" : undefined}
+                >
                   <dt>
                     {detail.label}
                     {detail.hint && (
