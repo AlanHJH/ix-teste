@@ -3,6 +3,15 @@ import {
   DiagnosticQuery,
   DiagnosticRepository,
 } from "../domain/diagnostic-repository.js";
+import { createPage, pageOffset } from "../../../shared/domain/page.js";
+
+const diagnosticSorts: Record<string, string> = {
+  default: "d.ts DESC, d.serial ASC",
+  ts_desc: "d.ts DESC, d.serial ASC",
+  ts_asc: "d.ts ASC, d.serial ASC",
+  serial_asc: "d.serial ASC, d.ts DESC",
+  download_mbps_desc: "d.download_mbps DESC NULLS LAST, d.ts DESC",
+};
 
 export class PostgresDiagnosticRepository implements DiagnosticRepository {
   constructor(private readonly database: Queryable) {}
@@ -27,20 +36,17 @@ export class PostgresDiagnosticRepository implements DiagnosticRepository {
       ),
       this.database.query<Record<string, unknown>>(
         `SELECT d.ts::text, d.serial, i.customer_id, d.requested_by,
-          d.diagnostic, d.state, d.download_mbps, d.upload_mbps, d.test_server
+          d.diagnostic, d.state, d.download_mbps, d.upload_mbps, d.test_server,
+          i.vendor, i.model, i.plan_mbps, i.city, i.neighborhood, i.olt,
+          i.pon_port AS pon, i.cto
          FROM diagnostics d LEFT JOIN inventory i USING(serial)
          ${where}
-         ORDER BY d.ts DESC, d.serial
+         ORDER BY ${diagnosticSorts[input.sort] ?? diagnosticSorts.default}
          LIMIT $${limitPosition} OFFSET $${offsetPosition}`,
-        [...params, input.limit, input.offset],
+        [...params, input.pageSize, pageOffset(input)],
       ),
     ]);
-    return {
-      total: countResult.rows[0]?.total ?? 0,
-      limit: input.limit,
-      offset: input.offset,
-      items: itemsResult.rows,
-    };
+    return createPage(itemsResult.rows, countResult.rows[0]?.total ?? 0, input);
   }
 
   private filter(

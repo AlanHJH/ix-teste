@@ -49,13 +49,24 @@ export const agentFindingJsonSchema = {
       properties: {
         type: {
           type: "string",
-          enum: ["park", "network", "firmware", "equipment", "customer"],
+          enum: [
+            "park",
+            "olt",
+            "pon",
+            "cto",
+            "customer",
+            "firmware",
+            "equipment",
+            "region",
+            "network",
+          ],
         },
         identifier: { type: "string" },
         olt: { type: ["string", "null"] },
         pon: { type: ["string", "null"] },
+        cto: { type: ["string", "null"] },
       },
-      required: ["type", "identifier", "olt", "pon"],
+      required: ["type", "identifier", "olt", "pon", "cto"],
       additionalProperties: false,
     },
     affectedCpes: { type: "integer", minimum: 0 },
@@ -105,6 +116,10 @@ const categories = new Set([
 const severities = new Set(["critical", "high", "medium", "low"]);
 const scopeTypes = new Set([
   "park",
+  "olt",
+  "pon",
+  "cto",
+  "region",
   "network",
   "firmware",
   "equipment",
@@ -145,6 +160,21 @@ export function validateAgentFinding(value: unknown): AgentFinding {
     finding.requiresHumanReview !== true
   ) {
     throw new Error("A conclusão da OpenAI não respeitou o contrato esperado.");
+  }
+
+  const scopeType = String(scope.type);
+  const identifier = String(scope.identifier).trim();
+  const olt = typeof scope.olt === "string" ? scope.olt.trim() : "";
+  const pon = typeof scope.pon === "string" ? scope.pon.trim() : "";
+  const cto = typeof scope.cto === "string" ? scope.cto.trim() : "";
+  if (
+    !identifier ||
+    (scopeType === "olt" && !olt) ||
+    (["pon", "network"].includes(scopeType) && (!olt || !pon)) ||
+    (scopeType === "cto" && (!olt || !pon || !cto)) ||
+    (finding.problemDetected && finding.affectedCpes < 1)
+  ) {
+    throw new Error("O escopo proposto pela OpenAI está incompleto.");
   }
 
   for (const key of ["evidence", "counterEvidence"] as const) {

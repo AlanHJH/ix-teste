@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { DatabaseService } from "../database";
+import { paginate } from "../pagination";
 import { CustomerSignals, decideSupport } from "./decision-engine";
+import type { InventoryFilter } from "./customers.controller";
 
 type InventoryRow = {
   serial: string;
@@ -29,6 +31,7 @@ type ActiveIncidentRow = {
   incident_id: string;
   title: string;
   severity: "critical" | "high" | "medium" | "low";
+  category: string;
   scope: {
     type?: string;
     identifier?: string;
@@ -36,6 +39,14 @@ type ActiveIncidentRow = {
     pon?: string | null;
     cto?: string | null;
   };
+  affected_cpes: number;
+  confidence: number;
+  probable_cause: string;
+  recommended_action: string;
+  opened_at: string;
+  opened_by: string;
+  source: "agent" | "manual";
+  origin_ticket_id: string | null;
 };
 
 export function incidentMatchesEquipment(
@@ -92,24 +103,54 @@ export class CustomersService {
   async list(
     query: string,
     page: number,
-    limit: number,
+    pageSize: number,
     status: "active" | "removed" | "all",
+    sort: string,
+    filters: InventoryFilter[] = [],
   ) {
     const q = query.trim();
-    const offset = (page - 1) * limit;
-    const params = [q ? `%${q}%` : "", q ? q : "", status, limit, offset];
-    const where = `
+    const offset = (page - 1) * pageSize;
+    const params: unknown[] = [q ? `%${q}%` : "", status];
+    const orderBy: Record<string, string> = {
+      relevance:
+        "CASE WHEN customer_id ILIKE $1 OR serial ILIKE $1 THEN 0 ELSE 1 END, customer_id, status='active' DESC, installed_at DESC",
+      customer_id_asc:
+        "customer_id ASC, status='active' DESC, installed_at DESC",
+      customer_id_desc:
+        "customer_id DESC, status='active' DESC, installed_at DESC",
+      installed_at_desc: "installed_at DESC, customer_id ASC",
+      plan_mbps_desc: "plan_mbps DESC, customer_id ASC",
+      plan_mbps_asc: "plan_mbps ASC, customer_id ASC",
+    };
+    const conditions = [
+      `
       ($1 = '' OR customer_id ILIKE $1 OR serial ILIKE $1 OR vendor ILIKE $1
         OR model ILIKE $1 OR olt ILIKE $1 OR cto ILIKE $1 OR city ILIKE $1 OR neighborhood ILIKE $1)
-      AND ($3 = 'all' OR status = $3)`;
-    const countWhere = `
-      ($1 = '' OR customer_id ILIKE $1 OR serial ILIKE $1 OR vendor ILIKE $1
-        OR model ILIKE $1 OR olt ILIKE $1 OR cto ILIKE $1 OR city ILIKE $1 OR neighborhood ILIKE $1)
-      AND ($2 = 'all' OR status = $2)`;
+      AND ($2 = 'all' OR status = $2)`,
+    ];
+    const columns: Record<InventoryFilter["kind"], string> = {
+      customer: "customer_id",
+      serial: "serial",
+      vendor: "vendor",
+      model: "model",
+      firmware: "software_version",
+      plan: "plan_mbps::text",
+      olt: "olt",
+      cto: "cto",
+      city: "city",
+      neighborhood: "neighborhood",
+    };
+    for (const filter of filters) {
+      params.push(filter.value);
+      conditions.push(`${columns[filter.kind]} = $${params.length}`);
+    }
+    const where = conditions.join(" AND ");
+    const limitPosition = params.length + 1;
+    const offsetPosition = params.length + 2;
     const [countResult, itemsResult] = await Promise.all([
       this.database.query<{ total: number }>(
-        `SELECT count(*)::int AS total FROM inventory WHERE ${countWhere}`,
-        [params[0], status],
+        `SELECT count(*)::int AS total FROM inventory WHERE ${where}`,
+        params,
       ),
       this.database.query<InventoryListRow>(
         `
@@ -118,35 +159,183 @@ export class CustomersService {
           city, neighborhood, status, installed_at::text, removed_at::text
         FROM inventory
         WHERE ${where}
-        ORDER BY CASE WHEN customer_id ILIKE $2 OR serial ILIKE $2 THEN 0 ELSE 1 END,
-          customer_id, status='active' DESC, installed_at DESC
-        LIMIT $4 OFFSET $5`,
-        params,
+        ORDER BY ${orderBy[sort] ?? orderBy.relevance}
+        LIMIT $${limitPosition} OFFSET $${offsetPosition}`,
+        [...params, pageSize, offset],
       ),
     ]);
 
-    return {
+    return paginate(
+      itemsResult.rows,
+      countResult.rows[0].total,
       page,
-      limit,
-      total: countResult.rows[0].total,
-      items: itemsResult.rows,
-    };
+      pageSize,
+    );
   }
 
-  async search(query: string) {
-    const q = query.trim();
-    if (q.length < 2) return [];
-    const result = await this.database.query<InventoryRow>(
-      `
-      SELECT serial, customer_id, vendor, model, hw_revision, software_version,
-        plan_mbps, previous_plan_mbps, plan_since::text, olt, pon_port, cto, city, neighborhood
-      FROM inventory
-      WHERE status='active' AND (customer_id ILIKE $1 OR serial ILIKE $1)
-      ORDER BY CASE WHEN customer_id ILIKE $2 THEN 0 ELSE 1 END, customer_id
-      LIMIT 8`,
-      [`%${q}%`, `${q}%`],
+  async filterOptions(
+    query: string,
+    status: "active" | "removed" | "all",
+    page: number,
+    pageSize: number,
+    sort: string,
+  ) {
+    const search = query.trim().slice(0, 80);
+    const result = await this.database.query<{
+      kind: InventoryFilter["kind"];
+      value: string;
+      label: string;
+      detail: string;
+      count: number;
+      total_items: number;
+    }>(
+      `WITH base AS (
+         SELECT * FROM inventory WHERE ($2 = 'all' OR status = $2)
+       ), options AS (
+         SELECT 'customer'::text AS kind, customer_id::text AS value,
+           customer_id::text AS label, min(neighborhood) || ' · ' || min(city) AS detail,
+           count(*)::int AS count FROM base GROUP BY customer_id
+         UNION ALL
+         SELECT 'serial', serial, serial, min(vendor) || ' ' || min(model), count(*)::int
+           FROM base GROUP BY serial
+         UNION ALL
+         SELECT 'vendor', vendor, vendor, 'Fabricante', count(*)::int
+           FROM base GROUP BY vendor
+         UNION ALL
+         SELECT 'model', model, model, min(vendor), count(*)::int
+           FROM base GROUP BY model
+         UNION ALL
+         SELECT 'firmware', software_version, 'fw ' || software_version,
+           'Versão de firmware', count(*)::int FROM base GROUP BY software_version
+         UNION ALL
+         SELECT 'plan', plan_mbps::text, plan_mbps::text || ' Mbps',
+           'Plano contratado', count(*)::int FROM base GROUP BY plan_mbps
+         UNION ALL
+         SELECT 'olt', olt, olt, 'OLT', count(*)::int FROM base GROUP BY olt
+         UNION ALL
+         SELECT 'cto', cto, cto, min(neighborhood) || ' · ' || min(city),
+           count(*)::int FROM base GROUP BY cto
+         UNION ALL
+         SELECT 'city', city, city, 'Cidade', count(*)::int FROM base GROUP BY city
+         UNION ALL
+         SELECT 'neighborhood', neighborhood, neighborhood, min(city),
+           count(*)::int FROM base GROUP BY neighborhood
+       )
+       SELECT kind, value, label, detail, count,
+         count(*) OVER()::int AS total_items
+       FROM options
+       WHERE $1 = '' OR value ILIKE $1 OR label ILIKE $1 OR detail ILIKE $1
+       ORDER BY ${
+         sort === "label_desc"
+           ? "label DESC, kind ASC"
+           : sort === "label_asc"
+             ? "label ASC, kind ASC"
+             : `CASE
+                 WHEN lower(label) = lower(trim(both '%' from $1)) THEN 0
+                 WHEN lower(label) LIKE lower(trim(both '%' from $1)) || '%' THEN 1
+                 WHEN label ILIKE $1 THEN 2
+                 WHEN value ILIKE $1 THEN 3
+                 ELSE 4 END,
+               CASE kind
+                 WHEN 'customer' THEN 0 WHEN 'serial' THEN 1 WHEN 'model' THEN 2
+                 WHEN 'firmware' THEN 3 WHEN 'plan' THEN 4 WHEN 'olt' THEN 5
+                 WHEN 'cto' THEN 6 ELSE 7 END, label`
+       }
+       LIMIT $3 OFFSET $4`,
+      [search ? `%${search}%` : "", status, pageSize, (page - 1) * pageSize],
     );
-    return result.rows;
+    const totalItems = result.rows[0]?.total_items ?? 0;
+    return paginate(
+      result.rows.map(({ total_items: _totalItems, ...row }) => row),
+      totalItems,
+      page,
+      pageSize,
+    );
+  }
+
+  async search(
+    query: string,
+    page: number,
+    pageSize: number,
+    sort: string,
+    status: "active" | "cancelled" | "all",
+  ) {
+    const q = query.trim();
+    const search = q ? `%${q}%` : "";
+    const selectedStatus = status === "all" ? "" : status;
+    const orderBy: Record<string, string> = {
+      customer_id_asc: "customer_id ASC",
+      customer_id_desc: "customer_id DESC",
+      customer_since_desc: "customer_since DESC, customer_id ASC",
+      plan_mbps_desc: "plan_mbps DESC, customer_id ASC",
+      plan_mbps_asc: "plan_mbps ASC, customer_id ASC",
+    };
+    const where = `($1='' OR customer_id ILIKE $1 OR serial ILIKE $1
+        OR city ILIKE $1 OR neighborhood ILIKE $1)
+      AND ($2='' OR customer_status=$2)`;
+    const [countResult, result] = await Promise.all([
+      this.database.query<{ total: number }>(
+        `SELECT count(DISTINCT customer_id)::int AS total
+         FROM inventory WHERE ${where}`,
+        [search, selectedStatus],
+      ),
+      this.database.query<Record<string, unknown>>(
+        `SELECT * FROM (
+           SELECT DISTINCT ON (customer_id)
+             customer_id, customer_status, customer_since::text,
+             cancelled_at::text,
+             CASE WHEN status='active' THEN serial END AS active_serial,
+             city, neighborhood, plan_mbps
+           FROM inventory
+           WHERE ${where}
+           ORDER BY customer_id, status='active' DESC, installed_at DESC
+         ) customers
+         ORDER BY ${orderBy[sort] ?? orderBy.customer_id_asc}
+         LIMIT $3 OFFSET $4`,
+        [search, selectedStatus, pageSize, (page - 1) * pageSize],
+      ),
+    ]);
+    return paginate(
+      result.rows,
+      countResult.rows[0]?.total ?? 0,
+      page,
+      pageSize,
+    );
+  }
+
+  async get(customerId: string) {
+    const result = await this.database.query<Record<string, unknown>>(
+      `SELECT customer_id, customer_status, customer_since::text,
+        cancelled_at::text, serial, vendor, model, hw_revision,
+        software_version, plan_mbps, previous_plan_mbps, plan_since::text,
+        olt, pon_port, cto, city, neighborhood, installed_at::text,
+        status, removed_at::text
+       FROM inventory
+       WHERE customer_id=$1
+       ORDER BY status='active' DESC, installed_at DESC`,
+      [customerId.trim().toUpperCase()],
+    );
+    if (result.rows.length === 0) {
+      throw new NotFoundException("Cliente não encontrado.");
+    }
+    const first = result.rows[0];
+    return {
+      customer: {
+        customer_id: first.customer_id,
+        customer_status: first.customer_status,
+        customer_since: first.customer_since,
+        cancelled_at: first.cancelled_at,
+      },
+      equipment_history: result.rows.map(
+        ({
+          customer_id,
+          customer_status,
+          customer_since,
+          cancelled_at,
+          ...equipment
+        }) => equipment,
+      ),
+    };
   }
 
   async getSupportProfile(customerId: string) {
@@ -214,7 +403,9 @@ export class CustomersService {
         [customerId],
       ),
       this.database.query<ActiveIncidentRow>(`
-          SELECT incident_id, title, severity, scope
+          SELECT incident_id, title, severity, category, scope,
+            affected_cpes, confidence, probable_cause, recommended_action,
+            opened_at::text, opened_by, source, origin_ticket_id
           FROM operational_incidents
           WHERE status IN ('open', 'mitigating', 'monitoring')
           ORDER BY CASE severity
@@ -310,6 +501,23 @@ export class CustomersService {
       },
       metrics: { ...metrics, diagnostic },
       decision,
+      activeIncidents: incidentsResult.rows
+        .filter((incident) => incidentMatchesEquipment(incident, equipment))
+        .map((incident) => ({
+          incidentId: incident.incident_id,
+          title: incident.title,
+          severity: incident.severity,
+          category: incident.category,
+          scope: incident.scope,
+          affectedCpes: incident.affected_cpes,
+          confidence: incident.confidence,
+          probableCause: incident.probable_cause,
+          recommendedAction: incident.recommended_action,
+          openedAt: incident.opened_at,
+          openedBy: incident.opened_by,
+          source: incident.source,
+          originTicketId: incident.origin_ticket_id,
+        })),
       recentTickets: ticketsResult.rows,
     };
   }

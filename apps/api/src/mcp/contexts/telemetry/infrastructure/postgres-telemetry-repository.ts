@@ -4,6 +4,26 @@ import {
   InformQuery,
   TelemetryRepository,
 } from "../domain/telemetry-repository.js";
+import {
+  createPage,
+  pageOffset,
+  PageRequest,
+} from "../../../shared/domain/page.js";
+
+const informSorts: Record<string, string> = {
+  default: "ts DESC, serial ASC",
+  ts_desc: "ts DESC, serial ASC",
+  ts_asc: "ts ASC, serial ASC",
+  serial_asc: "serial ASC, ts DESC",
+};
+
+const dailyMetricSorts: Record<string, string> = {
+  default: "day DESC, serial ASC, software_version ASC",
+  day_desc: "day DESC, serial ASC, software_version ASC",
+  day_asc: "day ASC, serial ASC, software_version ASC",
+  reboot_count_desc: "reboot_count DESC, day DESC, serial ASC",
+  mem_min_pct_asc: "mem_min_pct ASC NULLS LAST, day DESC, serial ASC",
+};
 
 export class PostgresTelemetryRepository implements TelemetryRepository {
   constructor(private readonly database: Queryable) {}
@@ -28,9 +48,8 @@ export class PostgresTelemetryRepository implements TelemetryRepository {
       "*",
       conditions,
       params,
-      "ts DESC, serial",
-      input.limit,
-      input.offset,
+      informSorts[input.sort] ?? informSorts.default,
+      input,
     );
   }
 
@@ -54,9 +73,8 @@ export class PostgresTelemetryRepository implements TelemetryRepository {
       "day::text, serial, customer_id, vendor, model, hw_revision, software_version, plan_mbps, previous_plan_mbps, plan_since::text, olt, pon_port, cto, city, neighborhood, inform_count, mem_min_pct, mem_avg_pct, lan_min_mbps, lan_max_mbps, reboot_count, fec_errors, optical_rx_min_dbm, optical_rx_avg_dbm, wifi_signal_avg_raw",
       conditions,
       params,
-      "day DESC, serial, software_version",
-      input.limit,
-      input.offset,
+      dailyMetricSorts[input.sort] ?? dailyMetricSorts.default,
+      input,
     );
   }
 
@@ -78,8 +96,7 @@ export class PostgresTelemetryRepository implements TelemetryRepository {
     conditions: string[],
     params: unknown[],
     orderBy: string,
-    limit: number,
-    offset: number,
+    input: PageRequest,
   ) {
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const limitPosition = params.length + 1;
@@ -93,14 +110,9 @@ export class PostgresTelemetryRepository implements TelemetryRepository {
         `SELECT ${columns} FROM ${table} ${where}
          ORDER BY ${orderBy}
          LIMIT $${limitPosition} OFFSET $${offsetPosition}`,
-        [...params, limit, offset],
+        [...params, input.pageSize, pageOffset(input)],
       ),
     ]);
-    return {
-      total: countResult.rows[0]?.total ?? 0,
-      limit,
-      offset,
-      items: itemsResult.rows,
-    };
+    return createPage(itemsResult.rows, countResult.rows[0]?.total ?? 0, input);
   }
 }

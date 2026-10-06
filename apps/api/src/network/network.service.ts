@@ -126,67 +126,113 @@ export class NetworkService {
     };
   }
 
-  async findTopologyPath(query: string) {
+  async findTopologyPath(
+    query: string,
+    page: number,
+    pageSize: number,
+    sort: string,
+  ) {
     const value = query.trim();
-    if (value.length < 2) return [];
-    const result = await this.database.query<{
-      serial: string;
-      customer_id: string;
-      vendor: string;
-      model: string;
-      hw_revision: string;
-      software_version: string;
-      plan_mbps: number;
-      olt: string;
-      pon: string;
-      cto: string;
-      city: string;
-      neighborhood: string;
-      logical_drop_id: string | null;
-    }>(
-      `
+    if (value.length < 2) return { data: [], totalItems: 0 };
+    const orderBy =
+      sort === "serial_asc"
+        ? "i.serial ASC, i.customer_id ASC"
+        : sort === "customer_id_desc"
+          ? "i.customer_id DESC, i.serial ASC"
+          : "CASE WHEN i.customer_id ILIKE $2 OR i.serial ILIKE $2 THEN 0 ELSE 1 END, i.customer_id ASC, i.serial ASC";
+    const [countResult, result] = await Promise.all([
+      this.database.query<{ total: number }>(
+        `SELECT count(*)::int AS total FROM inventory i
+         WHERE i.status='active'
+           AND (i.customer_id ILIKE $1 OR i.serial ILIKE $1)`,
+        [`%${value}%`],
+      ),
+      this.database.query<{
+        serial: string;
+        customer_id: string;
+        vendor: string;
+        model: string;
+        hw_revision: string;
+        software_version: string;
+        plan_mbps: number;
+        olt: string;
+        pon: string;
+        cto: string;
+        city: string;
+        neighborhood: string;
+        logical_drop_id: string | null;
+      }>(
+        `
       SELECT i.serial, i.customer_id, i.vendor, i.model, i.hw_revision, i.software_version,
         i.plan_mbps, i.olt, i.pon_port AS pon, i.cto, i.city, i.neighborhood,
         d.drop_id AS logical_drop_id
       FROM inventory i
       LEFT JOIN generated_logical_drops d USING(serial)
       WHERE i.status='active' AND (i.customer_id ILIKE $1 OR i.serial ILIKE $1)
-      ORDER BY CASE WHEN i.customer_id ILIKE $2 OR i.serial ILIKE $2 THEN 0 ELSE 1 END,
-        i.customer_id, i.serial
-      LIMIT 8`,
-      [`%${value}%`, value],
-    );
-    return result.rows;
+      ORDER BY ${orderBy}
+      LIMIT $3 OFFSET $4`,
+        [`%${value}%`, value, pageSize, (page - 1) * pageSize],
+      ),
+    ]);
+    return { data: result.rows, totalItems: countResult.rows[0]?.total ?? 0 };
   }
 
-  async getTopologyDevices(olt: string, pon: string, cto: string) {
-    if (!olt.trim() || !pon.trim() || !cto.trim()) return [];
-    const result = await this.database.query<{
-      serial: string;
-      customer_id: string;
-      vendor: string;
-      model: string;
-      hw_revision: string;
-      software_version: string;
-      plan_mbps: number;
-      olt: string;
-      pon: string;
-      cto: string;
-      city: string;
-      neighborhood: string;
-      logical_drop_id: string | null;
-    }>(
-      `
+  async getTopologyDevices(
+    olt: string,
+    pon: string,
+    cto: string,
+    page: number,
+    pageSize: number,
+    sort: string,
+  ) {
+    if (!olt.trim() || !pon.trim() || !cto.trim()) {
+      return { data: [], totalItems: 0 };
+    }
+    const orderBy =
+      sort === "serial_asc"
+        ? "i.serial ASC, i.customer_id ASC"
+        : sort === "customer_id_desc"
+          ? "i.customer_id DESC, i.serial ASC"
+          : "i.customer_id ASC, i.serial ASC";
+    const parameters = [
+      olt.trim().toUpperCase(),
+      pon.trim(),
+      cto.trim().toUpperCase(),
+    ];
+    const [countResult, result] = await Promise.all([
+      this.database.query<{ total: number }>(
+        `SELECT count(*)::int AS total FROM inventory i
+         WHERE i.status='active' AND i.olt=$1 AND i.pon_port=$2 AND i.cto=$3`,
+        parameters,
+      ),
+      this.database.query<{
+        serial: string;
+        customer_id: string;
+        vendor: string;
+        model: string;
+        hw_revision: string;
+        software_version: string;
+        plan_mbps: number;
+        olt: string;
+        pon: string;
+        cto: string;
+        city: string;
+        neighborhood: string;
+        logical_drop_id: string | null;
+      }>(
+        `
       SELECT i.serial, i.customer_id, i.vendor, i.model, i.hw_revision, i.software_version,
         i.plan_mbps, i.olt, i.pon_port AS pon, i.cto, i.city, i.neighborhood,
         d.drop_id AS logical_drop_id
       FROM inventory i
       LEFT JOIN generated_logical_drops d USING(serial)
       WHERE i.status='active' AND i.olt=$1 AND i.pon_port=$2 AND i.cto=$3
-      ORDER BY i.customer_id, i.serial`,
-      [olt.trim().toUpperCase(), pon.trim(), cto.trim().toUpperCase()],
-    );
-    return result.rows;
+      ORDER BY ${orderBy}
+      LIMIT $4 OFFSET $5`,
+        [...parameters, pageSize, (page - 1) * pageSize],
+      ),
+    ]);
+    return { data: result.rows, totalItems: countResult.rows[0]?.total ?? 0 };
   }
 
   async getOverview() {
@@ -207,9 +253,11 @@ export class NetworkService {
         WHERE category IN ('Lentidão','Sem conexão','Wi-Fi')
         GROUP BY date_trunc('week', opened_at AT TIME ZONE 'America/Sao_Paulo')
         ORDER BY date_trunc('week', opened_at AT TIME ZONE 'America/Sao_Paulo')`),
-      this.database.query<{ active: number }>(
-        "SELECT count(*)::int AS active FROM inventory WHERE status='active'",
-      ),
+      this.database.query<{ active: number; olts: number; pons: number }>(`
+        SELECT count(*)::int AS active,
+          count(DISTINCT olt)::int AS olts,
+          count(DISTINCT (olt, pon_port))::int AS pons
+        FROM inventory WHERE status='active'`),
       this.database.query<{ day: string }>(
         "SELECT max(day)::text AS day FROM daily_cpe_metrics",
       ),
@@ -262,6 +310,8 @@ export class NetworkService {
       asOf: latestResult.rows[0].day,
       kpis: {
         activeCpes: activeResult.rows[0].active,
+        oltCount: activeResult.rows[0].olts,
+        ponCount: activeResult.rows[0].pons,
         ticketGrowthPct,
         affectedCpes: affectedResult.rows[0].affected,
         repeatCustomers: repeatResult.rows[0].repeaters,

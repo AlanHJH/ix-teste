@@ -15,7 +15,26 @@ const domainTools = {
   telemetry: ["telemetry_list_informs", "telemetry_list_daily_metrics"],
   diagnostics: ["diagnostics_list"],
   tickets: ["tickets_list", "tickets_get"],
-  operations: ["operations_list_dataset_loads"],
+  operations: [
+    "operations_list_dataset_loads",
+    "operations_list_grouping_candidates",
+    "operations_list_active_groupings",
+  ],
+  application: [
+    "application_get_health",
+    "dashboard_get_overview",
+    "network_get_topology",
+    "network_search_topology",
+    "network_list_topology_devices",
+    "network_list_detected_groupings",
+    "network_get_detected_grouping",
+    "customers_get_support",
+    "tickets_list_noc_queue",
+    "incidents_list_active",
+    "incidents_list_options",
+    "investigations_list",
+    "investigations_get_config",
+  ],
 } as const;
 
 type RegisteredTool = {
@@ -48,10 +67,10 @@ export function normalizeAgentToolArguments(
   ),
 ): Record<string, unknown> {
   const normalized = { ...value };
-  if (typeof normalized.limit === "number") {
-    normalized.limit = Math.max(
+  if (typeof normalized.pageSize === "number") {
+    normalized.pageSize = Math.max(
       1,
-      Math.min(maximumPageSize, Math.floor(normalized.limit)),
+      Math.min(maximumPageSize, Math.floor(normalized.pageSize)),
     );
   }
   return normalized;
@@ -66,12 +85,12 @@ export function compactToolOutput(
 
   if (payload && typeof payload === "object" && !Array.isArray(payload)) {
     const object = payload as Record<string, unknown>;
-    if (Array.isArray(object.items)) {
-      const originalItems = object.items;
+    if (Array.isArray(object.data)) {
+      const originalItems = object.data;
       for (let count = originalItems.length - 1; count >= 0; count -= 1) {
         const candidate = JSON.stringify({
           ...object,
-          items: originalItems.slice(0, count),
+          data: originalItems.slice(0, count),
           truncatedForAgent: true,
           originalItemCount: originalItems.length,
           guidance:

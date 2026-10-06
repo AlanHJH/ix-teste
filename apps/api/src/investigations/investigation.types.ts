@@ -45,10 +45,20 @@ export type AgentFinding = {
   severity: "critical" | "high" | "medium" | "low";
   confidence: number;
   scope: {
-    type: "park" | "network" | "firmware" | "equipment" | "customer";
+    type:
+      | "park"
+      | "olt"
+      | "pon"
+      | "cto"
+      | "customer"
+      | "firmware"
+      | "equipment"
+      | "region"
+      | "network";
     identifier: string;
     olt: string | null;
     pon: string | null;
+    cto: string | null;
   };
   affectedCpes: number;
   summary: string;

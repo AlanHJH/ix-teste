@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { DatabaseService } from "../database";
+import { paginate } from "../pagination";
 
 type DiagnosticRow = {
   ts: string;
@@ -32,9 +33,15 @@ type SummaryRow = {
 type ListInput = {
   query: string;
   page: number;
-  limit: number;
+  pageSize: number;
+  sort: string;
   state: string;
   requestedBy: string;
+  serial: string;
+  customerId: string;
+  diagnostic: string;
+  from: string;
+  to: string;
 };
 
 @Injectable()
@@ -45,14 +52,39 @@ export class DiagnosticsService {
     const query = input.query.trim();
     const state = input.state === "all" ? "" : input.state;
     const requestedBy = input.requestedBy === "all" ? "" : input.requestedBy;
+    const serial = input.serial.trim();
+    const customerId = input.customerId.trim();
+    const diagnostic = input.diagnostic.trim();
+    const from = input.from.trim();
+    const to = input.to.trim();
     const search = query ? `%${query}%` : "";
-    const params = [search, state, requestedBy];
+    const params = [
+      search,
+      state,
+      requestedBy,
+      serial,
+      customerId,
+      diagnostic,
+      from,
+      to,
+    ];
     const where = `
       ($1 = '' OR d.serial ILIKE $1 OR i.customer_id ILIKE $1
         OR i.vendor ILIKE $1 OR i.model ILIKE $1)
       AND ($2 = '' OR d.state = $2)
-      AND ($3 = '' OR d.requested_by = $3)`;
-    const offset = (input.page - 1) * input.limit;
+      AND ($3 = '' OR d.requested_by = $3)
+      AND ($4 = '' OR d.serial = $4)
+      AND ($5 = '' OR i.customer_id = $5)
+      AND ($6 = '' OR d.diagnostic = $6)
+      AND ($7 = '' OR d.ts >= NULLIF($7, '')::timestamptz)
+      AND ($8 = '' OR d.ts <= NULLIF($8, '')::timestamptz)`;
+    const offset = (input.page - 1) * input.pageSize;
+    const orderBy: Record<string, string> = {
+      ts_desc: "d.ts DESC, d.serial ASC",
+      ts_asc: "d.ts ASC, d.serial ASC",
+      serial_asc: "d.serial ASC, d.ts DESC",
+      download_mbps_desc: "d.download_mbps DESC NULLS LAST, d.ts DESC",
+    };
 
     const [summaryResult, itemsResult, optionsResult] = await Promise.all([
       this.database.query<SummaryRow>(
@@ -77,9 +109,9 @@ export class DiagnosticsService {
           FROM diagnostics d
           LEFT JOIN inventory i USING(serial)
           WHERE ${where}
-          ORDER BY d.ts DESC, d.serial
-          LIMIT $4 OFFSET $5`,
-        [...params, input.limit, offset],
+          ORDER BY ${orderBy[input.sort] ?? orderBy.ts_desc}
+          LIMIT $9 OFFSET $10`,
+        [...params, input.pageSize, offset],
       ),
       this.database.query<{ states: string[]; requested_by: string[] }>(`
         SELECT
@@ -87,13 +119,15 @@ export class DiagnosticsService {
           ARRAY(SELECT DISTINCT requested_by FROM diagnostics ORDER BY requested_by) AS requested_by`),
     ]);
 
-    return {
-      page: input.page,
-      limit: input.limit,
-      total: summaryResult.rows[0].total,
-      summary: summaryResult.rows[0],
-      items: itemsResult.rows,
-      filters: optionsResult.rows[0],
-    };
+    return paginate(
+      itemsResult.rows,
+      summaryResult.rows[0].total,
+      input.page,
+      input.pageSize,
+      {
+        summary: summaryResult.rows[0],
+        filters: optionsResult.rows[0],
+      },
+    );
   }
 }

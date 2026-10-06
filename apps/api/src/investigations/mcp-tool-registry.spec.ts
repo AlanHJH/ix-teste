@@ -8,20 +8,20 @@ import {
 describe("limites das ferramentas do agente", () => {
   it("reduz paginações grandes antes de consultar o MCP", () => {
     assert.deepEqual(
-      normalizeAgentToolArguments({ limit: 100, offset: 25, olt: "OLT-2" }),
-      { limit: 50, offset: 25, olt: "OLT-2" },
+      normalizeAgentToolArguments({ pageSize: 100, page: 2, olt: "OLT-2" }),
+      { pageSize: 50, page: 2, olt: "OLT-2" },
     );
   });
 
   it("mantém respostas pequenas intactas", () => {
-    const payload = { total: 1, items: [{ serial: "ABC" }] };
+    const payload = { totalItems: 1, data: [{ serial: "ABC" }] };
     assert.equal(compactToolOutput(payload, 500), JSON.stringify(payload));
   });
 
   it("trunca páginas grandes em JSON válido", () => {
     const payload = {
-      total: 50,
-      items: Array.from({ length: 50 }, (_, index) => ({
+      totalItems: 50,
+      data: Array.from({ length: 50 }, (_, index) => ({
         serial: `SERIAL-${index}`,
         detail: "x".repeat(80),
       })),
@@ -30,11 +30,11 @@ describe("limites das ferramentas do agente", () => {
     const parsed = JSON.parse(output) as {
       truncatedForAgent: boolean;
       originalItemCount: number;
-      items: unknown[];
+      data: unknown[];
     };
     assert.ok(output.length <= 500);
     assert.equal(parsed.truncatedForAgent, true);
     assert.equal(parsed.originalItemCount, 50);
-    assert.ok(parsed.items.length < 50);
+    assert.ok(parsed.data.length < 50);
   });
 });

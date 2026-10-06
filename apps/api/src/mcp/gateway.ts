@@ -25,6 +25,10 @@ import { TicketQueries } from "./contexts/tickets/application/ticket-queries.js"
 import { PostgresTicketRepository } from "./contexts/tickets/infrastructure/postgres-ticket-repository.js";
 import { createTicketServer } from "./contexts/tickets/presentation/ticket-server.js";
 import { Queryable } from "./shared/infrastructure/database.js";
+import {
+  ApplicationApi,
+  createApplicationServer,
+} from "./contexts/application/presentation/application-server.js";
 
 export interface McpGatewayOptions {
   allowedHosts?: string[];
@@ -55,7 +59,11 @@ export class McpGateway {
   private readonly validateHost: ReturnType<typeof hostHeaderValidation>;
   private readonly validateOrigin: ReturnType<typeof originValidation>;
 
-  constructor(database: Queryable, options: McpGatewayOptions = {}) {
+  constructor(
+    database: Queryable,
+    options: McpGatewayOptions = {},
+    application?: ApplicationApi,
+  ) {
     const customers = new CustomerQueries(
       new PostgresCustomerRepository(database),
     );
@@ -95,6 +103,14 @@ export class McpGateway {
         "/mcp/operations",
         createMcpHandler(() => createOperationsServer(operations)),
       ],
+      ...(application
+        ? ([
+            [
+              "/mcp/application",
+              createMcpHandler(() => createApplicationServer(application)),
+            ],
+          ] as const)
+        : []),
     ];
     this.routes = new Map(
       this.handlers.map(([path, handler]) => [path, toNodeHandler(handler)]),
@@ -156,6 +172,7 @@ export class McpGateway {
 export function createMcpGateway(
   database: Queryable,
   options?: McpGatewayOptions,
+  application?: ApplicationApi,
 ): McpGateway {
-  return new McpGateway(database, options);
+  return new McpGateway(database, options, application);
 }

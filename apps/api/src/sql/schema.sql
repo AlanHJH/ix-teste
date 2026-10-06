@@ -6,6 +6,14 @@ CREATE TABLE IF NOT EXISTS dataset_loads (
   details jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 
+-- Composição e layout individual do dashboard. O user_id será fornecido pelo
+-- sistema de autenticação; no protótipo ele corresponde ao usuário de demonstração.
+CREATE TABLE IF NOT EXISTS dashboard_preferences (
+  user_id text PRIMARY KEY,
+  composition jsonb NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS inventory (
   serial text PRIMARY KEY,
   customer_id text NOT NULL,

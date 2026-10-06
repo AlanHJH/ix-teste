@@ -5,7 +5,10 @@ import {
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { DatabaseService } from "../database";
-import { NetworkService } from "../network/network.service";
+import { listGroupingCandidates } from "../grouping-candidates";
+import { IncidentsService } from "../incidents/incidents.service";
+import { paginate } from "../pagination";
+import { validateAgentFinding } from "./finding-schema";
 import {
   InvestigationAgentError,
   OpenAIInvestigationAgent,
@@ -13,6 +16,7 @@ import {
 import {
   InvestigationRequest,
   InvestigationStatus,
+  AgentFinding,
 } from "./investigation.types";
 
 type InvestigationRow = {
@@ -61,7 +65,7 @@ export class InvestigationsService {
 
   constructor(
     private readonly database: DatabaseService,
-    private readonly network: NetworkService,
+    private readonly incidents: IncidentsService,
     private readonly agent: OpenAIInvestigationAgent,
   ) {}
 
@@ -80,6 +84,12 @@ export class InvestigationsService {
         86_400_000,
       ),
       maxConcurrency: this.maxConcurrency,
+      groupingMaxCandidates: boundedInteger(
+        process.env.AGENT_GROUPING_MAX_CANDIDATES,
+        6,
+        1,
+        12,
+      ),
       reasoningEffort: runtime.reasoningEffort,
       maxContextCharacters: runtime.maxContextCharacters,
       toolCallBudgets: runtime.toolCallBudgets,
@@ -88,17 +98,30 @@ export class InvestigationsService {
     };
   }
 
-  async list() {
-    const [summary, rows, incidents] = await Promise.all([
+  async list(page: number, pageSize: number, sort: string, status = "") {
+    const orderBy =
+      sort === "created_at_asc"
+        ? "i.created_at ASC, i.investigation_id ASC"
+        : "i.created_at DESC, i.investigation_id ASC";
+    const [summary, count, rows, incidents] = await Promise.all([
       this.database.query<{ status: InvestigationStatus; count: number }>(`
         SELECT status, count(*)::int AS count
         FROM agent_investigations GROUP BY status ORDER BY status`),
-      this.database.query<InvestigationRow>(`
+      this.database.query<{ total: number }>(
+        `SELECT count(*)::int AS total FROM agent_investigations
+         WHERE ($1='' OR status=$1)`,
+        [status],
+      ),
+      this.database.query<InvestigationRow>(
+        `
         SELECT i.*, o.incident_id
         FROM agent_investigations i
         LEFT JOIN operational_incidents o USING(investigation_id)
-        ORDER BY i.created_at DESC
-        LIMIT 100`),
+        WHERE ($1='' OR i.status=$1)
+        ORDER BY ${orderBy}
+        LIMIT $2 OFFSET $3`,
+        [status, pageSize, (page - 1) * pageSize],
+      ),
       this.database.query<Record<string, unknown>>(`
         SELECT incident_id, investigation_id, status, category, severity, title,
           scope, affected_cpes, confidence, probable_cause, recommended_action,
@@ -106,14 +129,13 @@ export class InvestigationsService {
         FROM operational_incidents
         ORDER BY opened_at DESC LIMIT 50`),
     ]);
-    return {
+    return paginate(rows.rows, count.rows[0]?.total ?? 0, page, pageSize, {
       config: this.config(),
       summary: Object.fromEntries(
         summary.rows.map(({ status, count }) => [status, count]),
       ),
-      investigations: rows.rows,
       incidents: incidents.rows,
-    };
+    });
   }
 
   async triggerManual(objective: string) {
@@ -140,7 +162,7 @@ export class InvestigationsService {
       triggerType: "schedule",
       triggerLabel: "Revisão recorrente do parque",
       objective:
-        "Procure concentrações anormais recentes por PON, firmware, equipamento ou cliente. Confirme o alcance com telemetria e use chamados ou diagnósticos como evidência complementar.",
+        "Procure problemas compartilhados ainda não cobertos por agrupamentos ativos. Considere parque, OLT, PON, CTO, região, firmware, equipamento e cliente; escolha o menor escopo que explique os afetados e confirme com telemetria, inventário, chamados ou diagnósticos.",
       scope: { type: "park", window: "latest_available" },
       dedupKey: `schedule:park-health:${hourBucket}`,
     });
@@ -148,16 +170,29 @@ export class InvestigationsService {
 
   async triggerMetricCandidates() {
     this.assertConfigured();
-    const [incidents, latest] = await Promise.all([
-      this.network.getIncidents(),
+    const maximumCandidates = boundedInteger(
+      process.env.AGENT_GROUPING_MAX_CANDIDATES,
+      6,
+      1,
+      12,
+    );
+    const [candidates, latest] = await Promise.all([
+      listGroupingCandidates(this.database, { limit: maximumCandidates }),
       this.database.query<{ day: string }>(
         "SELECT max(day)::text AS day FROM daily_cpe_metrics",
       ),
     ]);
     const asOf = latest.rows[0]?.day ?? "unknown";
     const queued = [];
-    for (const incident of incidents) {
-      const existing = await this.findActiveMetricCandidate(incident.id);
+    let covered = 0;
+    for (const candidate of candidates) {
+      if (await this.isCoveredByActiveGrouping(candidate.scope)) {
+        covered += 1;
+        continue;
+      }
+      const existing = await this.findActiveMetricCandidate(
+        candidate.candidateKey,
+      );
       if (existing) {
         queued.push(existing);
         continue;
@@ -165,39 +200,61 @@ export class InvestigationsService {
       queued.push(
         await this.enqueue({
           triggerType: "metric",
-          triggerLabel: `Detector: ${incident.title}`,
-          objective: `Confirme ou descarte este candidato determinístico: ${incident.title}. Escopo inicial: ${incident.location}. Sinal observado: ${incident.signal}. Verifique alcance, evidências contrárias e ação recomendada.`,
+          triggerLabel: `Possível problema em ${candidate.scope.identifier}`,
+          objective: `Confirme ou descarte este candidato de agrupamento. ${candidate.summary} O sinal dominante inicial é ${candidate.signal}. Verifique se há uma causa comum, refine para o menor escopo válido, registre evidências contrárias e recomende o protocolo que o N1 deve seguir.`,
           scope: {
-            type: incident.scope,
-            sourceIncidentId: incident.id,
-            location: incident.location,
-            initiallyAffected: incident.affected,
+            ...candidate.scope,
+            candidateKey: candidate.candidateKey,
+            signal: candidate.signal,
+            initiallyAffected: candidate.affectedCpes,
+            totalInScope: candidate.totalCpes,
+            affectedPercent: candidate.affectedPercent,
           },
-          dedupKey: `metric:${incident.id}:${asOf}`,
+          dedupKey: `grouping:${candidate.candidateKey}:${asOf}`,
         }),
       );
     }
-    return { candidates: queued.length, investigations: queued };
+    return {
+      candidates: candidates.length,
+      queued: queued.length,
+      covered,
+      investigations: queued,
+    };
   }
 
   private async findActiveMetricCandidate(
-    sourceIncidentId: string,
+    candidateKey: string,
   ): Promise<InvestigationRow | undefined> {
     const result = await this.database.query<InvestigationRow>(
       `SELECT i.*, o.incident_id
        FROM agent_investigations i
        LEFT JOIN operational_incidents o USING(investigation_id)
        WHERE i.trigger_type='metric'
-         AND i.scope->>'sourceIncidentId'=$1
+         AND i.scope->>'candidateKey'=$1
          AND (
            i.status IN ('queued', 'running', 'pending_review')
            OR (i.status='approved' AND o.status <> 'resolved')
          )
        ORDER BY i.created_at DESC
        LIMIT 1`,
-      [sourceIncidentId],
+      [candidateKey],
     );
     return result.rows[0];
+  }
+
+  private async isCoveredByActiveGrouping(scope: {
+    type: string;
+    identifier: string;
+  }): Promise<boolean> {
+    const result = await this.database.query<{ incident_id: string }>(
+      `SELECT incident_id FROM operational_incidents
+       WHERE status IN ('open', 'mitigating', 'monitoring')
+         AND lower(scope->>'type')=lower($1)
+         AND lower(scope->>'identifier')=lower($2)
+       LIMIT 1`,
+      [scope.type, scope.identifier],
+    );
+    return Boolean(result.rows[0]);
   }
 
   async retry(investigationId: string) {
@@ -247,6 +304,21 @@ export class InvestigationsService {
       return result.rows[0];
     }
 
+    const proposal = await this.database.query<{ finding: AgentFinding }>(
+      `SELECT finding FROM agent_investigations
+       WHERE investigation_id=$1 AND status='pending_review'`,
+      [investigationId],
+    );
+    if (!proposal.rows[0]) this.reviewNotFound();
+    const finding = validateAgentFinding(proposal.rows[0].finding);
+    if (!finding.problemDetected) {
+      throw new BadRequestException(
+        "A investigação não contém um problema confirmado para agrupar.",
+      );
+    }
+    const resolvedScope = await this.incidents.resolveProposedScope(
+      finding.scope,
+    );
     const incidentId = `INC-${randomUUID().slice(0, 8).toUpperCase()}`;
     const result = await this.database.query<InvestigationRow>(
       `WITH approved AS (
@@ -261,8 +333,8 @@ export class InvestigationsService {
            evidence, opened_by, approval_note
          )
          SELECT $4, investigation_id, finding->>'category', finding->>'severity',
-           finding->>'title', finding->'scope',
-           (finding->>'affectedCpes')::int, (finding->>'confidence')::double precision,
+           finding->>'title', $5::jsonb,
+           $6::int, (finding->>'confidence')::double precision,
            finding->>'probableCause', finding->>'recommendedAction', finding->'evidence',
            $2, $3
          FROM approved
@@ -270,7 +342,14 @@ export class InvestigationsService {
        )
        SELECT approved.*, created.incident_id
        FROM approved JOIN created USING(investigation_id)`,
-      [investigationId, normalizedReviewer, note.trim(), incidentId],
+      [
+        investigationId,
+        normalizedReviewer,
+        note.trim(),
+        incidentId,
+        JSON.stringify(resolvedScope.scope),
+        resolvedScope.affected,
+      ],
     );
     if (!result.rows[0]) this.reviewNotFound();
     return result.rows[0];

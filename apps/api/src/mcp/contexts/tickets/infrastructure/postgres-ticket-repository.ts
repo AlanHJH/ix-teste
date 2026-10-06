@@ -1,10 +1,12 @@
 import { Queryable } from "../../../shared/infrastructure/database.js";
 import { TicketQuery, TicketRepository } from "../domain/ticket-repository.js";
+import { createPage, pageOffset } from "../../../shared/domain/page.js";
 
 const ticketColumns = `
   t.ticket_id, t.opened_at::text, t.customer_id, t.channel, t.category,
   t.description, t.resolution, t.closed_at::text,
   round(extract(epoch FROM (t.closed_at - t.opened_at)) / 60)::int AS handling_minutes,
+  t.source, t.opened_by, t.related_problem_id, t.noc_status,
   equipment.serial, equipment.olt, equipment.pon_port, equipment.cto,
   equipment.city, equipment.neighborhood`;
 
@@ -16,6 +18,14 @@ const inventoryJoin = `
     ORDER BY status='active' DESC, installed_at DESC
     LIMIT 1
   ) equipment ON true`;
+
+const ticketSorts: Record<string, string> = {
+  default: "t.opened_at DESC, t.ticket_id ASC",
+  opened_at_desc: "t.opened_at DESC, t.ticket_id ASC",
+  opened_at_asc: "t.opened_at ASC, t.ticket_id ASC",
+  customer_id_asc: "t.customer_id ASC, t.opened_at DESC",
+  customer_id_desc: "t.customer_id DESC, t.opened_at DESC",
+};
 
 export class PostgresTicketRepository implements TicketRepository {
   constructor(private readonly database: Queryable) {}
@@ -49,17 +59,12 @@ export class PostgresTicketRepository implements TicketRepository {
         `SELECT ${ticketColumns}
          FROM tickets t ${inventoryJoin}
          ${where}
-         ORDER BY t.opened_at DESC, t.ticket_id
+         ORDER BY ${ticketSorts[input.sort] ?? ticketSorts.default}
          LIMIT $${limitPosition} OFFSET $${offsetPosition}`,
-        [...params, input.limit, input.offset],
+        [...params, input.pageSize, pageOffset(input)],
       ),
     ]);
-    return {
-      total: countResult.rows[0]?.total ?? 0,
-      limit: input.limit,
-      offset: input.offset,
-      items: itemsResult.rows,
-    };
+    return createPage(itemsResult.rows, countResult.rows[0]?.total ?? 0, input);
   }
 
   async findById(ticketId: string) {

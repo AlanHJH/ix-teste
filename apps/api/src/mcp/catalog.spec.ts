@@ -4,8 +4,8 @@ import { MCP_ENDPOINTS } from "./catalog.js";
 
 describe("catálogo MCP", () => {
   it("mantém um endpoint exclusivo por contexto de domínio", () => {
-    assert.equal(new Set(MCP_ENDPOINTS.map(({ path }) => path)).size, 6);
-    assert.equal(new Set(MCP_ENDPOINTS.map(({ domain }) => domain)).size, 6);
+    assert.equal(new Set(MCP_ENDPOINTS.map(({ path }) => path)).size, 7);
+    assert.equal(new Set(MCP_ENDPOINTS.map(({ domain }) => domain)).size, 7);
     assert.ok(MCP_ENDPOINTS.every(({ path }) => path.startsWith("/mcp/")));
   });
 });

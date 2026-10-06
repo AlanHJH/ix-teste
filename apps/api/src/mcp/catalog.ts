@@ -27,6 +27,12 @@ export const MCP_ENDPOINTS = [
   {
     path: "/mcp/operations",
     domain: "operations",
-    description: "Estado das cargas de dados.",
+    description: "Estado das cargas e candidatos analíticos de agrupamento.",
+  },
+  {
+    path: "/mcp/application",
+    domain: "application",
+    description:
+      "Dashboard, topologia, suporte N1, operação NOC e revisão humana.",
   },
 ] as const;

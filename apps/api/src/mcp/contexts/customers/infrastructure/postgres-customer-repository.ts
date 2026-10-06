@@ -5,6 +5,16 @@ import {
   CustomerSearch,
   CustomerSummary,
 } from "../domain/customer-repository.js";
+import { createPage, pageOffset } from "../../../shared/domain/page.js";
+
+const customerSorts: Record<string, string> = {
+  default: "customer_id ASC",
+  customer_id_asc: "customer_id ASC",
+  customer_id_desc: "customer_id DESC",
+  customer_since_desc: "customer_since DESC, customer_id ASC",
+  plan_mbps_desc: "plan_mbps DESC, customer_id ASC",
+  plan_mbps_asc: "plan_mbps ASC, customer_id ASC",
+};
 
 export class PostgresCustomerRepository implements CustomerRepository {
   constructor(private readonly database: Queryable) {}
@@ -18,6 +28,7 @@ export class PostgresCustomerRepository implements CustomerRepository {
         OR neighborhood ILIKE $1)
       AND ($2 = '' OR customer_status = $2)`;
 
+    const orderBy = customerSorts[input.sort] ?? customerSorts.default;
     const [countResult, itemsResult] = await Promise.all([
       this.database.query<{ total: number }>(
         `SELECT count(DISTINCT customer_id)::int AS total FROM inventory WHERE ${where}`,
@@ -25,24 +36,22 @@ export class PostgresCustomerRepository implements CustomerRepository {
       ),
       this.database.query<CustomerSummary>(
         `
-        SELECT DISTINCT ON (customer_id)
-          customer_id, customer_status, customer_since::text,
-          cancelled_at::text, CASE WHEN status='active' THEN serial END AS active_serial,
-          city, neighborhood, plan_mbps
-        FROM inventory
-        WHERE ${where}
-        ORDER BY customer_id, status='active' DESC, installed_at DESC
+        SELECT * FROM (
+          SELECT DISTINCT ON (customer_id)
+            customer_id, customer_status, customer_since::text,
+            cancelled_at::text, CASE WHEN status='active' THEN serial END AS active_serial,
+            city, neighborhood, plan_mbps
+          FROM inventory
+          WHERE ${where}
+          ORDER BY customer_id, status='active' DESC, installed_at DESC
+        ) customers
+        ORDER BY ${orderBy}
         LIMIT $3 OFFSET $4`,
-        [search, status, input.limit, input.offset],
+        [search, status, input.pageSize, pageOffset(input)],
       ),
     ]);
 
-    return {
-      total: countResult.rows[0]?.total ?? 0,
-      limit: input.limit,
-      offset: input.offset,
-      items: itemsResult.rows,
-    };
+    return createPage(itemsResult.rows, countResult.rows[0]?.total ?? 0, input);
   }
 
   async findById(customerId: string): Promise<CustomerDetails | null> {

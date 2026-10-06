@@ -83,6 +83,7 @@ describe("IncidentsService.options", () => {
     const database = {
       async query(text: string, params: unknown[]) {
         queries.push({ text, params });
+        if (/count\(\*\)/.test(text)) return { rows: [{ total: 1 }] };
         return {
           rows: [{ value: "1/7", label: "PON 1/7 · OLT-2" }],
         };
@@ -94,14 +95,15 @@ describe("IncidentsService.options", () => {
       query: "1/",
       olt: "olt-2",
       pon: "",
-      limit: 40,
+      page: 1,
+      pageSize: 40,
+      sort: "value_asc",
     });
 
-    assert.deepEqual(result.items, [
-      { value: "1/7", label: "PON 1/7 · OLT-2" },
-    ]);
-    assert.match(queries[0].text, /olt=\$1/);
-    assert.deepEqual(queries[0].params, ["OLT-2", "1/", 40]);
+    assert.deepEqual(result.data, [{ value: "1/7", label: "PON 1/7 · OLT-2" }]);
+    const itemsQuery = queries.find(({ text }) => /ORDER BY value/.test(text));
+    assert.match(itemsQuery?.text ?? "", /olt=\$1/);
+    assert.deepEqual(itemsQuery?.params, ["OLT-2", "1/", 40, 0]);
   });
 
   it("não varre clientes antes de receber dois caracteres", async () => {
@@ -116,10 +118,12 @@ describe("IncidentsService.options", () => {
       query: "C",
       olt: "",
       pon: "",
-      limit: 40,
+      page: 1,
+      pageSize: 40,
+      sort: "value_asc",
     });
 
-    assert.deepEqual(result.items, []);
+    assert.deepEqual(result.data, []);
   });
 });
 
@@ -163,5 +167,35 @@ describe("IncidentsService.close", () => {
       () => new IncidentsService(database).close("INC-INEXISTENTE", "resolved"),
       /não encontrado ou já encerrado/,
     );
+  });
+});
+
+describe("IncidentsService.resolveProposedScope", () => {
+  it("recalcula no inventário o alcance proposto pelo agente", async () => {
+    const queries: Array<{ text: string; params: unknown[] }> = [];
+    const database = {
+      async query(text: string, params: unknown[] = []) {
+        queries.push({ text, params });
+        return { rows: [{ affected: 62 }] };
+      },
+    } as unknown as DatabaseService;
+
+    const result = await new IncidentsService(database).resolveProposedScope({
+      type: "pon",
+      identifier: "texto livre do modelo",
+      olt: "olt-2",
+      pon: "1/7",
+      cto: null,
+    });
+
+    assert.equal(result.affected, 62);
+    assert.deepEqual(result.scope, {
+      type: "pon",
+      identifier: "OLT-2 · PON 1/7",
+      olt: "OLT-2",
+      pon: "1/7",
+      cto: null,
+    });
+    assert.deepEqual(queries[0].params, ["OLT-2", "1/7"]);
   });
 });

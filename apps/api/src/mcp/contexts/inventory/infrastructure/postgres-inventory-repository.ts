@@ -5,6 +5,7 @@ import {
   InventoryRepository,
   TopologyQuery,
 } from "../domain/inventory-repository.js";
+import { createPage, pageOffset } from "../../../shared/domain/page.js";
 
 const deviceColumns = `
   i.serial, i.customer_id, i.vendor, i.model, i.hw_revision,
@@ -14,6 +15,17 @@ const deviceColumns = `
   i.neighborhood, i.installed_at::text, i.status, i.removed_at::text,
   d.drop_id AS logical_drop_id, d.source AS logical_drop_source,
   d.confidence AS logical_drop_confidence`;
+
+const inventorySorts: Record<string, string> = {
+  default: "i.customer_id ASC, i.serial ASC",
+  customer_id_asc: "i.customer_id ASC, i.serial ASC",
+  customer_id_desc: "i.customer_id DESC, i.serial ASC",
+  serial_asc: "i.serial ASC",
+  serial_desc: "i.serial DESC",
+  installed_at_desc: "i.installed_at DESC, i.serial ASC",
+  plan_mbps_desc: "i.plan_mbps DESC, i.serial ASC",
+  plan_mbps_asc: "i.plan_mbps ASC, i.serial ASC",
+};
 
 export class PostgresInventoryRepository implements InventoryRepository {
   constructor(private readonly database: Queryable) {}
@@ -36,7 +48,7 @@ export class PostgresInventoryRepository implements InventoryRepository {
     this.addFilter(conditions, params, "i.olt", input.olt?.toUpperCase());
     this.addFilter(conditions, params, "i.pon_port", input.pon);
     this.addFilter(conditions, params, "i.cto", input.cto?.toUpperCase());
-    return this.page(conditions, params, input.limit, input.offset);
+    return this.page(conditions, params, input);
   }
 
   async topology(input: TopologyQuery) {
@@ -45,7 +57,7 @@ export class PostgresInventoryRepository implements InventoryRepository {
     this.addFilter(conditions, params, "i.olt", input.olt?.toUpperCase());
     this.addFilter(conditions, params, "i.pon_port", input.pon);
     this.addFilter(conditions, params, "i.cto", input.cto?.toUpperCase());
-    return this.page(conditions, params, input.limit, input.offset);
+    return this.page(conditions, params, input);
   }
 
   async findBySerial(serial: string): Promise<Device | null> {
@@ -73,8 +85,7 @@ export class PostgresInventoryRepository implements InventoryRepository {
   private async page(
     conditions: string[],
     params: unknown[],
-    limit: number,
-    offset: number,
+    input: DeviceSearch | TopologyQuery,
   ) {
     const where = conditions.join(" AND ");
     const limitPosition = params.length + 1;
@@ -88,16 +99,11 @@ export class PostgresInventoryRepository implements InventoryRepository {
         `SELECT ${deviceColumns}
          FROM inventory i LEFT JOIN generated_logical_drops d USING(serial)
          WHERE ${where}
-         ORDER BY i.customer_id, i.serial
+         ORDER BY ${inventorySorts[input.sort] ?? inventorySorts.default}
          LIMIT $${limitPosition} OFFSET $${offsetPosition}`,
-        [...params, limit, offset],
+        [...params, input.pageSize, pageOffset(input)],
       ),
     ]);
-    return {
-      total: countResult.rows[0]?.total ?? 0,
-      limit,
-      offset,
-      items: itemsResult.rows,
-    };
+    return createPage(itemsResult.rows, countResult.rows[0]?.total ?? 0, input);
   }
 }

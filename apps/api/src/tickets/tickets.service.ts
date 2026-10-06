@@ -5,6 +5,7 @@ import {
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { DatabaseService } from "../database";
+import { paginate } from "../pagination";
 
 type TicketRow = {
   ticket_id: string;
@@ -39,10 +40,14 @@ type SummaryRow = {
 type ListInput = {
   query: string;
   page: number;
-  limit: number;
+  pageSize: number;
+  sort: string;
   category: string;
   resolution: string;
   channel: string;
+  customerId: string;
+  from: string;
+  to: string;
 };
 
 type CreateInput = {
@@ -166,8 +171,27 @@ export class TicketsService {
     return result.rows[0];
   }
 
-  async nocQueue() {
-    const result = await this.database.query<TicketRow>(`
+  async nocQueue(page: number, pageSize: number, sort: string) {
+    const orderBy =
+      sort === "opened_at_desc"
+        ? "t.opened_at DESC, t.ticket_id ASC"
+        : sort === "status_asc"
+          ? "t.noc_status ASC, t.opened_at ASC, t.ticket_id ASC"
+          : "t.opened_at ASC, t.ticket_id ASC";
+    const [summaryResult, result] = await Promise.all([
+      this.database.query<{
+        total: number;
+        received: number;
+        in_progress: number;
+      }>(`
+        SELECT count(*)::int AS total,
+          count(*) FILTER (WHERE noc_status='pending')::int AS received,
+          count(*) FILTER (WHERE noc_status='in_progress')::int AS in_progress
+        FROM tickets
+        WHERE source='n1' AND resolution='Escalado para NOC'
+          AND noc_status IN ('pending', 'in_progress')`),
+      this.database.query<TicketRow>(
+        `
       SELECT t.ticket_id, t.opened_at::text, t.customer_id, t.channel,
         t.category, t.description, t.resolution, t.closed_at::text,
         NULL::int AS handling_minutes, t.source, t.opened_by,
@@ -185,20 +209,39 @@ export class TicketsService {
       WHERE t.source='n1'
         AND t.resolution='Escalado para NOC'
         AND t.noc_status IN ('pending', 'in_progress')
-      ORDER BY t.opened_at ASC, t.ticket_id ASC
-      LIMIT 100`);
-    return {
-      total: result.rows.length,
+      ORDER BY ${orderBy}
+      LIMIT $1 OFFSET $2`,
+        [pageSize, (page - 1) * pageSize],
+      ),
+    ]);
+    const summary = summaryResult.rows[0];
+    return paginate(result.rows, summary.total, page, pageSize, {
       summary: {
-        received: result.rows.filter(
-          (ticket) => ticket.noc_status === "pending",
-        ).length,
-        inProgress: result.rows.filter(
-          (ticket) => ticket.noc_status === "in_progress",
-        ).length,
+        received: summary.received,
+        inProgress: summary.in_progress,
       },
-      items: result.rows,
-    };
+    });
+  }
+
+  async get(ticketId: string) {
+    const result = await this.database.query<TicketRow>(
+      `SELECT t.ticket_id, t.opened_at::text, t.customer_id, t.channel,
+        t.category, t.description, t.resolution, t.closed_at::text,
+        round(extract(epoch FROM (t.closed_at - t.opened_at)) / 60)::int AS handling_minutes,
+        t.source, t.opened_by, t.related_problem_id, t.noc_status,
+        equipment.city, equipment.neighborhood, equipment.olt,
+        equipment.pon_port AS pon, equipment.cto
+       FROM tickets t
+       LEFT JOIN LATERAL (
+         SELECT city, neighborhood, olt, pon_port, cto
+         FROM inventory WHERE customer_id=t.customer_id
+         ORDER BY status='active' DESC, installed_at DESC LIMIT 1
+       ) equipment ON true
+       WHERE t.ticket_id=$1`,
+      [ticketId.trim().toUpperCase()],
+    );
+    if (!result.rows[0]) throw new NotFoundException("Chamado não encontrado.");
+    return result.rows[0];
   }
 
   async updateNocStatus(ticketId: string, status: "in_progress" | "closed") {
@@ -237,15 +280,35 @@ export class TicketsService {
     const category = input.category === "all" ? "" : input.category;
     const resolution = input.resolution === "all" ? "" : input.resolution;
     const channel = input.channel === "all" ? "" : input.channel;
+    const customerId = input.customerId.trim();
+    const from = input.from.trim();
+    const to = input.to.trim();
     const search = query ? `%${query}%` : "";
-    const params = [search, category, resolution, channel];
+    const params = [
+      search,
+      category,
+      resolution,
+      channel,
+      customerId,
+      from,
+      to,
+    ];
     const where = `
       ($1 = '' OR t.ticket_id ILIKE $1 OR t.customer_id ILIKE $1
         OR t.description ILIKE $1 OR t.resolution ILIKE $1)
       AND ($2 = '' OR t.category = $2)
       AND ($3 = '' OR t.resolution = $3)
-      AND ($4 = '' OR t.channel = $4)`;
-    const offset = (input.page - 1) * input.limit;
+      AND ($4 = '' OR t.channel = $4)
+      AND ($5 = '' OR t.customer_id = $5)
+      AND ($6 = '' OR t.opened_at >= NULLIF($6, '')::timestamptz)
+      AND ($7 = '' OR t.opened_at <= NULLIF($7, '')::timestamptz)`;
+    const offset = (input.page - 1) * input.pageSize;
+    const orderBy: Record<string, string> = {
+      opened_at_desc: "t.opened_at DESC, t.ticket_id DESC",
+      opened_at_asc: "t.opened_at ASC, t.ticket_id ASC",
+      customer_id_asc: "t.customer_id ASC, t.opened_at DESC",
+      customer_id_desc: "t.customer_id DESC, t.opened_at DESC",
+    };
 
     const [summaryResult, itemsResult, optionsResult] = await Promise.all([
       this.database.query<SummaryRow>(
@@ -277,9 +340,9 @@ export class TicketsService {
             LIMIT 1
           ) equipment ON true
           WHERE ${where}
-          ORDER BY t.opened_at DESC, t.ticket_id DESC
-          LIMIT $5 OFFSET $6`,
-        [...params, input.limit, offset],
+          ORDER BY ${orderBy[input.sort] ?? orderBy.opened_at_desc}
+          LIMIT $8 OFFSET $9`,
+        [...params, input.pageSize, offset],
       ),
       this.database.query<{
         categories: string[];
@@ -292,13 +355,15 @@ export class TicketsService {
           ARRAY(SELECT DISTINCT channel FROM tickets ORDER BY channel) AS channels`),
     ]);
 
-    return {
-      page: input.page,
-      limit: input.limit,
-      total: summaryResult.rows[0].total,
-      summary: summaryResult.rows[0],
-      items: itemsResult.rows,
-      filters: optionsResult.rows[0],
-    };
+    return paginate(
+      itemsResult.rows,
+      summaryResult.rows[0].total,
+      input.page,
+      input.pageSize,
+      {
+        summary: summaryResult.rows[0],
+        filters: optionsResult.rows[0],
+      },
+    );
   }
 }

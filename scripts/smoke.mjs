@@ -18,11 +18,51 @@ function expect(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function expectPage(payload, label) {
+  expect(Array.isArray(payload.data), `${label} sem data[]`);
+  expect(payload.page === 1, `${label} com page inválida`);
+  expect(payload.pageSize === 2, `${label} com pageSize inválido`);
+  expect(
+    Number.isInteger(payload.totalItems) && payload.totalItems >= 0,
+    `${label} sem totalItems`,
+  );
+  expect(
+    Number.isInteger(payload.totalPages) && payload.totalPages >= 0,
+    `${label} sem totalPages`,
+  );
+}
+
 const health = await getJson("/health");
 expect(health.status === "ok", "healthcheck não está pronto");
 expect(
   health.dataset?.status === "complete",
   "a carga do dataset não foi concluída",
+);
+expect(
+  health.interfaces?.openapi === "/api/openapi.json",
+  "healthcheck não anuncia o contrato OpenAPI",
+);
+
+const openapi = await getJson("/api/openapi.json");
+expect(openapi.openapi === "3.0.3", "versão OpenAPI inesperada");
+expect(
+  Object.keys(openapi.paths ?? {}).length >= 30,
+  "contrato OpenAPI não contém todas as jornadas REST",
+);
+expect(
+  openapi.paths?.["/api/inventory"]?.get?.description?.length > 40,
+  "inventário sem descrição detalhada no OpenAPI",
+);
+expect(
+  openapi.paths?.["/api/inventory"]?.get?.["x-pagination"]?.style ===
+    "page-pageSize-sort",
+  "inventário sem metadado de paginação para o dashboard",
+);
+expect(
+  openapi.paths?.["/api/inventory"]?.get?.responses?.["200"]?.content?.[
+    "application/json"
+  ]?.schema?.properties?.data?.items?.properties?.serial?.description,
+  "schema de inventário sem descrição de campos",
 );
 
 const overview = await getJson("/api/network/overview");
@@ -56,10 +96,31 @@ for (const [customerId, expectedAction] of cases) {
   );
 }
 
+const inventory = await getJson(
+  "/api/inventory?page=1&pageSize=2&sort=customer_id_asc",
+);
+expectPage(inventory, "inventário");
+expect(inventory.data.length > 0, "inventário vazio");
+
+const dailyMetrics = await getJson(
+  "/api/telemetry/daily-metrics?page=1&pageSize=2&sort=day_desc",
+);
+expectPage(dailyMetrics, "métricas diárias");
+
+const informs = await getJson(
+  `/api/telemetry/informs?serial=${encodeURIComponent(inventory.data[0].serial)}&page=1&pageSize=2&sort=ts_desc`,
+);
+expectPage(informs, "Informs");
+
+const datasetLoads = await getJson(
+  "/api/operations/dataset-loads?page=1&pageSize=2&sort=started_at_desc",
+);
+expectPage(datasetLoads, "cargas do dataset");
+
 const catalog = await getJson("/api");
 expect(
-  catalog.mcp?.endpoints?.length === 6,
-  "catálogo MCP não contém os seis domínios",
+  catalog.mcp?.endpoints?.length === 7,
+  "catálogo MCP não contém os sete domínios",
 );
 
 console.log(

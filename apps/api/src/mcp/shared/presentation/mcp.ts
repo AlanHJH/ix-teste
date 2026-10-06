@@ -2,20 +2,25 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
 
 export const pageInput = {
-  limit: z
+  page: z
+    .number()
+    .int()
+    .min(1)
+    .max(100_000)
+    .default(1)
+    .describe("Número da página, começando em 1."),
+  pageSize: z
     .number()
     .int()
     .min(1)
     .max(100)
     .default(25)
-    .describe("Quantidade de registros no lote, entre 1 e 100."),
-  offset: z
-    .number()
-    .int()
-    .min(0)
-    .max(100_000)
-    .default(0)
-    .describe("Posição inicial do lote para paginação."),
+    .describe("Quantidade de registros por página, entre 1 e 100."),
+  sort: z
+    .string()
+    .max(80)
+    .default("default")
+    .describe("Ordenação no formato campo_direção, por exemplo ts_desc."),
 };
 
 export const readOnlyAnnotations = {

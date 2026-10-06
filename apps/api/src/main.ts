@@ -3,6 +3,7 @@ import { NestFactory } from "@nestjs/core";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { AppModule } from "./app.module";
 import { McpGatewayService } from "./mcp-gateway.service";
+import { configureOpenApi } from "./openapi";
 
 type Next = (error?: unknown) => void;
 
@@ -20,6 +21,7 @@ async function bootstrap(): Promise<void> {
       .catch(next);
   });
   app.setGlobalPrefix("api", { exclude: ["health"] });
+  configureOpenApi(app);
   await app.listen(Number(process.env.PORT ?? 3000), "0.0.0.0");
 }
 
