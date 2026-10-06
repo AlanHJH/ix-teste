@@ -3,21 +3,26 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "tsc -p tsconfig.json && cp -R src/sql dist/sql",
+    "build": "tsc -p tsconfig.json && cp -R src/sql/. dist/sql",
     "start": "node dist/main.js",
     "start:dev": "tsx watch src/main.ts",
     "data:load": "tsx src/loader.ts",
-    "test": "tsx --test src/**/*.spec.ts",
+    "test": "tsx --test $(find src -type f -name '*.spec.ts' | sort)",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@modelcontextprotocol/node": "^2.1.1",
+    "@modelcontextprotocol/server": "^2.3.1",
     "@nestjs/common": "^11.0.11",
     "@nestjs/core": "^11.0.11",
     "@nestjs/platform-express": "^11.0.11",
+    "openai": "^6.49.0",
     "pg": "^8.13.3",
     "pg-copy-streams": "^7.0.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^22.13.4",

@@ -4,6 +4,7 @@ import { createGunzip } from "node:zlib";
 import { pipeline } from "node:stream/promises";
 import { Client } from "pg";
 import { from as copyFrom } from "pg-copy-streams";
+import { datasetResetSql } from "./dataset-reset";
 
 const databaseUrl =
   process.env.DATABASE_URL ??
@@ -127,6 +128,16 @@ async function copyCsv(
   console.log(`[loader] ${definition.file} importado.`);
 }
 
+async function refreshGeneratedLogicalDrops(client: Client) {
+  await client.query(
+    readFileSync(join(sqlPath, "generated-logical-drops.sql"), "utf8"),
+  );
+  const result = await client.query<{ logical_drops: string }>(
+    "SELECT count(*)::text AS logical_drops FROM generated_logical_drops",
+  );
+  return result.rows[0]?.logical_drops ?? "0";
+}
+
 async function main(): Promise<void> {
   ensureDataset();
   const client = new Client({ connectionString: databaseUrl });
@@ -137,6 +148,11 @@ async function main(): Promise<void> {
       "SELECT status FROM dataset_loads WHERE dataset_key = 'ondaluz-2026-08'",
     );
     if (current.rows[0]?.status === "complete") {
+      const logicalDrops = await refreshGeneratedLogicalDrops(client);
+      await client.query(
+        "UPDATE dataset_loads SET details = details || jsonb_build_object('logical_drops', $1::text) WHERE dataset_key='ondaluz-2026-08'",
+        [logicalDrops],
+      );
       console.log("[loader] Dataset ja carregado; mantendo volume existente.");
       return;
     }
@@ -144,16 +160,21 @@ async function main(): Promise<void> {
     await client.query(
       "INSERT INTO dataset_loads(dataset_key, status) VALUES ('ondaluz-2026-08', 'loading') ON CONFLICT (dataset_key) DO UPDATE SET status='loading', started_at=now(), finished_at=NULL",
     );
-    await client.query("TRUNCATE inventory, tickets, diagnostics, informs");
+    // operational_incidents may reference tickets created by N1. PostgreSQL
+    // requires both tables in the same TRUNCATE, even on a brand-new database
+    // where the referencing table is still empty.
+    await client.query(datasetResetSql);
     for (const definition of imports) await copyCsv(client, definition);
 
     console.log("[loader] Calculando metricas diarias e indices...");
     await client.query(readFileSync(join(sqlPath, "derived.sql"), "utf8"));
+    const logicalDrops = await refreshGeneratedLogicalDrops(client);
     const counts = await client.query(`SELECT
       (SELECT count(*) FROM inventory) AS inventory,
       (SELECT count(*) FROM tickets) AS tickets,
       (SELECT count(*) FROM diagnostics) AS diagnostics,
-      (SELECT count(*) FROM informs) AS informs`);
+      (SELECT count(*) FROM informs) AS informs,
+      ${logicalDrops}::text AS logical_drops`);
     await client.query(
       "UPDATE dataset_loads SET status='complete', finished_at=now(), details=$1 WHERE dataset_key='ondaluz-2026-08'",
       [counts.rows[0]],
@@ -162,7 +183,7 @@ async function main(): Promise<void> {
   } catch (error) {
     await client
       .query(
-        "UPDATE dataset_loads SET status='failed', details=jsonb_build_object('error', $1) WHERE dataset_key='ondaluz-2026-08'",
+        "UPDATE dataset_loads SET status='failed', details=jsonb_build_object('error', $1::text) WHERE dataset_key='ondaluz-2026-08'",
         [error instanceof Error ? error.message : String(error)],
       )
       .catch(() => undefined);

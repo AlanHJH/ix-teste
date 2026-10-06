@@ -1,4 +1,4 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, ServiceUnavailableException } from "@nestjs/common";
 import { DatabaseService } from "./database";
 
 @Controller()
@@ -13,9 +13,15 @@ export class HealthController {
     }>(
       "SELECT status, finished_at FROM dataset_loads WHERE dataset_key='ondaluz-2026-08'",
     );
+    const dataset = result.rows[0] ?? null;
+    if (dataset?.status !== "complete") {
+      throw new ServiceUnavailableException({ status: "loading", dataset });
+    }
     return {
-      status: result.rows[0]?.status === "complete" ? "ok" : "loading",
-      dataset: result.rows[0] ?? null,
+      status: "ok",
+      service: "ondaluz-api",
+      interfaces: { rest: "/api", mcp: "/mcp" },
+      dataset,
     };
   }
 }

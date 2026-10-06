@@ -1,0 +1,1210 @@
+import { FormEvent, useEffect, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Network,
+  Play,
+  Plus,
+  RefreshCw,
+  TicketCheck,
+  X,
+} from "lucide-react";
+import { api } from "./api";
+import { HelpTooltip } from "./HelpTooltip";
+import { providerGlossary, TechnicalText } from "./ProviderGlossary";
+import type {
+  Incident,
+  IncidentOptionType,
+  NocQueue,
+  OperationalIncident,
+  OperationalIncidentPage,
+  SupportTicket,
+} from "./types";
+
+type IncidentOption = { value: string; label: string };
+
+const emptyCatalogOptions = (): Record<
+  IncidentOptionType,
+  IncidentOption[]
+> => ({
+  olt: [],
+  pon: [],
+  cto: [],
+  customer: [],
+  firmware: [],
+  equipment: [],
+  region: [],
+});
+
+type ScopeType =
+  | "park"
+  | "olt"
+  | "pon"
+  | "cto"
+  | "customer"
+  | "firmware"
+  | "equipment"
+  | "region";
+
+const initialForm = {
+  openedBy: "",
+  title: "",
+  severity: "high" as "critical" | "high" | "medium" | "low",
+  scopeType: "pon" as ScopeType,
+  identifier: "",
+  olt: "",
+  pon: "",
+  cto: "",
+  probableCause: "",
+  recommendedAction: "",
+  originTicketId: null as string | null,
+};
+
+const scopeLabels: Record<ScopeType, string> = {
+  park: "Parque inteiro",
+  olt: "OLT",
+  pon: "Porta PON",
+  cto: "CTO",
+  customer: "Cliente ou CPE",
+  firmware: "Versão de firmware",
+  equipment: "Modelo de equipamento",
+  region: "Cidade ou bairro",
+};
+
+const severityLabels = {
+  critical: "Crítico",
+  high: "Alto",
+  medium: "Médio",
+  low: "Baixo",
+};
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+function NocTicketCard({
+  ticket,
+  stage,
+  busy,
+  onStart,
+  onClose,
+  onCreateIncident,
+}: {
+  ticket: SupportTicket;
+  stage: "received" | "in_progress";
+  busy: boolean;
+  onStart: () => void;
+  onClose: () => void;
+  onCreateIncident: () => void;
+}) {
+  const inProgress = stage === "in_progress";
+  return (
+    <article
+      className={`incident-card high noc-escalated-card ${stage}`}
+      key={ticket.ticket_id}
+    >
+      <header>
+        <div className="incident-title">
+          <span className="scope-icon">
+            <TicketCheck size={19} />
+          </span>
+          <div>
+            <div className="eyebrow-row">
+              <span className="severity">
+                {inProgress ? "Em andamento" : "Recebido"}
+              </span>
+              <span className="scope-label">
+                Chamado N1
+                <HelpTooltip
+                  term="Chamado escalado pelo N1"
+                  description="Atendimento individual encaminhado ao NOC. Ainda não é um incidente compartilhado."
+                />
+              </span>
+              <time>{formatDate(ticket.opened_at)}</time>
+            </div>
+            <h3>
+              <TechnicalText text={ticket.category} /> · {ticket.customer_id}
+            </h3>
+            <p>
+              {ticket.olt && ticket.pon
+                ? `${ticket.olt} · PON ${ticket.pon}${ticket.cto ? ` · ${ticket.cto}` : ""}`
+                : "Topologia não localizada"}
+            </p>
+          </div>
+        </div>
+        <div className="score">
+          <strong>N1</strong>
+          <span>origem</span>
+        </div>
+      </header>
+      <div className="incident-stats">
+        <div>
+          <strong>{ticket.customer_id}</strong>
+          <span>Cliente</span>
+        </div>
+        <div>
+          <strong>
+            {ticket.olt && ticket.pon
+              ? `${ticket.olt} / ${ticket.pon}`
+              : "Não localizada"}
+          </strong>
+          <span>
+            Escopo inicial
+            <HelpTooltip
+              term="Escopo inicial"
+              description="Topologia do cliente usada como ponto de partida. O NOC ainda deve confirmar a área real de impacto."
+            />
+          </span>
+        </div>
+        <div>
+          <strong>{ticket.opened_by ?? "Não informado"}</strong>
+          <span>Atendente responsável</span>
+        </div>
+      </div>
+      <div className="recommendation noc-ticket-report">
+        <AlertTriangle size={17} />
+        <p>
+          <strong>Relato recebido · {ticket.ticket_id}</strong>
+          {ticket.description}
+        </p>
+      </div>
+      {inProgress ? (
+        <div className="noc-ticket-actions">
+          <button
+            className="noc-escalated-action close-ticket"
+            disabled={busy}
+            onClick={onClose}
+            title="Encerra o chamado no NOC e o remove do Kanban, preservando o histórico."
+          >
+            <CheckCircle2 size={14} />
+            {busy ? "Encerrando…" : "Encerrar chamado"}
+          </button>
+          <button
+            className="noc-escalated-action"
+            disabled={busy}
+            onClick={onCreateIncident}
+          >
+            Criar agrupamento para este chamado
+            <ArrowRight size={14} />
+          </button>
+        </div>
+      ) : (
+        <button
+          className="noc-escalated-action"
+          disabled={busy}
+          onClick={onStart}
+        >
+          <Play size={14} />
+          {busy ? "Movendo…" : "Iniciar análise"}
+        </button>
+      )}
+    </article>
+  );
+}
+
+type GroupingCardData = {
+  id: string;
+  severity: "critical" | "high" | "medium" | "low";
+  title: string;
+  location: string;
+  affected: number;
+  confidence: string;
+  signal: string;
+  recommendation: string;
+  owner: string;
+  evidence: string[];
+  origin: string;
+  originTicketId: string | null;
+};
+
+function detectedGrouping(incident: Incident): GroupingCardData {
+  return {
+    id: incident.id,
+    severity: incident.severity,
+    title: incident.title,
+    location: incident.location,
+    affected: incident.affected,
+    confidence: incident.confidence,
+    signal: incident.signal,
+    recommendation: incident.recommendation,
+    owner: incident.owner,
+    evidence: incident.evidence,
+    origin: "Detecção automática",
+    originTicketId: null,
+  };
+}
+
+function operationalGrouping(incident: OperationalIncident): GroupingCardData {
+  const evidence = incident.evidence
+    .map((record) =>
+      Object.values(record)
+        .filter((value): value is string => typeof value === "string")
+        .join(" · "),
+    )
+    .filter(Boolean);
+
+  return {
+    id: incident.incident_id,
+    severity: incident.severity,
+    title: incident.title,
+    location: incident.scope.identifier,
+    affected: incident.affected_cpes,
+    confidence: `${Math.round(incident.confidence * 100)}%`,
+    signal: incident.probable_cause,
+    recommendation: incident.recommended_action,
+    owner: incident.opened_by,
+    evidence,
+    origin:
+      incident.source === "manual" ? "Registro do NOC" : "Detecção automática",
+    originTicketId: incident.origin_ticket_id,
+  };
+}
+
+function GroupingCard({
+  grouping,
+  closing,
+  onClose,
+}: {
+  grouping: GroupingCardData;
+  closing: boolean;
+  onClose: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <article className={`incident-card grouping-card ${grouping.severity}`}>
+      <header>
+        <div className="incident-title">
+          <span className="scope-icon">
+            <Network size={19} aria-hidden="true" />
+          </span>
+          <div>
+            <div className="eyebrow-row">
+              <span className={`severity ${grouping.severity}`}>
+                {severityLabels[grouping.severity]}
+              </span>
+              <span className="scope-label">
+                Agrupamento ativo
+                <HelpTooltip
+                  term="Agrupamento ativo"
+                  description="Problema compartilhado que reúne clientes por uma causa ou parte da rede em comum."
+                />
+              </span>
+              <span>{grouping.id}</span>
+            </div>
+            <h3>
+              <TechnicalText text={grouping.title} />
+            </h3>
+            <p>
+              <TechnicalText text={grouping.location} />
+            </p>
+          </div>
+        </div>
+        <div className="score">
+          <strong>{grouping.confidence}</strong>
+          <span>confiança</span>
+        </div>
+      </header>
+      <div className="incident-stats">
+        <div>
+          <strong>{grouping.affected.toLocaleString("pt-BR")}</strong>
+          <span>
+            CPEs afetadas
+            <HelpTooltip
+              term="CPEs potencialmente afetadas"
+              description="Quantidade calculada no inventário para o escopo definido. Representa impacto potencial, não confirmação individual."
+            />
+          </span>
+        </div>
+        <div>
+          <strong>
+            <TechnicalText text={grouping.signal} />
+          </strong>
+          <span>Sinal dominante</span>
+        </div>
+        <div>
+          <strong>
+            <TechnicalText text={grouping.owner} />
+          </strong>
+          <span>Responsável</span>
+        </div>
+      </div>
+      <div className="recommendation">
+        <ArrowRight size={17} aria-hidden="true" />
+        <p>
+          <strong>Próxima ação</strong>
+          <TechnicalText text={grouping.recommendation} />
+        </p>
+      </div>
+      {expanded && grouping.evidence.length > 0 && (
+        <ul className="evidence">
+          {grouping.evidence.map((item, index) => (
+            <li key={`${grouping.id}-${index}`}>
+              <CheckCircle2 size={15} aria-hidden="true" />
+              <TechnicalText text={item} />
+            </li>
+          ))}
+        </ul>
+      )}
+      <footer className="grouping-card-footer">
+        <div className="grouping-card-metadata">
+          <span>Origem: {grouping.origin}</span>
+          {grouping.originTicketId && (
+            <span>Chamado vinculado: {grouping.originTicketId}</span>
+          )}
+        </div>
+        <div className="grouping-card-actions">
+          {grouping.evidence.length > 0 && (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setExpanded((value) => !value)}
+              aria-expanded={expanded}
+            >
+              {expanded ? "Ocultar evidências" : "Ver evidências"}
+            </button>
+          )}
+          <button
+            type="button"
+            className="close-grouping"
+            onClick={onClose}
+            disabled={closing}
+            aria-label={`Encerrar agrupamento ${grouping.title}`}
+            title="Encerra o agrupamento nas visões do NOC e do N1, preservando o histórico."
+          >
+            <CheckCircle2 size={15} aria-hidden="true" />
+            <span>{closing ? "Encerrando…" : "Encerrar"}</span>
+          </button>
+        </div>
+      </footer>
+    </article>
+  );
+}
+
+export function NocOperations({
+  detectedGroups,
+}: {
+  detectedGroups: Incident[];
+}) {
+  const [queue, setQueue] = useState<NocQueue | null>(null);
+  const [incidents, setIncidents] = useState<OperationalIncidentPage | null>(
+    null,
+  );
+  const [catalogOptions, setCatalogOptions] = useState(emptyCatalogOptions);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState("");
+  const [form, setForm] = useState(initialForm);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [created, setCreated] = useState("");
+  const [closedGrouping, setClosedGrouping] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [movingTicket, setMovingTicket] = useState("");
+  const [closingTicket, setClosingTicket] = useState("");
+  const [closingGrouping, setClosingGrouping] = useState("");
+  const [activeDetectedGroups, setActiveDetectedGroups] =
+    useState(detectedGroups);
+
+  useEffect(() => setActiveDetectedGroups(detectedGroups), [detectedGroups]);
+
+  async function refresh() {
+    try {
+      const [nextQueue, nextIncidents] = await Promise.all([
+        api.nocQueue(),
+        api.operationalIncidents(),
+      ]);
+      setQueue(nextQueue);
+      setIncidents(nextIncidents);
+      setError("");
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Falha ao consultar o NOC",
+      );
+    }
+  }
+
+  useEffect(() => {
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 10_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  function openCreateGrouping() {
+    setCreated("");
+    setError("");
+    setForm((current) => ({ ...initialForm, openedBy: current.openedBy }));
+    setModalOpen(true);
+  }
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !busy) setModalOpen(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [busy, modalOpen]);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    const scope = form.scopeType;
+    const lookups: Array<{
+      type: IncidentOptionType;
+      query: string;
+      olt?: string;
+      pon?: string;
+    }> = [];
+
+    if (["olt", "pon", "cto"].includes(scope)) {
+      lookups.push({ type: "olt", query: form.olt });
+    }
+    if (["pon", "cto"].includes(scope) && form.olt) {
+      lookups.push({ type: "pon", query: form.pon, olt: form.olt });
+    }
+    if (scope === "cto" && form.olt && form.pon) {
+      lookups.push({
+        type: "cto",
+        query: form.cto,
+        olt: form.olt,
+        pon: form.pon,
+      });
+    }
+    if (["customer", "firmware", "equipment", "region"].includes(scope)) {
+      lookups.push({
+        type: scope as IncidentOptionType,
+        query: form.identifier,
+      });
+    }
+
+    if (lookups.length === 0) {
+      setCatalogLoading(false);
+      setCatalogError("");
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setCatalogLoading(true);
+      void Promise.all(lookups.map((lookup) => api.incidentOptions(lookup)))
+        .then((responses) => {
+          if (cancelled) return;
+          setCatalogOptions((current) => {
+            const next = { ...current };
+            for (const response of responses) {
+              next[response.type] = response.items;
+            }
+            return next;
+          });
+          setCatalogError("");
+        })
+        .catch((reason) => {
+          if (cancelled) return;
+          setCatalogError(
+            reason instanceof Error
+              ? reason.message
+              : "Falha ao consultar opções cadastradas.",
+          );
+        })
+        .finally(() => {
+          if (!cancelled) setCatalogLoading(false);
+        });
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    form.cto,
+    form.identifier,
+    form.olt,
+    form.pon,
+    form.scopeType,
+    modalOpen,
+  ]);
+
+  function update<Key extends keyof typeof form>(
+    key: Key,
+    value: (typeof form)[Key],
+  ) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateScope(scopeType: ScopeType) {
+    setCatalogError("");
+    setForm((current) => ({
+      ...current,
+      scopeType,
+      identifier: "",
+      olt: "",
+      pon: "",
+      cto: "",
+    }));
+  }
+
+  function updateOlt(olt: string) {
+    setForm((current) => ({
+      ...current,
+      olt: olt.toUpperCase(),
+      pon: "",
+      cto: "",
+    }));
+  }
+
+  function updatePon(pon: string) {
+    setForm((current) => ({ ...current, pon, cto: "" }));
+  }
+
+  function useTicket(ticket: SupportTicket) {
+    setCreated("");
+    setForm((current) => ({
+      ...current,
+      title: `${ticket.category} com possível impacto compartilhado`,
+      scopeType: ticket.olt && ticket.pon ? "pon" : "customer",
+      identifier: ticket.customer_id,
+      olt: ticket.olt ?? "",
+      pon: ticket.pon ?? "",
+      cto: ticket.cto ?? "",
+      probableCause: ticket.description,
+      recommendedAction:
+        "Correlacionar telemetria e atuar no ponto comum confirmado.",
+      originTicketId: ticket.ticket_id,
+    }));
+    setError("");
+    setModalOpen(true);
+  }
+
+  async function startTicket(ticket: SupportTicket) {
+    setMovingTicket(ticket.ticket_id);
+    setError("");
+    try {
+      await api.updateNocTicketStatus(ticket.ticket_id, "in_progress");
+      await refresh();
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Falha ao mover o chamado",
+      );
+    } finally {
+      setMovingTicket("");
+    }
+  }
+
+  async function closeTicket(ticket: SupportTicket) {
+    const confirmed = window.confirm(
+      `Encerrar o chamado ${ticket.ticket_id}?\n\nEle sairá do Kanban do NOC e continuará disponível no histórico de tickets.`,
+    );
+    if (!confirmed) return;
+
+    setClosingTicket(ticket.ticket_id);
+    setError("");
+    try {
+      await api.updateNocTicketStatus(ticket.ticket_id, "closed");
+      await refresh();
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Falha ao encerrar o chamado",
+      );
+    } finally {
+      setClosingTicket("");
+    }
+  }
+
+  function confirmGroupingClosure(title: string) {
+    return window.confirm(
+      `Encerrar o agrupamento “${title}”?\n\nEle deixará de aparecer para o NOC e para o atendente N1. O registro continuará preservado no histórico.`,
+    );
+  }
+
+  async function closeOperationalGrouping(incident: OperationalIncident) {
+    if (!confirmGroupingClosure(incident.title)) return;
+
+    setClosingGrouping(incident.incident_id);
+    setError("");
+    setCreated("");
+    setClosedGrouping("");
+    try {
+      await api.closeOperationalIncident(incident.incident_id);
+      setClosedGrouping(incident.incident_id);
+      await refresh();
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Falha ao encerrar o agrupamento",
+      );
+    } finally {
+      setClosingGrouping("");
+    }
+  }
+
+  async function closeDetectedGrouping(incident: Incident) {
+    if (!confirmGroupingClosure(incident.title)) return;
+
+    setClosingGrouping(incident.id);
+    setError("");
+    setCreated("");
+    setClosedGrouping("");
+    try {
+      await api.closeDetectedGrouping(incident.id);
+      setActiveDetectedGroups((current) =>
+        current.filter((grouping) => grouping.id !== incident.id),
+      );
+      setClosedGrouping(incident.id);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Falha ao encerrar o agrupamento",
+      );
+    } finally {
+      setClosingGrouping("");
+    }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const requiredSelections: Array<[IncidentOptionType, string]> = [];
+    if (["olt", "pon", "cto"].includes(form.scopeType)) {
+      requiredSelections.push(["olt", form.olt]);
+    }
+    if (["pon", "cto"].includes(form.scopeType)) {
+      requiredSelections.push(["pon", form.pon]);
+    }
+    if (form.scopeType === "cto") {
+      requiredSelections.push(["cto", form.cto]);
+    }
+    if (
+      ["customer", "firmware", "equipment", "region"].includes(form.scopeType)
+    ) {
+      requiredSelections.push([
+        form.scopeType as IncidentOptionType,
+        form.identifier,
+      ]);
+    }
+    const invalidSelection = requiredSelections.some(
+      ([type, value]) =>
+        !catalogOptions[type].some(
+          (option) => option.value.toLowerCase() === value.toLowerCase(),
+        ),
+    );
+    if (catalogLoading || invalidSelection) {
+      setError("Selecione valores cadastrados nas listas de sugestões.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setCreated("");
+    setClosedGrouping("");
+    try {
+      const result = await api.createOperationalIncident(form);
+      setCreated(result.incident_id);
+      setForm((current) => ({ ...initialForm, openedBy: current.openedBy }));
+      await refresh();
+      setModalOpen(false);
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Falha ao criar agrupamento",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const needsOlt = ["olt", "pon", "cto"].includes(form.scopeType);
+  const needsPon = ["pon", "cto"].includes(form.scopeType);
+  const needsCto = form.scopeType === "cto";
+  const needsIdentifier = [
+    "customer",
+    "firmware",
+    "equipment",
+    "region",
+  ].includes(form.scopeType);
+  const identifierOptions = needsIdentifier
+    ? catalogOptions[form.scopeType as IncidentOptionType]
+    : [];
+  const receivedTickets =
+    queue?.items.filter((ticket) => ticket.noc_status === "pending") ?? [];
+  const inProgressTickets =
+    queue?.items.filter((ticket) => ticket.noc_status === "in_progress") ?? [];
+
+  return (
+    <>
+      <section className="noc-operations">
+        <header className="noc-operations-heading">
+          <div>
+            <span className="section-label">Operação humana</span>
+            <h2>Chamados escalados para o NOC</h2>
+            <p>
+              Atendimentos individuais recebidos do N1, separados entre os que
+              aguardam análise e os que já estão em andamento.
+            </p>
+          </div>
+          <div className="noc-heading-actions">
+            <button
+              className="noc-refresh"
+              aria-label="Atualizar chamados do NOC"
+              title="Atualizar chamados do NOC"
+              onClick={() => void refresh()}
+            >
+              <RefreshCw size={16} /> Atualizar
+            </button>
+          </div>
+        </header>
+
+        <div className="noc-kanban-board" aria-label="Fluxo de chamados do NOC">
+          <section className="noc-kanban-column received">
+            <header>
+              <div>
+                <span>1</span>
+                <div>
+                  <strong>Chamado recebido</strong>
+                  <small>Aguardando início da análise</small>
+                </div>
+              </div>
+              <b>{queue?.summary.received ?? 0}</b>
+            </header>
+            <div className="noc-kanban-list">
+              {receivedTickets.map((ticket) => (
+                <NocTicketCard
+                  key={ticket.ticket_id}
+                  ticket={ticket}
+                  stage="received"
+                  busy={movingTicket === ticket.ticket_id}
+                  onStart={() => void startTicket(ticket)}
+                  onClose={() => undefined}
+                  onCreateIncident={() => useTicket(ticket)}
+                />
+              ))}
+              {queue && receivedTickets.length === 0 && (
+                <div className="noc-column-empty">
+                  <TicketCheck size={27} />
+                  <strong>Nenhum chamado recebido</strong>
+                  <span>Novos escalonamentos do N1 aparecerão aqui.</span>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="noc-kanban-column in-progress">
+            <header>
+              <div>
+                <span>2</span>
+                <div>
+                  <strong>Chamado em andamento</strong>
+                  <small>Atendimentos em análise pelo NOC</small>
+                </div>
+              </div>
+              <b>{queue?.summary.inProgress ?? 0}</b>
+            </header>
+            <div className="noc-kanban-list">
+              {inProgressTickets.map((ticket) => (
+                <NocTicketCard
+                  key={ticket.ticket_id}
+                  ticket={ticket}
+                  stage="in_progress"
+                  busy={closingTicket === ticket.ticket_id}
+                  onStart={() => undefined}
+                  onClose={() => void closeTicket(ticket)}
+                  onCreateIncident={() => useTicket(ticket)}
+                />
+              ))}
+              {queue && inProgressTickets.length === 0 && (
+                <div className="noc-column-empty">
+                  <TicketCheck size={27} />
+                  <strong>Nenhum chamado em andamento</strong>
+                  <span>Inicie a análise de um chamado recebido.</span>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <p className="noc-kanban-note">
+          Ao criar um agrupamento, o chamado de origem é encerrado e o novo
+          agrupamento passa para a seção abaixo.
+        </p>
+      </section>
+
+      <section className="incidents-section">
+        <div className="section-heading">
+          <div>
+            <span className="section-label">
+              Agrupamentos detectados
+              <HelpTooltip
+                term="Agrupamento detectado"
+                description="Problema compartilhado identificado pelos sinais analíticos ou registrado pelo NOC. A atuação acontece no ponto comum afetado."
+              />
+            </span>
+            <h2>Onde agir primeiro</h2>
+          </div>
+          <div className="grouping-heading-actions">
+            <span>
+              {(incidents?.total ?? 0) + activeDetectedGroups.length} grupos
+              ativos
+            </span>
+            <button className="noc-open-incident" onClick={openCreateGrouping}>
+              <Plus size={16} /> Criar agrupamento
+            </button>
+          </div>
+        </div>
+
+        {created && (
+          <p className="noc-form-success">
+            <CheckCircle2 size={15} /> Agrupamento {created} criado e impacto
+            calculado pelo inventário.
+          </p>
+        )}
+
+        {closedGrouping && (
+          <p className="noc-form-success">
+            <CheckCircle2 size={15} /> Agrupamento {closedGrouping} encerrado
+            nas visões ativas do NOC e do N1.
+          </p>
+        )}
+
+        <div className="incidents-list">
+          {incidents?.items.map((incident) => (
+            <GroupingCard
+              key={incident.incident_id}
+              grouping={operationalGrouping(incident)}
+              closing={closingGrouping === incident.incident_id}
+              onClose={() => void closeOperationalGrouping(incident)}
+            />
+          ))}
+          {activeDetectedGroups.map((incident) => (
+            <GroupingCard
+              key={incident.id}
+              grouping={detectedGrouping(incident)}
+              closing={closingGrouping === incident.id}
+              onClose={() => void closeDetectedGrouping(incident)}
+            />
+          ))}
+        </div>
+      </section>
+
+      {modalOpen && (
+        <div
+          className="entity-modal-backdrop noc-incident-backdrop"
+          role="presentation"
+          onMouseDown={() => !busy && setModalOpen(false)}
+        >
+          <section
+            className="noc-incident-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="noc-incident-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              className="entity-modal-close"
+              type="button"
+              onClick={() => setModalOpen(false)}
+              aria-label="Fechar criação de agrupamento"
+              title="Fecha a janela sem criar o agrupamento."
+              disabled={busy}
+            >
+              <X size={19} />
+            </button>
+            <form
+              id="noc-incident-form"
+              className="noc-incident-form"
+              onSubmit={submit}
+            >
+              <header>
+                <div>
+                  <span className="section-label">Decisão do operador</span>
+                  <h3 id="noc-incident-title">Criar agrupamento</h3>
+                  <p>
+                    Defina o ponto comum; o sistema calcula as CPEs
+                    potencialmente afetadas antes de registrar o caso.
+                  </p>
+                </div>
+                <Network size={24} />
+              </header>
+              {form.originTicketId && (
+                <div className="noc-origin-ticket">
+                  <TicketCheck size={15} /> Origem: {form.originTicketId}
+                  <button
+                    type="button"
+                    aria-label="Remover vínculo com o chamado de origem"
+                    onClick={() => update("originTicketId", null)}
+                  >
+                    remover vínculo
+                  </button>
+                </div>
+              )}
+              <div className="noc-form-grid">
+                <label>
+                  Responsável do NOC
+                  <input
+                    value={form.openedBy}
+                    onChange={(event) => update("openedBy", event.target.value)}
+                    placeholder="Nome ou matrícula"
+                    maxLength={100}
+                    required
+                  />
+                </label>
+                <label>
+                  Severidade
+                  <select
+                    value={form.severity}
+                    onChange={(event) =>
+                      update(
+                        "severity",
+                        event.target.value as typeof form.severity,
+                      )
+                    }
+                  >
+                    {Object.entries(severityLabels).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="noc-wide-field">
+                  Título do agrupamento
+                  <input
+                    value={form.title}
+                    onChange={(event) => update("title", event.target.value)}
+                    placeholder="Ex.: perda de sinal compartilhada no Jardim Aurora"
+                    minLength={5}
+                    maxLength={160}
+                    required
+                  />
+                </label>
+                <label>
+                  Área de impacto
+                  <span className="label-with-help">
+                    Tipo de escopo
+                    <HelpTooltip
+                      term="Escopo do agrupamento"
+                      description="Define o ponto comum usado para calcular as CPEs potencialmente afetadas: parque, OLT, PON, CTO, cliente ou grupo lógico."
+                    />
+                  </span>
+                  <select
+                    value={form.scopeType}
+                    onChange={(event) =>
+                      updateScope(event.target.value as ScopeType)
+                    }
+                  >
+                    {Object.entries(scopeLabels).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {needsOlt && (
+                  <label>
+                    <span className="label-with-help">
+                      OLT
+                      <HelpTooltip
+                        term="OLT"
+                        description={providerGlossary.olt.description}
+                      />
+                    </span>
+                    <input
+                      list="noc-olt-options"
+                      value={form.olt}
+                      onChange={(event) => updateOlt(event.target.value)}
+                      placeholder="Digite para buscar uma OLT"
+                      autoComplete="off"
+                      aria-describedby="noc-olt-hint"
+                      required
+                    />
+                    <datalist id="noc-olt-options">
+                      {catalogOptions.olt.map((option) => (
+                        <option
+                          key={option.value}
+                          value={option.value}
+                          label={option.label}
+                        />
+                      ))}
+                    </datalist>
+                    <small id="noc-olt-hint" className="catalog-field-note">
+                      Selecione uma OLT cadastrada.
+                    </small>
+                  </label>
+                )}
+                {needsPon && (
+                  <label>
+                    <span className="label-with-help">
+                      PON
+                      <HelpTooltip
+                        term="PON"
+                        description={providerGlossary.pon.description}
+                      />
+                    </span>
+                    <input
+                      list="noc-pon-options"
+                      value={form.pon}
+                      onChange={(event) => updatePon(event.target.value)}
+                      placeholder="Selecione primeiro a OLT"
+                      autoComplete="off"
+                      aria-describedby="noc-pon-hint"
+                      required
+                    />
+                    <datalist id="noc-pon-options">
+                      {catalogOptions.pon.map((option) => (
+                        <option
+                          key={option.value}
+                          value={option.value}
+                          label={option.label}
+                        />
+                      ))}
+                    </datalist>
+                    <small id="noc-pon-hint" className="catalog-field-note">
+                      Lista filtrada pela OLT escolhida.
+                    </small>
+                  </label>
+                )}
+                {needsCto && (
+                  <label>
+                    <span className="label-with-help">
+                      CTO
+                      <HelpTooltip
+                        term="CTO"
+                        description={providerGlossary.cto.description}
+                      />
+                    </span>
+                    <input
+                      list="noc-cto-options"
+                      value={form.cto}
+                      onChange={(event) => update("cto", event.target.value)}
+                      placeholder="Selecione primeiro a OLT e a PON"
+                      autoComplete="off"
+                      aria-describedby="noc-cto-hint"
+                      required
+                    />
+                    <datalist id="noc-cto-options">
+                      {catalogOptions.cto.map((option) => (
+                        <option
+                          key={option.value}
+                          value={option.value}
+                          label={option.label}
+                        />
+                      ))}
+                    </datalist>
+                    <small id="noc-cto-hint" className="catalog-field-note">
+                      Lista filtrada pela OLT e PON escolhidas.
+                    </small>
+                  </label>
+                )}
+                {needsIdentifier && (
+                  <label>
+                    <span className="label-with-help">
+                      {scopeLabels[form.scopeType]}
+                      {form.scopeType === "customer" && (
+                        <HelpTooltip
+                          term="CPE"
+                          description={providerGlossary.cpe.description}
+                        />
+                      )}
+                    </span>
+                    <input
+                      list={`noc-${form.scopeType}-options`}
+                      value={form.identifier}
+                      onChange={(event) =>
+                        update("identifier", event.target.value)
+                      }
+                      placeholder={
+                        form.scopeType === "customer"
+                          ? "Cliente ou serial"
+                          : form.scopeType === "firmware"
+                            ? "Digite para buscar um firmware"
+                            : form.scopeType === "equipment"
+                              ? "Digite fabricante ou modelo"
+                              : "Digite uma cidade ou bairro"
+                      }
+                      autoComplete="off"
+                      aria-describedby="noc-identifier-hint"
+                      required
+                    />
+                    <datalist id={`noc-${form.scopeType}-options`}>
+                      {identifierOptions.map((option) => (
+                        <option
+                          key={option.value}
+                          value={option.value}
+                          label={option.label}
+                        />
+                      ))}
+                    </datalist>
+                    <small
+                      id="noc-identifier-hint"
+                      className="catalog-field-note"
+                    >
+                      {form.scopeType === "customer"
+                        ? "Digite ao menos 2 caracteres e selecione o cliente cadastrado."
+                        : "Selecione uma opção cadastrada."}
+                    </small>
+                  </label>
+                )}
+                <label className="noc-wide-field">
+                  Causa ou hipótese
+                  <textarea
+                    value={form.probableCause}
+                    onChange={(event) =>
+                      update("probableCause", event.target.value)
+                    }
+                    minLength={5}
+                    maxLength={600}
+                    required
+                  />
+                </label>
+                <label className="noc-wide-field">
+                  Próxima ação
+                  <textarea
+                    value={form.recommendedAction}
+                    onChange={(event) =>
+                      update("recommendedAction", event.target.value)
+                    }
+                    minLength={5}
+                    maxLength={600}
+                    required
+                  />
+                </label>
+              </div>
+              {error && (
+                <p className="noc-operations-error">
+                  <AlertTriangle size={15} /> {error}
+                </p>
+              )}
+              {catalogError && (
+                <p className="noc-operations-error">
+                  <AlertTriangle size={15} /> {catalogError}
+                </p>
+              )}
+              <div className="noc-modal-actions">
+                <button
+                  className="noc-cancel-incident"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setModalOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button className="noc-create-incident" disabled={busy}>
+                  <Network size={16} />
+                  {busy ? "Criando…" : "Criar agrupamento"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {error && !modalOpen && (
+        <p className="noc-operations-error">
+          <AlertTriangle size={15} /> {error}
+        </p>
+      )}
+    </>
+  );
+}

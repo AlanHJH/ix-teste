@@ -24,7 +24,14 @@ export type SupportDecision = {
   sayToCustomer: string;
   operatorSteps: string[];
   reasons: string[];
+  relatedProblemId: string | null;
+  relatedProblemTitle: string | null;
+  relatedProblemKind: "incident" | "signal" | null;
 };
+
+function observedReboots(count: number): string {
+  return `${count} ${count === 1 ? "reinício observado" : "reinícios observados"} em 7 dias`;
+}
 
 export function decideSupport(signals: CustomerSignals): SupportDecision {
   if (signals.olt === "OLT-2" && ["1/7", "1/8"].includes(signals.ponPort)) {
@@ -32,11 +39,11 @@ export function decideSupport(signals: CustomerSignals): SupportDecision {
       issue: "Instabilidade coletiva no trecho de fibra do Jardim Aurora",
       confidence: "Alta",
       action: "escalar_noc",
-      actionLabel: "Escalar para o NOC — incidente coletivo já identificado",
+      actionLabel: "Escalar para o NOC — padrão coletivo detectado",
       sayToCustomer:
-        "Identificamos uma instabilidade na rede que atende sua região. Nossa equipe já tem o ponto provável e está atuando; não é necessário reiniciar novamente nem agendar visita individual agora.",
+        "Identificamos sinais de uma instabilidade na rede que atende sua região. Vou encaminhar o caso ao NOC para confirmar o alcance; não é necessário reiniciar novamente nem agendar visita individual agora.",
       operatorSteps: [
-        "Vincular o chamado ao incidente OLT-2 / CE-JA-03",
+        "Registrar o sinal coletivo em OLT-2 / CE-JA-03",
         "Não solicitar novo reboot",
         "Não agendar visita residencial neste momento",
       ],
@@ -44,6 +51,9 @@ export function decideSupport(signals: CustomerSignals): SupportDecision {
         "Cliente está nas portas PON 1/7 ou 1/8",
         "O grupo apresenta crescimento conjunto de FEC e chamados",
       ],
+      relatedProblemId: "pon-olt2-ja",
+      relatedProblemTitle: "Degradação coletiva na fibra — Jardim Aurora",
+      relatedProblemKind: "signal",
     };
   }
 
@@ -66,8 +76,11 @@ export function decideSupport(signals: CustomerSignals): SupportDecision {
       ],
       reasons: [
         `Memória mínima: ${signals.memMinPct?.toFixed(1) ?? "n/d"}%`,
-        `${signals.rebootCount} reinícios observados em 7 dias`,
+        observedReboots(signals.rebootCount),
       ],
+      relatedProblemId: "firmware-kestrel-241",
+      relatedProblemTitle: "Instabilidade do firmware Kestrel 2.4.1",
+      relatedProblemKind: "signal",
     };
   }
 
@@ -93,6 +106,9 @@ export function decideSupport(signals: CustomerSignals): SupportDecision {
         "Norvik revisão A",
         `LAN negociada em ${signals.lanMinMbps} Mbps para plano de ${signals.planMbps} Mbps`,
       ],
+      relatedProblemId: "capacity-norvik-a",
+      relatedProblemTitle: "Turbo 500 limitado a 100 Mbps",
+      relatedProblemKind: "signal",
     };
   }
 
@@ -113,6 +129,9 @@ export function decideSupport(signals: CustomerSignals): SupportDecision {
         `Rx abaixo de -27 dBm em ${signals.opticalLowDays} dias`,
         `Mínimo observado: ${signals.opticalRxMinDbm?.toFixed(1)} dBm`,
       ],
+      relatedProblemId: "optical-isolated",
+      relatedProblemTitle: "Sinal óptico fora da especificação",
+      relatedProblemKind: "signal",
     };
   }
 
@@ -137,6 +156,9 @@ export function decideSupport(signals: CustomerSignals): SupportDecision {
         "Diagnóstico remoto compatível com o plano",
         "Sinal médio dos dispositivos indica cobertura fraca",
       ],
+      relatedProblemId: null,
+      relatedProblemTitle: null,
+      relatedProblemKind: null,
     };
   }
 
@@ -153,5 +175,8 @@ export function decideSupport(signals: CustomerSignals): SupportDecision {
       "Escalar com os dados anexados",
     ],
     reasons: ["Não há anomalia dominante nas últimas leituras"],
+    relatedProblemId: null,
+    relatedProblemTitle: null,
+    relatedProblemKind: null,
   };
 }

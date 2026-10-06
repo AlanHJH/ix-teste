@@ -2,103 +2,126 @@
 
 ## Objetivo e volume
 
-O sistema deve detectar problemas antes de o suporte escalar, localizar o alcance (cliente, grupo ou rede) e explicar a recomendação. Com Inform a cada duas horas, **300 mil CPEs produzem cerca de 3,6 milhões de eventos por dia**, com picos de reconexão muito acima da média após falhas elétricas ou de rede.
+O sistema deve detectar problemas antes de o suporte escalar, localizar o alcance (cliente, grupo ou rede) e explicar a recomendação. Com um Inform a cada duas horas, **300 mil CPEs produzem cerca de 3,6 milhões de eventos por dia**, com média nominal de aproximadamente 42 eventos por segundo e picos muito maiores após falhas elétricas ou de rede.
+
+O desenho separa três responsabilidades:
+
+1. processamento determinístico de todos os Informs;
+2. investigação contextual de candidatos delimitados;
+3. confirmação humana antes de qualquer ação no parque.
+
+O modelo de linguagem não processa cada Inform e não controla dispositivos. Regras e agregações funcionam mesmo quando o agente estiver indisponível.
 
 ## Protótipo entregue
 
 ```mermaid
 flowchart LR
   Files[CSV + CSV.GZ] -->|COPY streaming| PG[(PostgreSQL 16)]
-  PG --> Daily[Visão diária por CPE/firmware]
+  PG --> Daily[Agregado diário por CPE e firmware]
   Daily --> Rules[Regras explicáveis]
   PG --> Rules
-  Rules --> API[NestJS API]
+  Rules --> API[NestJS REST + MCP]
   API --> NOC[React: visão NOC]
   API --> N1[React: atendimento N1]
+  Rules --> Review[Revisão humana]
 ```
 
-O `data-loader` valida a presença dos quatro arquivos, faz `COPY FROM STDIN` sem descompactar o arquivo inteiro em memória, constrói índices e uma visão materializada diária. A carga é idempotente por chave de dataset. O Compose só inicia a API depois do término bem-sucedido da carga e só inicia o front-end depois do healthcheck da API.
+O `data-loader` valida os quatro arquivos, faz `COPY FROM STDIN` sem carregar o GZIP inteiro em memória, cria índices e o agregado diário. A carga é idempotente por chave de dataset. O Compose inicia a API somente após a carga e o front-end somente após o healthcheck da API.
 
 Escolhi PostgreSQL no protótipo porque:
 
-- os sinais úteis dependem de joins entre inventário, telemetria, chamados e diagnósticos;
-- SQL torna as evidências auditáveis e fáceis de reproduzir;
-- o volume fornecido cabe confortavelmente em uma instância local;
-- reduz o número de componentes necessários para uma entrega executável.
+- os sinais exigem joins entre inventário, telemetria, chamados e diagnósticos;
+- SQL torna as evidências auditáveis e reproduzíveis;
+- o volume fornecido cabe em uma instância local;
+- um único banco reduz a complexidade da entrega executável.
 
-A tabela bruta de Informs é `UNLOGGED`: no protótipo ela é derivada de um arquivo imutável e pode ser reconstruída. Inventário, chamados, diagnósticos, controle de carga e agregados usam persistência normal. O grão diário inclui o firmware porque uma CPE pode mudar de versão no meio do dia.
+A tabela bruta de Informs é `UNLOGGED` porque deriva de um arquivo imutável e pode ser reconstruída. Inventário, chamados, diagnósticos, carga e agregados usam persistência normal. O grão diário inclui o firmware para preservar trocas de versão no mesmo dia.
 
 ## Produção para 300 mil CPEs
 
 ```mermaid
 flowchart LR
-  ACS[ACS / Informs] --> Gateway[Gateway de ingestão]
-  Gateway --> Bus[(Kafka/Pulsar)]
-  Bus --> Normalize[Normalização + enriquecimento]
+  ACS[CPE / ACS] --> Gateway[Gateway stateless]
+  Gateway --> Bus[(Kafka ou Pulsar)]
+  Bus --> Normalize[Normalização e enriquecimento]
   Normalize --> Raw[(Object storage / Parquet)]
-  Normalize --> Hot[(Store analítico temporal)]
-  Hot --> Detect[Detecção em janela]
+  Normalize --> Hot[(Store temporal ou colunar)]
   Inventory[(Inventário e topologia)] --> Normalize
   Tickets[(Atendimento)] --> Bus
+  Hot --> Detect[Regras e baselines em janela]
   Detect --> Aggregate[Agregador de incidentes]
   Aggregate --> Ops[(PostgreSQL operacional)]
-  Aggregate --> Alerts[Alert router]
+  Aggregate --> Investigate[Fila de investigação]
+  Investigate --> Agent[Agente + MCP read-only]
+  Agent --> Validate[Validação estruturada]
+  Validate --> Ops
   Ops --> API[NestJS API]
   API --> UI[NOC + N1]
+  UI --> Human[Decisão humana]
 ```
 
-### Fluxo do Inform ao alerta
+Kafka/Pulsar não é necessário pela média de 42 eventos por segundo; ele existe para absorver rajadas, desacoplar o ACS, permitir replay e transformar indisponibilidade de consumidores em atraso observável, não em perda.
 
-1. **Recepção.** O ACS envia o Inform para um gateway stateless. Cada evento recebe `provider_id`, `serial`, timestamp de ingestão e chave de idempotência. A resposta ao CPE não espera a análise.
-2. **Fila.** Kafka ou Pulsar absorve picos, preserva a ordem por CPE e permite reprocessamento. Uma dead-letter queue retém eventos inválidos.
-3. **Normalização.** Um consumidor aplica contrato por fabricante/modelo/firmware. Aqui ocorre a conversão de potência óptica: Kestrel em milésimos de dBm, Tuim em dBm e Norvik em mW para dBm. O evento é enriquecido com plano e topologia válidos naquele instante.
-4. **Persistência.** O evento bruto vai para object storage em Parquet particionado por provedor/data. Métricas normalizadas e agregados recentes vão para ClickHouse ou TimescaleDB; incidentes, estados e ações ficam em PostgreSQL.
-5. **Detecção.** Processadores mantêm janelas por CPE e por dimensões compartilhadas (firmware, PON, CTO, OLT, bairro). Regras determinísticas cobrem limites conhecidos; baselines robustos detectam mudança relativa ao histórico do próprio grupo.
-6. **Agrupamento.** O agregador impede uma tempestade de alertas: 60 CPEs com FEC na mesma PON viram um incidente de rede, não 60 alertas. O incidente registra evidência, alcance, confiança, custo e runbook.
-7. **Entrega.** O alert router envia apenas severidades acionáveis; a API alimenta as visões NOC/N1. Toda mudança de estado e ação remota é auditada.
+## Fluxo do Inform até o alerta
 
-### Detecção e prioridade
+1. **Recepção.** O gateway recebe o Inform, adiciona `provider_id`, serial, `event_time`, `received_at`, versão de schema e chave idempotente. A resposta ao ACS ocorre após a gravação no barramento.
+2. **Normalização.** Adaptadores por fabricante/modelo/firmware convertem nomes e unidades. Eventos incompatíveis vão para quarentena; a CPE não bloqueia a ingestão das demais.
+3. **Enriquecimento temporal.** O evento recebe plano, firmware e caminho OLT → PON → CTO válidos no instante observado, sem usar apenas o inventário atual.
+4. **Persistência.** O bruto vai para object storage em Parquet particionado por provedor/data. Métricas normalizadas e agregados recentes vão para ClickHouse ou TimescaleDB. Estado de incidentes e ações permanece em PostgreSQL.
+5. **Detecção.** Processadores mantêm janelas por CPE, firmware, CTO, PON, OLT, região e provedor. Regras determinísticas cobrem limites conhecidos; baselines robustos detectam mudança relativa ao histórico.
+6. **Agrupamento.** Sinais equivalentes tornam-se um único candidato por `provider_id + tipo + escopo + janela`. Sessenta CPEs com FEC na mesma PON geram um incidente compartilhado, não sessenta alertas.
+7. **Investigação.** Para casos delimitados, o agente começa por agregados e consulta detalhes via MCP somente leitura. O orquestrador impõe tempo, custo, escopo, número de ferramentas e tamanho de respostas.
+8. **Validação.** A conclusão precisa obedecer a um schema versionado e conter alcance, evidências rastreáveis, contraindícios, confiança e ação recomendada. Resultado incompleto permanece inconclusivo.
+9. **Entrega.** A API alimenta NOC e N1. Um operador confirma, corrige ou descarta. Reboot, rollback, configuração ou ordem de serviço continuam fora do ciclo automático.
 
-O score deve combinar cinco fatores visíveis ao operador: alcance, severidade técnica, crescimento sobre baseline, custo/risk de churn e confiança. Um alerta só abre após duração mínima ou múltiplas CPEs, evitando ruído. Histerese e cooldown controlam abre/fecha repetido.
+Ausência de Inform é inferida por temporizador, porque não existe um evento de “não recebimento”. Eventos atrasados são tratados por `event_time`, watermark e janela de tolerância.
+
+## Detecção e prioridade
+
+O score de produção deve combinar fatores visíveis: alcance, severidade técnica, crescimento sobre baseline, custo/risco de churn e confiança. Alertas exigem duração mínima ou múltiplas CPEs; histerese e cooldown evitam abre/fecha repetido.
 
 Exemplos:
 
-- **CPE:** Rx abaixo de -27 dBm por leituras consecutivas;
-- **grupo:** aumento de FEC e ausência de Inform em uma PON/CTO acima do baseline;
-- **firmware:** queda de memória e boots significativamente maiores na versão nova que no controle;
-- **produto:** plano acima da capacidade negociada da interface.
+- **CPE:** Rx abaixo de -27 dBm em leituras consecutivas sem cluster compartilhado;
+- **grupo:** FEC e ausência de Inform acima do baseline em uma PON/CTO;
+- **firmware:** memória e reinícios piores na nova versão do que no controle;
+- **produto:** plano contratado acima da capacidade negociada da interface.
 
-As regras e seus limites são versionados. Cada incidente conserva a versão da regra, as amostras e a explicação que levou ao score.
+Cada incidente conserva a regra e sua versão, janela, amostras, evidências, contraindícios e explicação do score.
 
 ## Decisões e alternativas descartadas
 
-| Decisão                              | Alternativa                                  | Motivo para não usar agora                                                                                                                    |
-| ------------------------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Agregado diário no protótipo         | Consultar 5,5 milhões de linhas em toda tela | Latência e custo desnecessários para sinais que evoluem em horas/dias.                                                                        |
-| Regras explicáveis                   | Modelo ML supervisionado                     | Não há rótulo confiável de causa; categoria e resolução dos chamados têm ruído. ML agora produziria precisão aparente e pouca auditabilidade. |
-| PostgreSQL local                     | MongoDB                                      | As consultas são relacionais e multidimensionais; documentos duplicariam inventário/topologia.                                                |
-| Barramento em produção               | Gravar o Inform direto no banco              | Acopla o ACS ao storage e não absorve tempestades de reconexão.                                                                               |
-| Store analítico separado em produção | Escalar apenas PostgreSQL transacional       | 3,6 milhões de eventos/dia e agregações por muitas dimensões favorecem armazenamento colunar/temporal.                                        |
-| Alertar incidentes agregados         | Alertar por CPE                              | Evita fadiga do único operador por turno e aponta onde agir.                                                                                  |
+| Decisão                              | Alternativa descartada                       | Motivo                                                                                                 |
+| ------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Agregado diário no protótipo         | Consultar 5,5 milhões de linhas em cada tela | Latência e custo sem ganho para sinais que evoluem em horas ou dias.                                   |
+| Regras explicáveis                   | ML supervisionado como decisão principal     | Não há rótulo causal confiável; as categorias e resoluções dos chamados têm ruído.                     |
+| PostgreSQL local                     | MongoDB                                      | As consultas são relacionais e multidimensionais; documentos duplicariam inventário e topologia.       |
+| Barramento em produção               | Gravar o Inform direto no banco              | Acoplaria o ACS ao armazenamento e não absorveria tempestades de reconexão.                            |
+| Store analítico separado em produção | Escalar apenas PostgreSQL transacional       | Milhões de eventos diários e agregações por muitas dimensões favorecem armazenamento temporal/colunar. |
+| Incidentes agregados                 | Um alerta por CPE                            | Evita fadiga do operador e aponta onde agir.                                                           |
+| Agente apenas após pré-filtro        | Enviar cada Inform ao modelo                 | Mantém custo, latência, privacidade e disponibilidade sob controle.                                    |
+| Aprovação humana                     | Ações remotas automáticas                    | O protótipo ainda não possui controles operacionais suficientes para autorizar impacto no cliente.     |
 
 ## Confiabilidade, segurança e operação
 
-- contratos de schema e quarentena por fabricante/versão;
-- idempotência, offsets e reprocessamento controlado;
+- contrato de schema e quarentena por fabricante/versão;
+- idempotência, offsets, replay e dead-letter queue;
 - multi-tenant por `provider_id`, RBAC e escopo por provedor;
-- TLS, criptografia em repouso e retenção menor para dados identificáveis;
-- logs de auditoria para mudança de regra, reconhecimento de incidente e RPC remoto;
-- SLOs para atraso de ingestão, completude, tempo até detecção e falsos alertas;
-- métricas de qualidade: atraso do Inform, campos ausentes, cardinalidade e mudança de unidade;
-- rollout canário para regra/firmware e feature flags para ações remotas.
+- TLS, criptografia em repouso e retenção mínima para dados identificáveis;
+- auditoria de regra, evidência, revisão humana e ação remota;
+- SLOs para ingestão, completude, detecção e falsos alertas;
+- cotas por provedor e circuit breaker para modelo e ferramentas;
+- rollout canário para regras e firmware;
+- nenhuma credencial, autorização ou restrição de escopo delegada ao prompt.
 
-## Deliberadamente fora do escopo
+## Deliberadamente fora do escopo do protótipo
 
 - executar reboot, rollback ou alteração de configuração automaticamente;
-- autenticação/SSO, gestão multi-provedor e permissões finas no protótipo;
-- mapa geográfico, notificações externas e abertura automática de ordem de serviço;
+- autenticação/SSO, multi-provedor e permissões finas;
+- ingestão TR-069 online; a entrega usa o snapshot fornecido;
+- alta disponibilidade, backup e disaster recovery locais;
+- mapa geográfico, notificações externas e ordem de serviço automática;
 - treinamento de ML, previsão de churn e correlação com clima/energia;
-- ingestão TR-069 online: a entrega usa o snapshot fornecido;
-- alta disponibilidade, backup e disaster recovery locais.
+- operação do agente sem chave OpenAI e sem revisão humana.
 
-Esses itens são importantes para produção, mas não aumentariam a qualidade da decisão demonstrada no recorte atual. A primeira evolução seria transformar as consultas em detecção incremental e manter o mesmo contrato de incidente consumido pelas telas.
+Esses itens são necessários antes da produção, mas não aumentariam a qualidade da decisão demonstrada no recorte. A primeira evolução é tornar a detecção incremental mantendo o mesmo contrato de incidente consumido pelas telas.

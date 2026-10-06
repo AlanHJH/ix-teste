@@ -22,14 +22,10 @@ const base: CustomerSignals = {
 
 describe("decideSupport", () => {
   it("prioriza incidente coletivo de fibra", () => {
-    assert.equal(
-      decideSupport({ ...base, olt: "OLT-2", ponPort: "1/7" }).action,
-      "escalar_noc",
-    );
-    assert.match(
-      decideSupport({ ...base, olt: "OLT-2", ponPort: "1/7" }).issue,
-      /coletiva/,
-    );
+    const result = decideSupport({ ...base, olt: "OLT-2", ponPort: "1/7" });
+    assert.equal(result.action, "escalar_noc");
+    assert.match(result.issue, /coletiva/);
+    assert.equal(result.relatedProblemId, "pon-olt2-ja");
   });
 
   it("identifica incompatibilidade do Norvik A com plano acima de 100 Mbps", () => {
@@ -43,6 +39,7 @@ describe("decideSupport", () => {
     });
     assert.equal(result.action, "agendar_visita");
     assert.match(result.issue, /100 Mbps/);
+    assert.equal(result.relatedProblemId, "capacity-norvik-a");
   });
 
   it("não compara qualidade Tuim como se fosse dBm", () => {
@@ -52,6 +49,7 @@ describe("decideSupport", () => {
       wifiSignalRaw: 25,
     });
     assert.equal(result.action, "resolver_telefone");
+    assert.equal(result.relatedProblemId, null);
   });
 
   it("recomenda rollback para a regressão de firmware", () => {
@@ -63,6 +61,18 @@ describe("decideSupport", () => {
     });
     assert.equal(result.action, "escalar_noc");
     assert.match(result.issue, /firmware/);
+    assert.ok(result.reasons.includes("0 reinícios observados em 7 dias"));
+  });
+
+  it("mantém a concordância quando há um único reinício", () => {
+    const result = decideSupport({
+      ...base,
+      vendor: "Kestrel",
+      softwareVersion: "2.4.1",
+      memMinPct: 7,
+      rebootCount: 1,
+    });
+    assert.ok(result.reasons.includes("1 reinício observado em 7 dias"));
   });
 
   it("agenda visita somente quando o sinal óptico ruim persiste", () => {

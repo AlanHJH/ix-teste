@@ -1,4 +1,8 @@
-import { Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { DatabaseService } from "../database";
 
 type WeeklyTicket = {
@@ -26,9 +30,164 @@ type Incident = {
   costLabel: string;
 };
 
+const detectedGroupingIds = new Set([
+  "pon-olt2-ja",
+  "firmware-kestrel-241",
+  "capacity-norvik-a",
+  "optical-isolated",
+]);
+
 @Injectable()
 export class NetworkService {
   constructor(private readonly database: DatabaseService) {}
+
+  async getTopology(olt?: string, pon?: string) {
+    const selectedOlt = olt?.trim().toUpperCase() || null;
+    const selectedPon = pon?.trim() || null;
+    const [totalsResult, oltsResult] = await Promise.all([
+      this.database.query<{
+        cpes: number;
+        olts: number;
+        pons: number;
+        ctos: number;
+      }>(`
+        SELECT count(*)::int AS cpes,
+          count(DISTINCT olt)::int AS olts,
+          count(DISTINCT (olt, pon_port))::int AS pons,
+          count(DISTINCT cto)::int AS ctos
+        FROM inventory WHERE status='active'`),
+      this.database.query<{
+        olt: string;
+        cpes: number;
+        pons: number;
+        ctos: number;
+        cities: string[];
+        neighborhoods: string[];
+      }>(`
+        SELECT olt, count(*)::int AS cpes,
+          count(DISTINCT pon_port)::int AS pons,
+          count(DISTINCT cto)::int AS ctos,
+          array_agg(DISTINCT city ORDER BY city) AS cities,
+          array_agg(DISTINCT neighborhood ORDER BY neighborhood) AS neighborhoods
+        FROM inventory
+        WHERE status='active'
+        GROUP BY olt ORDER BY olt`),
+    ]);
+
+    const ponsResult = selectedOlt
+      ? await this.database.query<{
+          pon: string;
+          cpes: number;
+          ctos: number;
+        }>(
+          `
+          SELECT pon_port AS pon, count(*)::int AS cpes,
+            count(DISTINCT cto)::int AS ctos
+          FROM inventory
+          WHERE status='active' AND olt=$1
+          GROUP BY pon_port
+          ORDER BY split_part(pon_port, '/', 1)::int, split_part(pon_port, '/', 2)::int`,
+          [selectedOlt],
+        )
+      : { rows: [] };
+
+    const ctosResult =
+      selectedOlt && selectedPon
+        ? await this.database.query<{
+            cto: string;
+            cpes: number;
+            city: string;
+            neighborhood: string;
+          }>(
+            `
+          SELECT cto, count(*)::int AS cpes,
+            min(city) AS city, min(neighborhood) AS neighborhood
+          FROM inventory
+          WHERE status='active' AND olt=$1 AND pon_port=$2
+          GROUP BY cto
+          ORDER BY cto`,
+            [selectedOlt, selectedPon],
+          )
+        : { rows: [] };
+
+    return {
+      totals: totalsResult.rows[0],
+      olts: oltsResult.rows,
+      pons: ponsResult.rows,
+      ctos: ctosResult.rows,
+      selected: { olt: selectedOlt, pon: selectedPon },
+      limitations: {
+        hasCableIds: false,
+        hasDropIds: false,
+        hasLogicalDropIds: true,
+        message:
+          "Cada CPE ativa recebeu um ID de drop lógico, derivado do serial e marcado como estimado. O dataset ainda não fornece IDs físicos de cabo, splitter ou drop.",
+      },
+    };
+  }
+
+  async findTopologyPath(query: string) {
+    const value = query.trim();
+    if (value.length < 2) return [];
+    const result = await this.database.query<{
+      serial: string;
+      customer_id: string;
+      vendor: string;
+      model: string;
+      hw_revision: string;
+      software_version: string;
+      plan_mbps: number;
+      olt: string;
+      pon: string;
+      cto: string;
+      city: string;
+      neighborhood: string;
+      logical_drop_id: string | null;
+    }>(
+      `
+      SELECT i.serial, i.customer_id, i.vendor, i.model, i.hw_revision, i.software_version,
+        i.plan_mbps, i.olt, i.pon_port AS pon, i.cto, i.city, i.neighborhood,
+        d.drop_id AS logical_drop_id
+      FROM inventory i
+      LEFT JOIN generated_logical_drops d USING(serial)
+      WHERE i.status='active' AND (i.customer_id ILIKE $1 OR i.serial ILIKE $1)
+      ORDER BY CASE WHEN i.customer_id ILIKE $2 OR i.serial ILIKE $2 THEN 0 ELSE 1 END,
+        i.customer_id, i.serial
+      LIMIT 8`,
+      [`%${value}%`, value],
+    );
+    return result.rows;
+  }
+
+  async getTopologyDevices(olt: string, pon: string, cto: string) {
+    if (!olt.trim() || !pon.trim() || !cto.trim()) return [];
+    const result = await this.database.query<{
+      serial: string;
+      customer_id: string;
+      vendor: string;
+      model: string;
+      hw_revision: string;
+      software_version: string;
+      plan_mbps: number;
+      olt: string;
+      pon: string;
+      cto: string;
+      city: string;
+      neighborhood: string;
+      logical_drop_id: string | null;
+    }>(
+      `
+      SELECT i.serial, i.customer_id, i.vendor, i.model, i.hw_revision, i.software_version,
+        i.plan_mbps, i.olt, i.pon_port AS pon, i.cto, i.city, i.neighborhood,
+        d.drop_id AS logical_drop_id
+      FROM inventory i
+      LEFT JOIN generated_logical_drops d USING(serial)
+      WHERE i.status='active' AND i.olt=$1 AND i.pon_port=$2 AND i.cto=$3
+      ORDER BY i.customer_id, i.serial`,
+      [olt.trim().toUpperCase(), pon.trim(), cto.trim().toUpperCase()],
+    );
+    return result.rows;
+  }
 
   async getOverview() {
     const [
@@ -209,7 +368,7 @@ export class NetworkService {
     const net = network.rows[0];
     const cap = capacity.rows[0];
     const opt = optical.rows[0];
-    return [
+    const detectedGroups: Incident[] = [
       {
         id: "pon-olt2-ja",
         severity: "critical",
@@ -295,5 +454,33 @@ export class NetworkService {
         costLabel: "exposição de visitas",
       },
     ];
+    const resolvedResult = await this.database.query<{ grouping_id: string }>(`
+      SELECT grouping_id FROM detected_group_states WHERE status='resolved'`);
+    const resolvedIds = new Set(
+      resolvedResult.rows.map((item) => item.grouping_id),
+    );
+    return detectedGroups.filter((grouping) => !resolvedIds.has(grouping.id));
+  }
+
+  async closeDetectedGrouping(groupingId: string, status: "resolved") {
+    if (status !== "resolved") {
+      throw new BadRequestException("Encerramento de agrupamento inválido.");
+    }
+    const normalizedId = groupingId.trim().toLowerCase();
+    if (!detectedGroupingIds.has(normalizedId)) {
+      throw new NotFoundException("Agrupamento não encontrado.");
+    }
+    const result = await this.database.query<{
+      grouping_id: string;
+      status: "resolved";
+    }>(
+      `INSERT INTO detected_group_states(grouping_id, status, resolved_at)
+       VALUES ($1, 'resolved', now())
+       ON CONFLICT (grouping_id) DO UPDATE
+         SET status='resolved', resolved_at=now()
+       RETURNING grouping_id, status`,
+      [normalizedId],
+    );
+    return result.rows[0];
   }
 }

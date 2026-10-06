@@ -1,4 +1,14 @@
-# Log de decisões
+## Decisões que eu tomaria
+
+| Ordem | Decisão                                                                                     | Por que eu faria isso                                                                                                                  | Critério para avançar ou encerrar                                                                                 |
+| ----- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 1     | Abriria um único incidente para OLT-2/PON 1/7 e 1/8 e acionaria rede externa na CE-JA-03.   | O alcance compartilhado, o FEC e os chamados crescem juntos; visitas residenciais não tratam uma causa comum.                          | FEC volta ao baseline e chamados/quedas do grupo recuam após a correção do trecho.                                |
+| 2     | Congelaria o rollout Kestrel 2.4.1 e faria rollback canário para 2.3.8.                     | A degradação surge depois do rollout e é específica da versão, mas correlação temporal ainda precisa de confirmação controlada.        | O grupo canário melhora memória e boots por 72 horas sem regressão funcional; só então amplio o rollback.         |
+| 3     | Bloquearia novos Turbo 500 em Norvik NV-G1 revisão A e priorizaria a troca dos reclamantes. | A porta a 100 Mbps torna impossível entregar 500 Mbps; é uma incompatibilidade objetiva, não uma hipótese de Wi-Fi.                    | Regra comercial ativa, lista de 377 afetados tratada por risco e ausência de novos upgrades incompatíveis.        |
+| 4     | Rejeitaria a troca geral dos Tuim e o reboot diário do parque.                              | As taxas por fabricante são próximas e as duas propostas atacam sintomas ou correlações aparentes, com alto custo e risco operacional. | Só reabro a hipótese de fabricante se uma taxa normalizada por base, região e versão mostrar diferença relevante. |
+| 5     | Manteria ações remotas e ordens de serviço sob confirmação humana.                          | O protótipo produz recomendação explicável, mas não possui autenticação, aprovação em duas etapas nem trilha operacional de produção.  | Automação apenas depois de RBAC, auditoria, canário, rollback seguro e limites por provedor.                      |
+
+Essas decisões não tratam correlação como prova absoluta. Fibra é confirmada por inspeção; firmware, por canário; e a incompatibilidade de capacidade, por inventário e negociação LAN. Enquanto a confirmação ocorre, a solução já reduz desperdício ao agrupar o alcance e orientar o próximo passo correto.
 
 ## Hipóteses testadas
 
@@ -31,6 +41,9 @@
 - Mantive as regras determinísticas e testáveis. O dataset não tem rótulo causal confiável para treinar ML.
 - Usei NestJS e Vite/React em monorepo; PostgreSQL centraliza joins e torna as consultas auditáveis.
 - A carga usa streaming e é idempotente. O Compose condiciona API e web ao sucesso da etapa anterior.
+- Integrei a interface MCP somente leitura ao mesmo processo NestJS da API REST, usando uma rota Streamable HTTP por contexto de domínio e camadas `domain`, `application`, `infrastructure` e `presentation`. REST e MCP compartilham porta, ciclo de vida e pool PostgreSQL, sem misturar seus contratos. Mantive paginação obrigatória e exigi serial para Informs brutos, evitando respostas acidentais com milhões de eventos.
+- Consolidei a implementação MCP em `apps/api/src/mcp`, eliminando um workspace e uma etapa de build que não representavam um serviço independente. Os contratos REST e MCP continuam separados, mas agora pertencem ao mesmo projeto implantável, de acordo com o processo único já usado em execução.
+- Mantive o MCP sem autenticação apenas no protótipo, como solicitado. O backend unificado não deve ser exposto publicamente; produção exige autenticação, autorização por provedor/perfil, TLS, limites e auditoria.
 - O pacote fornecido está ignorado no Git; o README descreve onde colocá-lo.
 
 ## Uso de IA

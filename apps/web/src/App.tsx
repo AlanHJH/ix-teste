@@ -3,18 +3,24 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  BrainCircuit,
   CheckCircle2,
   CircleDollarSign,
   Clock3,
+  Gauge,
+  GitBranch,
   Headphones,
+  LayoutDashboard,
+  Menu,
   Network,
   RadioTower,
   RefreshCw,
   Search,
-  Server,
   ShieldCheck,
+  TicketCheck,
+  TicketPlus,
   Users,
-  Wifi,
+  X,
 } from "lucide-react";
 import {
   Area,
@@ -26,7 +32,15 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "./api";
-import type { Incident, Overview, SupportProfile } from "./types";
+import { HelpTooltip } from "./HelpTooltip";
+import { providerGlossary, TechnicalText } from "./ProviderGlossary";
+import { InventoryDirectory } from "./InventoryDirectory";
+import { TopologyMap } from "./TopologyMap";
+import { SupportTickets } from "./SupportTickets";
+import { DiagnosticsDirectory } from "./DiagnosticsDirectory";
+import { InvestigationReview } from "./InvestigationReview";
+import { NocOperations } from "./NocOperations";
+import type { Overview, SupportProfile } from "./types";
 
 const number = new Intl.NumberFormat("pt-BR");
 const money = new Intl.NumberFormat("pt-BR", {
@@ -35,29 +49,29 @@ const money = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 0,
 });
 
-const severityLabel = {
-  critical: "Crítico",
-  high: "Alto",
-  medium: "Atenção",
-} as const;
-const scopeIcon = {
-  network: Network,
-  firmware: Server,
-  equipment: RadioTower,
-  customer: Wifi,
-};
+type View =
+  | "dashboard"
+  | "noc"
+  | "support"
+  | "investigations"
+  | "tickets"
+  | "diagnostics"
+  | "topology"
+  | "inventory";
 
 function Metric({
   icon: Icon,
   label,
   value,
   note,
+  help,
   tone = "neutral",
 }: {
   icon: typeof Activity;
   label: string;
   value: string;
   note: string;
+  help?: string;
   tone?: string;
 }) {
   return (
@@ -66,7 +80,10 @@ function Metric({
         <Icon size={19} />
       </div>
       <div>
-        <span>{label}</span>
+        <span>
+          {label}
+          {help && <HelpTooltip term={label} description={help} />}
+        </span>
         <strong>{value}</strong>
         <small>{note}</small>
       </div>
@@ -74,96 +91,24 @@ function Metric({
   );
 }
 
-function IncidentCard({ incident }: { incident: Incident }) {
-  const [expanded, setExpanded] = useState(false);
-  const Icon = scopeIcon[incident.scope];
+function ExecutiveDashboard({ overview }: { overview: Overview }) {
   return (
-    <article className={`incident-card ${incident.severity}`}>
-      <header>
-        <div className="incident-title">
-          <span className="scope-icon">
-            <Icon size={19} />
-          </span>
-          <div>
-            <div className="eyebrow-row">
-              <span className={`severity ${incident.severity}`}>
-                {severityLabel[incident.severity]}
-              </span>
-              <span>Confiança {incident.confidence.toLowerCase()}</span>
-            </div>
-            <h3>{incident.title}</h3>
-            <p>{incident.location}</p>
-          </div>
+    <section className="executive-dashboard">
+      <header className="dashboard-hero">
+        <div>
+          <span className="section-label">Visão consolidada</span>
+          <h1>Dashboard</h1>
+          <p>Indicadores gerais do parque e evolução da demanda de suporte.</p>
         </div>
-        <div className="score">
-          <strong>{incident.score}</strong>
-          <span>prioridade</span>
-        </div>
+        <LayoutDashboard size={28} />
       </header>
-      <div className="incident-stats">
-        <div>
-          <strong>{number.format(incident.affected)}</strong>
-          <span>CPEs afetadas</span>
-        </div>
-        <div>
-          <strong>{incident.signal}</strong>
-          <span>Sinal dominante</span>
-        </div>
-        <div>
-          <strong>{money.format(incident.cost)}</strong>
-          <span>{incident.costLabel}</span>
-        </div>
-      </div>
-      <div className="recommendation">
-        <ArrowRight size={17} />
-        <p>
-          <strong>Próxima ação · {incident.owner}</strong>
-          {incident.recommendation}
-        </p>
-      </div>
-      {expanded && (
-        <ul className="evidence">
-          {incident.evidence.map((item) => (
-            <li key={item}>
-              <CheckCircle2 size={15} />
-              {item}
-            </li>
-          ))}
-        </ul>
-      )}
-      <button
-        className="text-button"
-        onClick={() => setExpanded((value) => !value)}
-      >
-        {expanded ? "Ocultar evidências" : "Ver evidências"}
-      </button>
-    </article>
-  );
-}
-
-function NocDashboard({ overview }: { overview: Overview }) {
-  return (
-    <>
-      <section className="hero-copy">
-        <div>
-          <span className="section-label">
-            Leitura do turno · dados até{" "}
-            {new Date(`${overview.asOf}T12:00:00`).toLocaleDateString("pt-BR")}
-          </span>
-          <h1>{overview.readout.headline}</h1>
-          <p>{overview.readout.summary}</p>
-        </div>
-        <div className="status-chip">
-          <span className="live-dot" />
-          Monitoramento ativo
-        </div>
-      </section>
       <section className="metrics-grid">
         <Metric
           icon={RadioTower}
           label="Parque ativo"
           value={number.format(overview.kpis.activeCpes)}
           note="CPEs em operação"
+          help={providerGlossary.cpe.description}
         />
         <Metric
           icon={AlertTriangle}
@@ -177,6 +122,7 @@ function NocDashboard({ overview }: { overview: Overview }) {
           label="Sob risco"
           value={number.format(overview.kpis.affectedCpes)}
           note="CPEs únicas com alerta"
+          help={`${providerGlossary.cpe.description} A contagem não duplica o mesmo equipamento em vários alertas.`}
           tone="warning"
         />
         <Metric
@@ -246,81 +192,78 @@ function NocDashboard({ overview }: { overview: Overview }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <aside className="panel decision-panel">
-          <span className="section-label">Decisão recomendada</span>
-          <h2>Evite três atalhos caros</h2>
-          <ol>
-            <li>
-              <span>01</span>
-              <div>
-                <strong>Não troque todos os Tuim</strong>
-                <p>A taxa geral por fabricante não sustenta R$ 1,2 mi.</p>
-              </div>
-            </li>
-            <li>
-              <span>02</span>
-              <div>
-                <strong>Não reinicie todo o parque</strong>
-                <p>Reboot diário mascara a falha e cria indisponibilidade.</p>
-              </div>
-            </li>
-            <li>
-              <span>03</span>
-              <div>
-                <strong>Não confie só no speed test</strong>
-                <p>O TR‑143 não enxerga todo gargalo até o dispositivo.</p>
-              </div>
-            </li>
-          </ol>
-        </aside>
       </section>
-      <section className="incidents-section">
-        <div className="section-heading">
-          <div>
-            <span className="section-label">Fila operacional</span>
-            <h2>Onde agir primeiro</h2>
-          </div>
-          <span>
-            {overview.incidents.length} grupos ativos, ordenados por impacto
-          </span>
-        </div>
-        <div className="incidents-list">
-          {overview.incidents.map((incident) => (
-            <IncidentCard key={incident.id} incident={incident} />
-          ))}
-        </div>
-      </section>
-    </>
+    </section>
   );
 }
 
+function NocDashboard({ overview }: { overview: Overview }) {
+  return <NocOperations detectedGroups={overview.incidents} />;
+}
+
 const examples = [
-  { id: "C545968", label: "Incidente de fibra" },
+  { id: "C545968", label: "Agrupamento de fibra" },
   { id: "C373254", label: "Firmware instável" },
   { id: "C171248", label: "Plano incompatível" },
+  { id: "C361578", label: "Resolver por telefone" },
 ];
 
-function MetricValue({ label, value }: { label: string; value: string }) {
+function MetricValue({
+  label,
+  value,
+  help,
+}: {
+  label: string;
+  value: string;
+  help?: string;
+}) {
   return (
     <div className="signal-value">
-      <span>{label}</span>
+      <span>
+        {label}
+        {help && <HelpTooltip term={label} description={help} />}
+      </span>
       <strong>{value}</strong>
     </div>
   );
 }
 
-function SupportDesk() {
+function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
   const [query, setQuery] = useState("");
   const [profile, setProfile] = useState<SupportProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [ticketOpenedBy, setTicketOpenedBy] = useState("");
+  const [ticketCategory, setTicketCategory] = useState("Lentidão");
+  const [ticketDescription, setTicketDescription] = useState("");
+  const [ticketOutcome, setTicketOutcome] = useState<
+    "resolver_telefone" | "escalar_noc" | "agendar_visita"
+  >("escalar_noc");
+  const [ticketBusy, setTicketBusy] = useState(false);
+  const [ticketError, setTicketError] = useState("");
+  const [createdTicket, setCreatedTicket] = useState("");
+
+  function suggestedCategory(issue: string) {
+    const normalized = issue.toLocaleLowerCase("pt-BR");
+    if (normalized.includes("wi-fi")) return "Wi-Fi";
+    if (normalized.includes("fibra") || normalized.includes("sinal óptico")) {
+      return "Sem conexão";
+    }
+    return "Lentidão";
+  }
 
   async function load(customerId: string) {
     setLoading(true);
     setError("");
     setQuery(customerId);
     try {
-      setProfile(await api.support(customerId.trim().toUpperCase()));
+      const nextProfile = await api.support(customerId.trim().toUpperCase());
+      setProfile(nextProfile);
+      setTicketCategory(suggestedCategory(nextProfile.decision.issue));
+      setTicketDescription(nextProfile.decision.issue);
+      setTicketOutcome(nextProfile.decision.action);
+      setTicketError("");
+      setCreatedTicket("");
     } catch (reason) {
       setProfile(null);
       setError(
@@ -330,9 +273,41 @@ function SupportDesk() {
       setLoading(false);
     }
   }
+  useEffect(() => {
+    if (initialCustomer) void load(initialCustomer);
+  }, [initialCustomer]);
+
   function submit(event: FormEvent) {
     event.preventDefault();
     if (query.trim()) void load(query);
+  }
+
+  async function createTicket(event: FormEvent) {
+    event.preventDefault();
+    if (!profile) return;
+    setTicketBusy(true);
+    setTicketError("");
+    setCreatedTicket("");
+    try {
+      const ticket = await api.createTicket({
+        customerId: profile.customer.id,
+        openedBy: ticketOpenedBy,
+        category: ticketCategory,
+        description: ticketDescription,
+        outcome: ticketOutcome,
+        relatedProblemId: profile.decision.relatedProblemId,
+      });
+      setCreatedTicket(ticket.ticket_id);
+      setProfile(await api.support(profile.customer.id));
+    } catch (reason) {
+      setTicketError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível abrir o chamado",
+      );
+    } finally {
+      setTicketBusy(false);
+    }
   }
 
   return (
@@ -340,6 +315,10 @@ function SupportDesk() {
       <section className="support-hero">
         <span className="section-label">
           Atendimento N1 · meta de 6 minutos
+          <HelpTooltip
+            term="Atendimento N1"
+            description="Primeiro nível de suporte: confirma dados, interpreta sinais e orienta o cliente antes de escalar o caso."
+          />
         </span>
         <h1>Entenda antes de orientar.</h1>
         <p>
@@ -379,7 +358,8 @@ function SupportDesk() {
           <h2>Uma resposta pronta para a ligação</h2>
           <p>
             O atendente recebe a causa provável, a fala sugerida e o
-            encaminhamento correto — sem interpretar telemetria bruta.
+            encaminhamento correto — sem interpretar{" "}
+            <TechnicalText text="telemetria" /> bruta.
           </p>
         </section>
       )}
@@ -399,12 +379,15 @@ function SupportDesk() {
                 {profile.equipment.vendor} {profile.equipment.model}
               </strong>
               <small>
-                {profile.equipment.serial} · fw {profile.equipment.firmware}
+                {profile.equipment.serial} ·{" "}
+                <TechnicalText text={`fw ${profile.equipment.firmware}`} />
               </small>
             </div>
             <div>
               <span>Plano</span>
-              <strong>{profile.equipment.planMbps} Mbps</strong>
+              <strong>
+                <TechnicalText text={`${profile.equipment.planMbps} Mbps`} />
+              </strong>
               <small>
                 {profile.equipment.previousPlanMbps
                   ? `upgrade de ${profile.equipment.previousPlanMbps} Mbps`
@@ -427,12 +410,16 @@ function SupportDesk() {
                     Diagnóstico provável · confiança{" "}
                     {profile.decision.confidence.toLowerCase()}
                   </span>
-                  <h2>{profile.decision.issue}</h2>
+                  <h2>
+                    <TechnicalText text={profile.decision.issue} />
+                  </h2>
                 </div>
                 <ShieldCheck size={30} />
               </header>
               <div className="action-banner">
-                <strong>{profile.decision.actionLabel}</strong>
+                <strong>
+                  <TechnicalText text={profile.decision.actionLabel} />
+                </strong>
               </div>
               <div className="customer-script">
                 <span>O que dizer ao cliente</span>
@@ -442,7 +429,9 @@ function SupportDesk() {
                 <span>Durante esta ligação</span>
                 <ol>
                   {profile.decision.operatorSteps.map((step) => (
-                    <li key={step}>{step}</li>
+                    <li key={step}>
+                      <TechnicalText text={step} />
+                    </li>
                   ))}
                 </ol>
               </div>
@@ -458,6 +447,7 @@ function SupportDesk() {
               <div className="signals-grid">
                 <MetricValue
                   label="Memória mínima"
+                  help={`Menor percentual de memória livre registrado na CPE nos últimos sete dias. ${providerGlossary.cpe.description}`}
                   value={
                     profile.metrics.mem_min_pct == null
                       ? "n/d"
@@ -466,10 +456,12 @@ function SupportDesk() {
                 />
                 <MetricValue
                   label="Reinícios"
+                  help={providerGlossary.reboot.description}
                   value={String(profile.metrics.reboot_count ?? 0)}
                 />
                 <MetricValue
                   label="Sinal óptico"
+                  help={`${providerGlossary.opticalSignal.description} ${providerGlossary.dbm.description}`}
                   value={
                     profile.metrics.optical_rx_min_dbm == null
                       ? "n/d"
@@ -478,6 +470,7 @@ function SupportDesk() {
                 />
                 <MetricValue
                   label="Porta LAN"
+                  help={`${providerGlossary.lan.description} ${providerGlossary.mbps.description}`}
                   value={
                     profile.metrics.lan_min_mbps == null
                       ? "n/d"
@@ -489,13 +482,19 @@ function SupportDesk() {
                 {profile.decision.reasons.map((reason) => (
                   <li key={reason}>
                     <CheckCircle2 size={15} />
-                    {reason}
+                    <TechnicalText text={reason} />
                   </li>
                 ))}
               </ul>
               {profile.metrics.diagnostic && (
                 <div className="diagnostic">
-                  <span>Último diagnóstico ACS</span>
+                  <span>
+                    Último diagnóstico ACS
+                    <HelpTooltip
+                      term="ACS"
+                      description={providerGlossary.acs.description}
+                    />
+                  </span>
                   <strong>
                     {profile.metrics.diagnostic.state === "Completed"
                       ? `${profile.metrics.diagnostic.download_mbps} Mbps`
@@ -510,6 +509,120 @@ function SupportDesk() {
               )}
             </aside>
           </div>
+          <form className="n1-ticket-card" onSubmit={createTicket}>
+            <header>
+              <div>
+                <span className="section-label">Registro do atendimento</span>
+                <h2>Abrir chamado para este cliente</h2>
+                <p>
+                  O chamado registra esta ligação. Ele pode ser individual ou
+                  ficar vinculado a um problema compartilhado do NOC.
+                </p>
+              </div>
+              <TicketPlus size={26} />
+            </header>
+            <div className="n1-ticket-fields">
+              <label>
+                Responsável pelo atendimento
+                <input
+                  value={ticketOpenedBy}
+                  onChange={(event) => setTicketOpenedBy(event.target.value)}
+                  placeholder="Nome ou matrícula"
+                  maxLength={100}
+                  required
+                />
+              </label>
+              <label>
+                Categoria
+                <select
+                  value={ticketCategory}
+                  onChange={(event) => setTicketCategory(event.target.value)}
+                >
+                  <option>Lentidão</option>
+                  <option>Sem conexão</option>
+                  <option>Wi-Fi</option>
+                </select>
+              </label>
+              <label>
+                Encaminhamento
+                <select
+                  value={ticketOutcome}
+                  onChange={(event) =>
+                    setTicketOutcome(event.target.value as typeof ticketOutcome)
+                  }
+                >
+                  <option value="resolver_telefone">
+                    Resolvido por telefone
+                  </option>
+                  <option value="escalar_noc">Escalar para o NOC</option>
+                  <option value="agendar_visita">Agendar visita técnica</option>
+                </select>
+              </label>
+              <label className="n1-ticket-description">
+                Relato do cliente
+                <textarea
+                  value={ticketDescription}
+                  onChange={(event) => setTicketDescription(event.target.value)}
+                  minLength={10}
+                  maxLength={600}
+                  required
+                />
+              </label>
+            </div>
+            <div className="n1-ticket-footer">
+              <div className="n1-ticket-link">
+                <Network size={17} />
+                {profile.decision.relatedProblemId ? (
+                  <span>
+                    {profile.decision.relatedProblemKind === "incident"
+                      ? "Vinculado ao agrupamento ativo do NOC: "
+                      : "Sinal relacionado detectado: "}
+                    <strong>
+                      {profile.decision.relatedProblemTitle ??
+                        profile.decision.relatedProblemId}
+                    </strong>
+                    <small>
+                      Referência interna: {profile.decision.relatedProblemId}
+                    </small>
+                    <HelpTooltip
+                      term={
+                        profile.decision.relatedProblemKind === "incident"
+                          ? "Vínculo com agrupamento"
+                          : "Sinal relacionado"
+                      }
+                      description={
+                        profile.decision.relatedProblemKind === "incident"
+                          ? "O chamado continua sendo individual, mas aponta para um agrupamento operacional já registrado pelo NOC."
+                          : "Há um padrão conhecido nos dados, mas ele ainda não representa um agrupamento operacional confirmado. Se escalado, o chamado entra na fila do NOC."
+                      }
+                    />
+                  </span>
+                ) : (
+                  <span>
+                    Chamado individual, sem agrupamento coletivo associado.
+                  </span>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={
+                  ticketBusy ||
+                  ticketOpenedBy.trim().length < 2 ||
+                  ticketDescription.trim().length < 10
+                }
+              >
+                <TicketPlus size={16} />
+                {ticketBusy ? "Abrindo…" : "Abrir chamado"}
+              </button>
+            </div>
+            {ticketError && <p className="n1-ticket-error">{ticketError}</p>}
+            {createdTicket && (
+              <p className="n1-ticket-success">
+                <CheckCircle2 size={16} /> Chamado {createdTicket} aberto e
+                incluído no histórico do cliente.
+              </p>
+            )}
+          </form>
           {profile.recentTickets.length > 0 && (
             <div className="panel history">
               <div className="panel-heading">
@@ -525,9 +638,15 @@ function SupportDesk() {
                     <span>
                       {new Date(ticket.opened_at).toLocaleDateString("pt-BR")}
                     </span>
-                    <strong>{ticket.category}</strong>
-                    <p>{ticket.description}</p>
-                    <small>{ticket.resolution}</small>
+                    <strong>
+                      <TechnicalText text={ticket.category} />
+                    </strong>
+                    <p>
+                      <TechnicalText text={ticket.description} />
+                    </p>
+                    <small>
+                      <TechnicalText text={ticket.resolution} />
+                    </small>
                   </div>
                 ))}
               </div>
@@ -540,7 +659,9 @@ function SupportDesk() {
 }
 
 export default function App() {
-  const [view, setView] = useState<"noc" | "support">("noc");
+  const [view, setView] = useState<View>("noc");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [supportCustomer, setSupportCustomer] = useState<string>();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -551,10 +672,22 @@ export default function App() {
         setError(reason instanceof Error ? reason.message : "Erro ao carregar"),
       );
   }, []);
+  function navigate(nextView: View) {
+    setView(nextView);
+    setSidebarOpen(false);
+  }
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="#">
+      <aside
+        className={`sidebar ${sidebarOpen ? "open" : ""}`}
+        aria-label="Navegação principal"
+      >
+        <a
+          className="brand"
+          href="#"
+          onClick={() => navigate("dashboard")}
+          aria-label="Ir para o dashboard"
+        >
           <span className="brand-mark">
             <RadioTower size={20} />
           </span>
@@ -563,20 +696,75 @@ export default function App() {
             <small>Operations intelligence</small>
           </span>
         </a>
-        <nav>
+        <nav aria-label="Áreas da aplicação">
+          <span className="sidebar-section-label">Operação</span>
+          <button
+            className={view === "dashboard" ? "active" : ""}
+            title="Indicadores consolidados do parque e do suporte."
+            aria-current={view === "dashboard" ? "page" : undefined}
+            onClick={() => navigate("dashboard")}
+          >
+            <LayoutDashboard size={17} />
+            Dashboard
+          </button>
           <button
             className={view === "noc" ? "active" : ""}
-            onClick={() => setView("noc")}
+            title={providerGlossary.noc.description}
+            aria-current={view === "noc" ? "page" : undefined}
+            onClick={() => navigate("noc")}
           >
             <Activity size={17} />
             Visão NOC
           </button>
           <button
             className={view === "support" ? "active" : ""}
-            onClick={() => setView("support")}
+            title={providerGlossary.n1.description}
+            aria-current={view === "support" ? "page" : undefined}
+            onClick={() => navigate("support")}
           >
             <Headphones size={17} />
             Atendimento N1
+          </button>
+          <button
+            className={view === "investigations" ? "active" : ""}
+            title="Fila de investigações do agente com aprovação humana obrigatória."
+            aria-current={view === "investigations" ? "page" : undefined}
+            onClick={() => navigate("investigations")}
+          >
+            <BrainCircuit size={17} />
+            Revisão IA
+          </button>
+          <button
+            className={view === "tickets" ? "active" : ""}
+            aria-current={view === "tickets" ? "page" : undefined}
+            onClick={() => navigate("tickets")}
+          >
+            <TicketCheck size={17} />
+            Tickets
+          </button>
+          <button
+            className={view === "diagnostics" ? "active" : ""}
+            aria-current={view === "diagnostics" ? "page" : undefined}
+            onClick={() => navigate("diagnostics")}
+          >
+            <Gauge size={17} />
+            Diagnósticos
+          </button>
+          <button
+            className={view === "topology" ? "active" : ""}
+            aria-current={view === "topology" ? "page" : undefined}
+            onClick={() => navigate("topology")}
+          >
+            <GitBranch size={17} />
+            Mapa de entidades
+          </button>
+          <button
+            className={view === "inventory" ? "active" : ""}
+            aria-current={view === "inventory" ? "page" : undefined}
+            onClick={() => navigate("inventory")}
+          >
+            <Users size={17} />
+            Cadastros
           </button>
         </nav>
         <div className="data-state">
@@ -591,31 +779,76 @@ export default function App() {
             </small>
           </div>
         </div>
-      </header>
-      <main>
-        {view === "support" ? (
-          <SupportDesk />
-        ) : error ? (
-          <div className="fatal-error">
-            <AlertTriangle />
-            {error}
-          </div>
-        ) : overview ? (
-          <NocDashboard overview={overview} />
-        ) : (
-          <div className="loading">
-            <span />
-            <p>Consolidando sinais da rede…</p>
-          </div>
-        )}
-      </main>
-      <footer>
-        <span>Ondaluz Ops · protótipo de decisão operacional</span>
-        <span>
-          As recomendações mostram evidência e confiança — a ação continua
-          humana.
-        </span>
-      </footer>
+      </aside>
+      <button
+        className="sidebar-toggle"
+        aria-label={sidebarOpen ? "Fechar menu" : "Abrir menu"}
+        title={sidebarOpen ? "Fechar menu" : "Abrir menu"}
+        aria-expanded={sidebarOpen}
+        onClick={() => setSidebarOpen((current) => !current)}
+      >
+        {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+      </button>
+      {sidebarOpen && (
+        <button
+          className="sidebar-overlay"
+          aria-label="Fechar menu de navegação"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      <div className="app-content">
+        <main>
+          {view === "inventory" ? (
+            <InventoryDirectory
+              onOpenSupport={(customerId) => {
+                setSupportCustomer(customerId);
+                navigate("support");
+              }}
+            />
+          ) : view === "investigations" ? (
+            <InvestigationReview />
+          ) : view === "topology" ? (
+            <TopologyMap />
+          ) : view === "tickets" ? (
+            <SupportTickets
+              onOpenSupport={(customerId) => {
+                setSupportCustomer(customerId);
+                navigate("support");
+              }}
+            />
+          ) : view === "diagnostics" ? (
+            <DiagnosticsDirectory
+              onOpenSupport={(customerId) => {
+                setSupportCustomer(customerId);
+                navigate("support");
+              }}
+            />
+          ) : view === "support" ? (
+            <SupportDesk initialCustomer={supportCustomer} />
+          ) : error ? (
+            <div className="fatal-error">
+              <AlertTriangle />
+              {error}
+            </div>
+          ) : !overview ? (
+            <div className="loading">
+              <span />
+              <p>Consolidando sinais da rede…</p>
+            </div>
+          ) : view === "dashboard" ? (
+            <ExecutiveDashboard overview={overview} />
+          ) : (
+            <NocDashboard overview={overview} />
+          )}
+        </main>
+        <footer className="app-footer">
+          <span>Ondaluz Ops · protótipo de decisão operacional</span>
+          <span>
+            As recomendações mostram evidência e confiança — a ação continua
+            humana.
+          </span>
+        </footer>
+      </div>
     </div>
   );
 }

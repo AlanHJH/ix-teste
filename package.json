@@ -11,8 +11,11 @@
     "dev": "concurrently -n api,web -c cyan,magenta \"npm run start:dev -w @ondaluz/api\" \"npm run dev -w @ondaluz/web\"",
     "test": "npm run test -w @ondaluz/api && npm run test -w @ondaluz/web",
     "lint": "npm run lint -w @ondaluz/api && npm run lint -w @ondaluz/web",
-    "format": "prettier --write \"apps/**/*.{ts,tsx,css,json}\" \"*.{json,md}\" \"docs/*.md\"",
-    "format:check": "prettier --check \"apps/**/*.{ts,tsx,css,json}\" \"*.{json,md}\" \"docs/*.md\""
+    "compose:check": "docker compose config --quiet",
+    "smoke": "node scripts/smoke.mjs",
+    "verify": "npm run build && npm test && npm run lint && npm run format:check && npm run compose:check && npm audit --audit-level=moderate",
+    "format": "prettier --no-error-on-unmatched-pattern --write \"apps/**/*.{ts,tsx,css,json}\" \"scripts/**/*.mjs\" \"*.{json,md}\" \"docs/*.md\" \".github/**/*.yml\"",
+    "format:check": "prettier --no-error-on-unmatched-pattern --check \"apps/**/*.{ts,tsx,css,json}\" \"scripts/**/*.mjs\" \"*.{json,md}\" \"docs/*.md\" \".github/**/*.yml\""
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

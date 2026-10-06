@@ -11,6 +11,9 @@ export class DatabaseService implements OnModuleDestroy {
       process.env.DATABASE_URL ??
       "postgresql://ondaluz:ondaluz@localhost:5432/ondaluz",
     max: 10,
+    connectionTimeoutMillis: 5_000,
+    idleTimeoutMillis: 30_000,
+    statement_timeout: 15_000,
   });
 
   query<T extends QueryResultRow>(text: string, params: unknown[] = []) {

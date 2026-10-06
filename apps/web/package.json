@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "tsx --test src/api.spec.ts",
+    "test": "tsx --test src/api.spec.ts src/ProviderGlossary.spec.tsx",
     "lint": "tsc -b --pretty false"
   },
   "dependencies": {
@@ -14,7 +14,8 @@
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "recharts": "^2.15.1"
+    "react-is": "^19.3.0",
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@types/react": "^19.0.8",
