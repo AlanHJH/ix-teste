@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  Boxes,
   BrainCircuit,
   CheckCircle2,
   CircleDollarSign,
@@ -11,12 +12,14 @@ import {
   GitBranch,
   Headphones,
   LayoutDashboard,
+  LogOut,
   Menu,
   Network,
   RadioTower,
   RefreshCw,
   Search,
   ShieldCheck,
+  Settings2,
   TicketCheck,
   TicketPlus,
   Users,
@@ -40,6 +43,23 @@ import { SupportTickets } from "./SupportTickets";
 import { DiagnosticsDirectory } from "./DiagnosticsDirectory";
 import { InvestigationReview } from "./InvestigationReview";
 import { NocOperations } from "./NocOperations";
+import { AgentConfiguration } from "./AgentConfiguration";
+import { N1AdvisorChat } from "./N1AdvisorChat";
+import { DynamicDashboard } from "./DynamicDashboard";
+import {
+  groupingAgentEnabled,
+  n1GuidanceEnabled,
+  useAgentPolicy,
+} from "./agentPolicy";
+import {
+  canAccessView,
+  clearSession,
+  defaultViewFor,
+  demoUsers,
+  loadSession,
+  saveSession,
+} from "./auth";
+import type { AppView, DemoUser } from "./auth";
 import type { Overview, SupportProfile } from "./types";
 
 const number = new Intl.NumberFormat("pt-BR");
@@ -49,15 +69,7 @@ const money = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 0,
 });
 
-type View =
-  | "dashboard"
-  | "noc"
-  | "support"
-  | "investigations"
-  | "tickets"
-  | "diagnostics"
-  | "topology"
-  | "inventory";
+type View = AppView;
 
 function Metric({
   icon: Icon,
@@ -197,8 +209,8 @@ function ExecutiveDashboard({ overview }: { overview: Overview }) {
   );
 }
 
-function NocDashboard({ overview }: { overview: Overview }) {
-  return <NocOperations detectedGroups={overview.incidents} />;
+function NocDashboard() {
+  return <NocOperations />;
 }
 
 const examples = [
@@ -229,6 +241,8 @@ function MetricValue({
 }
 
 function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
+  const agentPolicy = useAgentPolicy();
+  const showN1Advisor = n1GuidanceEnabled(agentPolicy);
   const [query, setQuery] = useState("");
   const [profile, setProfile] = useState<SupportProfile | null>(null);
   const [loading, setLoading] = useState(false);
@@ -509,6 +523,14 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
               )}
             </aside>
           </div>
+          {showN1Advisor && (
+            <N1AdvisorChat
+              customerId={profile.customer.id}
+              profile={profile}
+              onDocumentationChange={setTicketDescription}
+              onOutcomeChange={setTicketOutcome}
+            />
+          )}
           <form className="n1-ticket-card" onSubmit={createTicket}>
             <header>
               <div>
@@ -658,8 +680,90 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
   );
 }
 
-export default function App() {
-  const [view, setView] = useState<View>("noc");
+function LoginScreen({ onLogin }: { onLogin: (user: DemoUser) => void }) {
+  return (
+    <main className="login-page">
+      <section className="login-shell" aria-labelledby="login-title">
+        <div className="login-intro">
+          <a className="login-brand" href="#" aria-label="Ondaluz Ops">
+            <span className="brand-mark">
+              <RadioTower size={21} />
+            </span>
+            <span>
+              <strong>Ondaluz</strong>
+              <small>Operations intelligence</small>
+            </span>
+          </a>
+          <div className="login-intro-copy">
+            <span className="login-eyebrow">Ambiente de demonstração</span>
+            <h1>Uma operação conectada começa pelo contexto certo.</h1>
+            <p>
+              Escolha um perfil para explorar os fluxos de administração,
+              atendimento N1 ou operação NOC.
+            </p>
+          </div>
+          <div className="login-signal" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className="login-intro-note">
+            <ShieldCheck size={18} />
+            <span>
+              <strong>Acesso simplificado</strong>
+              <small>Sem senha e sem cadastro neste protótipo.</small>
+            </span>
+          </div>
+        </div>
+
+        <div className="login-panel">
+          <div className="login-heading">
+            <span className="section-label">Acessar a plataforma</span>
+            <h2 id="login-title">Quem está entrando?</h2>
+            <p>Selecione um usuário para iniciar com as permissões do papel.</p>
+          </div>
+          <div className="login-users">
+            {demoUsers.map((user) => (
+              <button
+                className={`login-user-card ${user.role}`}
+                key={user.id}
+                type="button"
+                onClick={() => onLogin(user)}
+                aria-label={`Entrar como ${user.name}, ${user.roleLabel}`}
+              >
+                <span className="login-avatar">{user.initials}</span>
+                <span className="login-user-copy">
+                  <span className="login-role">{user.roleLabel}</span>
+                  <strong>{user.name}</strong>
+                  <small>{user.description}</small>
+                </span>
+                <span className="login-enter" aria-hidden="true">
+                  <ArrowRight size={18} />
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="login-disclaimer">
+            A identidade selecionada fica salva somente neste navegador. Este
+            fluxo simula autenticação e não protege a API.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function OperationsApp({
+  user,
+  onLogout,
+}: {
+  user: DemoUser;
+  onLogout: () => void;
+}) {
+  const agentPolicy = useAgentPolicy();
+  const showGroupingAgent = groupingAgentEnabled(agentPolicy);
+  const [view, setView] = useState<View>(() => defaultViewFor(user.role));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [supportCustomer, setSupportCustomer] = useState<string>();
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -673,6 +777,7 @@ export default function App() {
       );
   }, []);
   function navigate(nextView: View) {
+    if (!canAccessView(user.role, nextView)) return;
     setView(nextView);
     setSidebarOpen(false);
   }
@@ -685,8 +790,11 @@ export default function App() {
         <a
           className="brand"
           href="#"
-          onClick={() => navigate("dashboard")}
-          aria-label="Ir para o dashboard"
+          onClick={(event) => {
+            event.preventDefault();
+            navigate(defaultViewFor(user.role));
+          }}
+          aria-label="Ir para a página inicial"
         >
           <span className="brand-mark">
             <RadioTower size={20} />
@@ -698,75 +806,117 @@ export default function App() {
         </a>
         <nav aria-label="Áreas da aplicação">
           <span className="sidebar-section-label">Operação</span>
-          <button
-            className={view === "dashboard" ? "active" : ""}
-            title="Indicadores consolidados do parque e do suporte."
-            aria-current={view === "dashboard" ? "page" : undefined}
-            onClick={() => navigate("dashboard")}
-          >
-            <LayoutDashboard size={17} />
-            Dashboard
-          </button>
-          <button
-            className={view === "noc" ? "active" : ""}
-            title={providerGlossary.noc.description}
-            aria-current={view === "noc" ? "page" : undefined}
-            onClick={() => navigate("noc")}
-          >
-            <Activity size={17} />
-            Visão NOC
-          </button>
-          <button
-            className={view === "support" ? "active" : ""}
-            title={providerGlossary.n1.description}
-            aria-current={view === "support" ? "page" : undefined}
-            onClick={() => navigate("support")}
-          >
-            <Headphones size={17} />
-            Atendimento N1
-          </button>
-          <button
-            className={view === "investigations" ? "active" : ""}
-            title="Fila de investigações do agente com aprovação humana obrigatória."
-            aria-current={view === "investigations" ? "page" : undefined}
-            onClick={() => navigate("investigations")}
-          >
-            <BrainCircuit size={17} />
-            Revisão IA
-          </button>
-          <button
-            className={view === "tickets" ? "active" : ""}
-            aria-current={view === "tickets" ? "page" : undefined}
-            onClick={() => navigate("tickets")}
-          >
-            <TicketCheck size={17} />
-            Tickets
-          </button>
-          <button
-            className={view === "diagnostics" ? "active" : ""}
-            aria-current={view === "diagnostics" ? "page" : undefined}
-            onClick={() => navigate("diagnostics")}
-          >
-            <Gauge size={17} />
-            Diagnósticos
-          </button>
-          <button
-            className={view === "topology" ? "active" : ""}
-            aria-current={view === "topology" ? "page" : undefined}
-            onClick={() => navigate("topology")}
-          >
-            <GitBranch size={17} />
-            Mapa de entidades
-          </button>
-          <button
-            className={view === "inventory" ? "active" : ""}
-            aria-current={view === "inventory" ? "page" : undefined}
-            onClick={() => navigate("inventory")}
-          >
-            <Users size={17} />
-            Cadastros
-          </button>
+          {canAccessView(user.role, "dashboard") && (
+            <button
+              className={view === "dashboard" ? "active" : ""}
+              title="Indicadores consolidados do parque e do suporte."
+              aria-current={view === "dashboard" ? "page" : undefined}
+              onClick={() => navigate("dashboard")}
+            >
+              <LayoutDashboard size={17} />
+              Dashboard
+            </button>
+          )}
+          {canAccessView(user.role, "noc") && (
+            <button
+              className={view === "noc" ? "active" : ""}
+              title={providerGlossary.noc.description}
+              aria-current={view === "noc" ? "page" : undefined}
+              onClick={() => navigate("noc")}
+            >
+              <Activity size={17} />
+              Visão NOC
+            </button>
+          )}
+          {canAccessView(user.role, "support") && (
+            <button
+              className={view === "support" ? "active" : ""}
+              title={providerGlossary.n1.description}
+              aria-current={view === "support" ? "page" : undefined}
+              onClick={() => navigate("support")}
+            >
+              <Headphones size={17} />
+              Atendimento N1
+            </button>
+          )}
+          {showGroupingAgent && canAccessView(user.role, "investigations") && (
+            <button
+              className={view === "investigations" ? "active" : ""}
+              title="Fila de investigações do agente com aprovação humana obrigatória."
+              aria-current={view === "investigations" ? "page" : undefined}
+              onClick={() => navigate("investigations")}
+            >
+              <BrainCircuit size={17} />
+              Revisão IA
+            </button>
+          )}
+          {canAccessView(user.role, "agent-config") && (
+            <button
+              className={view === "agent-config" ? "active" : ""}
+              title="Configure as capacidades e os recursos consultáveis do agente IA."
+              aria-current={view === "agent-config" ? "page" : undefined}
+              onClick={() => navigate("agent-config")}
+            >
+              <Settings2 size={17} />
+              Configuração IA
+            </button>
+          )}
+          {canAccessView(user.role, "tickets") && (
+            <button
+              className={view === "tickets" ? "active" : ""}
+              aria-current={view === "tickets" ? "page" : undefined}
+              onClick={() => navigate("tickets")}
+            >
+              <TicketCheck size={17} />
+              Tickets
+            </button>
+          )}
+          {canAccessView(user.role, "diagnostics") && (
+            <button
+              className={view === "diagnostics" ? "active" : ""}
+              aria-current={view === "diagnostics" ? "page" : undefined}
+              onClick={() => navigate("diagnostics")}
+            >
+              <Gauge size={17} />
+              Diagnósticos
+            </button>
+          )}
+          {canAccessView(user.role, "topology") && (
+            <button
+              className={view === "topology" ? "active" : ""}
+              aria-current={view === "topology" ? "page" : undefined}
+              onClick={() => navigate("topology")}
+            >
+              <GitBranch size={17} />
+              Infraestrutura de rede
+            </button>
+          )}
+          {canAccessView(user.role, "inventory") && (
+            <button
+              className={view === "inventory" ? "active" : ""}
+              aria-current={view === "inventory" ? "page" : undefined}
+              onClick={() => navigate("inventory")}
+            >
+              <Boxes size={17} />
+              Equipamentos
+            </button>
+          )}
         </nav>
+        <div className="sidebar-user">
+          <span className={`sidebar-avatar ${user.role}`}>{user.initials}</span>
+          <span className="sidebar-user-copy">
+            <strong>{user.name}</strong>
+            <small>{user.roleLabel}</small>
+          </span>
+          <button
+            type="button"
+            onClick={onLogout}
+            aria-label="Sair e trocar de usuário"
+            title="Sair e trocar de usuário"
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
         <div className="data-state">
           <span />
           <div>
@@ -796,17 +946,22 @@ export default function App() {
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      <div className="app-content">
-        <main>
+      <div
+        className={`app-content ${view === "topology" ? "topology-content" : ""}`}
+      >
+        <main className={view === "topology" ? "topology-main" : undefined}>
           {view === "inventory" ? (
             <InventoryDirectory
+              canOpenSupport={canAccessView(user.role, "support")}
               onOpenSupport={(customerId) => {
                 setSupportCustomer(customerId);
                 navigate("support");
               }}
             />
-          ) : view === "investigations" ? (
+          ) : view === "investigations" && showGroupingAgent ? (
             <InvestigationReview />
+          ) : view === "agent-config" ? (
+            <AgentConfiguration />
           ) : view === "topology" ? (
             <TopologyMap />
           ) : view === "tickets" ? (
@@ -836,19 +991,43 @@ export default function App() {
               <p>Consolidando sinais da rede…</p>
             </div>
           ) : view === "dashboard" ? (
-            <ExecutiveDashboard overview={overview} />
+            <DynamicDashboard
+              initialOverview={overview}
+              userId={user.id}
+              fallback={<ExecutiveDashboard overview={overview} />}
+            />
           ) : (
-            <NocDashboard overview={overview} />
+            <NocDashboard />
           )}
         </main>
-        <footer className="app-footer">
-          <span>Ondaluz Ops · protótipo de decisão operacional</span>
-          <span>
-            As recomendações mostram evidência e confiança — a ação continua
-            humana.
-          </span>
-        </footer>
+        {view !== "topology" && (
+          <footer className="app-footer">
+            <span>Ondaluz Ops · protótipo de decisão operacional</span>
+            <span>
+              As recomendações mostram evidência e confiança — a ação continua
+              humana.
+            </span>
+          </footer>
+        )}
       </div>
     </div>
   );
+}
+
+export default function App() {
+  const [user, setUser] = useState<DemoUser | null>(() => loadSession());
+
+  function login(nextUser: DemoUser) {
+    saveSession(nextUser);
+    setUser(nextUser);
+  }
+
+  function logout() {
+    clearSession();
+    setUser(null);
+  }
+
+  if (!user) return <LoginScreen onLogin={login} />;
+
+  return <OperationsApp key={user.id} user={user} onLogout={logout} />;
 }

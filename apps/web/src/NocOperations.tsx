@@ -12,9 +12,10 @@ import {
 } from "lucide-react";
 import { api } from "./api";
 import { HelpTooltip } from "./HelpTooltip";
+import { InvestigationReview } from "./InvestigationReview";
+import { groupingAgentEnabled, useAgentPolicy } from "./agentPolicy";
 import { providerGlossary, TechnicalText } from "./ProviderGlossary";
 import type {
-  Incident,
   IncidentOptionType,
   NocQueue,
   OperationalIncident,
@@ -221,23 +222,6 @@ type GroupingCardData = {
   originTicketId: string | null;
 };
 
-function detectedGrouping(incident: Incident): GroupingCardData {
-  return {
-    id: incident.id,
-    severity: incident.severity,
-    title: incident.title,
-    location: incident.location,
-    affected: incident.affected,
-    confidence: incident.confidence,
-    signal: incident.signal,
-    recommendation: incident.recommendation,
-    owner: incident.owner,
-    evidence: incident.evidence,
-    origin: "Detecção automática",
-    originTicketId: null,
-  };
-}
-
 function operationalGrouping(incident: OperationalIncident): GroupingCardData {
   const evidence = incident.evidence
     .map((record) =>
@@ -385,11 +369,9 @@ function GroupingCard({
   );
 }
 
-export function NocOperations({
-  detectedGroups,
-}: {
-  detectedGroups: Incident[];
-}) {
+export function NocOperations() {
+  const agentPolicy = useAgentPolicy();
+  const showGroupingAgent = groupingAgentEnabled(agentPolicy);
   const [queue, setQueue] = useState<NocQueue | null>(null);
   const [incidents, setIncidents] = useState<OperationalIncidentPage | null>(
     null,
@@ -406,11 +388,6 @@ export function NocOperations({
   const [movingTicket, setMovingTicket] = useState("");
   const [closingTicket, setClosingTicket] = useState("");
   const [closingGrouping, setClosingGrouping] = useState("");
-  const [activeDetectedGroups, setActiveDetectedGroups] =
-    useState(detectedGroups);
-
-  useEffect(() => setActiveDetectedGroups(detectedGroups), [detectedGroups]);
-
   async function refresh() {
     try {
       const [nextQueue, nextIncidents] = await Promise.all([
@@ -495,7 +472,7 @@ export function NocOperations({
           setCatalogOptions((current) => {
             const next = { ...current };
             for (const response of responses) {
-              next[response.type] = response.items;
+              next[response.meta.type] = response.data;
             }
             return next;
           });
@@ -643,30 +620,6 @@ export function NocOperations({
     }
   }
 
-  async function closeDetectedGrouping(incident: Incident) {
-    if (!confirmGroupingClosure(incident.title)) return;
-
-    setClosingGrouping(incident.id);
-    setError("");
-    setCreated("");
-    setClosedGrouping("");
-    try {
-      await api.closeDetectedGrouping(incident.id);
-      setActiveDetectedGroups((current) =>
-        current.filter((grouping) => grouping.id !== incident.id),
-      );
-      setClosedGrouping(incident.id);
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Falha ao encerrar o agrupamento",
-      );
-    } finally {
-      setClosingGrouping("");
-    }
-  }
-
   async function submit(event: FormEvent) {
     event.preventDefault();
     const requiredSelections: Array<[IncidentOptionType, string]> = [];
@@ -728,10 +681,16 @@ export function NocOperations({
   const identifierOptions = needsIdentifier
     ? catalogOptions[form.scopeType as IncidentOptionType]
     : [];
+  const hasSelectedOlt = catalogOptions.olt.some(
+    (option) => option.value.toLowerCase() === form.olt.toLowerCase(),
+  );
+  const hasSelectedPon = catalogOptions.pon.some(
+    (option) => option.value.toLowerCase() === form.pon.toLowerCase(),
+  );
   const receivedTickets =
-    queue?.items.filter((ticket) => ticket.noc_status === "pending") ?? [];
+    queue?.data.filter((ticket) => ticket.noc_status === "pending") ?? [];
   const inProgressTickets =
-    queue?.items.filter((ticket) => ticket.noc_status === "in_progress") ?? [];
+    queue?.data.filter((ticket) => ticket.noc_status === "in_progress") ?? [];
 
   return (
     <>
@@ -767,7 +726,7 @@ export function NocOperations({
                   <small>Aguardando início da análise</small>
                 </div>
               </div>
-              <b>{queue?.summary.received ?? 0}</b>
+              <b>{queue?.meta.summary.received ?? 0}</b>
             </header>
             <div className="noc-kanban-list">
               {receivedTickets.map((ticket) => (
@@ -800,7 +759,7 @@ export function NocOperations({
                   <small>Atendimentos em análise pelo NOC</small>
                 </div>
               </div>
-              <b>{queue?.summary.inProgress ?? 0}</b>
+              <b>{queue?.meta.summary.inProgress ?? 0}</b>
             </header>
             <div className="noc-kanban-list">
               {inProgressTickets.map((ticket) => (
@@ -844,10 +803,7 @@ export function NocOperations({
             <h2>Onde agir primeiro</h2>
           </div>
           <div className="grouping-heading-actions">
-            <span>
-              {(incidents?.total ?? 0) + activeDetectedGroups.length} grupos
-              ativos
-            </span>
+            <span>{incidents?.totalItems ?? 0} grupos ativos</span>
             <button className="noc-open-incident" onClick={openCreateGrouping}>
               <Plus size={16} /> Criar agrupamento
             </button>
@@ -868,21 +824,20 @@ export function NocOperations({
           </p>
         )}
 
+        {showGroupingAgent && (
+          <InvestigationReview
+            mode="noc"
+            onGroupingChanged={() => void refresh()}
+          />
+        )}
+
         <div className="incidents-list">
-          {incidents?.items.map((incident) => (
+          {incidents?.data.map((incident) => (
             <GroupingCard
               key={incident.incident_id}
               grouping={operationalGrouping(incident)}
               closing={closingGrouping === incident.incident_id}
               onClose={() => void closeOperationalGrouping(incident)}
-            />
-          ))}
-          {activeDetectedGroups.map((incident) => (
-            <GroupingCard
-              key={incident.id}
-              grouping={detectedGrouping(incident)}
-              closing={closingGrouping === incident.id}
-              onClose={() => void closeDetectedGrouping(incident)}
             />
           ))}
         </div>
@@ -1046,9 +1001,19 @@ export function NocOperations({
                       list="noc-pon-options"
                       value={form.pon}
                       onChange={(event) => updatePon(event.target.value)}
-                      placeholder="Selecione primeiro a OLT"
+                      placeholder={
+                        hasSelectedOlt
+                          ? "Digite para buscar uma PON"
+                          : "Selecione primeiro uma OLT cadastrada"
+                      }
                       autoComplete="off"
                       aria-describedby="noc-pon-hint"
+                      disabled={!hasSelectedOlt}
+                      title={
+                        hasSelectedOlt
+                          ? "Selecione uma PON cadastrada na OLT escolhida."
+                          : "Selecione uma OLT cadastrada para habilitar este campo."
+                      }
                       required
                     />
                     <datalist id="noc-pon-options">
@@ -1061,7 +1026,9 @@ export function NocOperations({
                       ))}
                     </datalist>
                     <small id="noc-pon-hint" className="catalog-field-note">
-                      Lista filtrada pela OLT escolhida.
+                      {hasSelectedOlt
+                        ? "Lista filtrada pela OLT escolhida."
+                        : "Campo bloqueado até selecionar uma OLT cadastrada."}
                     </small>
                   </label>
                 )}
@@ -1078,9 +1045,19 @@ export function NocOperations({
                       list="noc-cto-options"
                       value={form.cto}
                       onChange={(event) => update("cto", event.target.value)}
-                      placeholder="Selecione primeiro a OLT e a PON"
+                      placeholder={
+                        hasSelectedPon
+                          ? "Digite para buscar uma CTO"
+                          : "Selecione primeiro uma OLT e uma PON cadastradas"
+                      }
                       autoComplete="off"
                       aria-describedby="noc-cto-hint"
+                      disabled={!hasSelectedOlt || !hasSelectedPon}
+                      title={
+                        hasSelectedOlt && hasSelectedPon
+                          ? "Selecione uma CTO cadastrada na PON escolhida."
+                          : "Selecione uma OLT e uma PON cadastradas para habilitar este campo."
+                      }
                       required
                     />
                     <datalist id="noc-cto-options">
@@ -1093,7 +1070,9 @@ export function NocOperations({
                       ))}
                     </datalist>
                     <small id="noc-cto-hint" className="catalog-field-note">
-                      Lista filtrada pela OLT e PON escolhidas.
+                      {hasSelectedOlt && hasSelectedPon
+                        ? "Lista filtrada pela OLT e PON escolhidas."
+                        : "Campo bloqueado até selecionar uma OLT e uma PON cadastradas."}
                     </small>
                   </label>
                 )}

@@ -1,7 +1,11 @@
 import type {
   EquipmentPath,
+  DashboardComposition,
+  DailyMetricPage,
   DiagnosticsPage,
   InventoryPage,
+  InventoryFilter,
+  InventoryFilterOption,
   Overview,
   InvestigationPage,
   IncidentOptions,
@@ -9,6 +13,8 @@ import type {
   NocQueue,
   OperationalIncidentPage,
   SupportProfile,
+  N1AdvisorReply,
+  N1ChatMessage,
   TicketPage,
   TopologySnapshot,
 } from "./types";
@@ -24,7 +30,7 @@ async function request<T>(path: string): Promise<T> {
 
 async function mutate<T>(
   path: string,
-  method: "POST" | "PATCH" | "DELETE",
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
   body?: Record<string, unknown>,
 ): Promise<T> {
   const response = await fetch(path, {
@@ -43,23 +49,96 @@ async function mutate<T>(
 }
 
 export const api = {
+  dashboardPreference: (userId: string) =>
+    request<{
+      composition: DashboardComposition | null;
+      updatedAt: string | null;
+    }>(`/api/dashboard/preferences/${encodeURIComponent(userId)}`),
+  saveDashboardPreference: (
+    userId: string,
+    composition: DashboardComposition,
+  ) =>
+    mutate<{
+      composition: DashboardComposition;
+      updatedAt: string;
+    }>(`/api/dashboard/preferences/${encodeURIComponent(userId)}`, "PUT", {
+      composition,
+    }),
+  composeDashboard: (
+    objective: string,
+    currentPlan?: DashboardComposition,
+    targetWidgetId?: string,
+  ) =>
+    mutate<DashboardComposition>("/api/dashboard/compose", "POST", {
+      objective,
+      ...(currentPlan ? { currentPlan } : {}),
+      ...(targetWidgetId ? { targetWidgetId } : {}),
+    }),
   overview: () => request<Overview>("/api/network/overview"),
+  dashboardInventory: (query = "") => {
+    const params = new URLSearchParams({
+      q: query,
+      status: "active",
+      page: "1",
+      pageSize: "15",
+      sort: "customer_id_asc",
+    });
+    return request<InventoryPage>(`/api/inventory?${params}`);
+  },
+  dashboardTelemetry: (fromDay = "") => {
+    const params = new URLSearchParams({
+      page: "1",
+      pageSize: "15",
+      sort: "day_desc",
+    });
+    if (fromDay) params.set("fromDay", fromDay);
+    return request<DailyMetricPage>(`/api/telemetry/daily-metrics?${params}`);
+  },
+  dashboardDiagnostics: (from = "") => {
+    const params = new URLSearchParams({
+      page: "1",
+      pageSize: "15",
+      sort: "ts_desc",
+    });
+    if (from) params.set("from", from);
+    return request<DiagnosticsPage>(`/api/diagnostics?${params}`);
+  },
   inventory: (
     query = "",
     page = 1,
     status: "active" | "removed" | "all" = "active",
+    filters: InventoryFilter[] = [],
   ) => {
     const params = new URLSearchParams({
       page: String(page),
-      limit: "25",
+      pageSize: "25",
+      sort: "relevance",
       status,
     });
     if (query.trim()) params.set("q", query.trim());
+    filters.forEach((filter) =>
+      params.append("filter", `${filter.kind}:${filter.value}`),
+    );
     return request<InventoryPage>(`/api/customers?${params.toString()}`);
+  },
+  inventoryFilterOptions: (
+    query = "",
+    status: "active" | "removed" | "all" = "active",
+  ) => {
+    const params = new URLSearchParams({ q: query.trim(), status });
+    return request<{ data: InventoryFilterOption[] }>(
+      `/api/customers/filter-options?${params.toString()}`,
+    ).then((response) => response.data);
   },
   support: (customerId: string) =>
     request<SupportProfile>(
       `/api/customers/${encodeURIComponent(customerId)}/support`,
+    ),
+  n1Chat: (customerId: string, message: string, history: N1ChatMessage[]) =>
+    mutate<N1AdvisorReply>(
+      `/api/customers/${encodeURIComponent(customerId)}/n1-chat`,
+      "POST",
+      { message, history },
     ),
   topology: (olt?: string, pon?: string) => {
     const params = new URLSearchParams();
@@ -71,13 +150,32 @@ export const api = {
     );
   },
   topologyPath: (query: string) =>
-    request<EquipmentPath[]>(
-      `/api/network/topology/path?q=${encodeURIComponent(query)}`,
-    ),
+    request<{
+      data: EquipmentPath[];
+      page: number;
+      pageSize: number;
+      totalItems: number;
+      totalPages: number;
+    }>(
+      `/api/network/topology/path?q=${encodeURIComponent(query)}&page=1&pageSize=8&sort=relevance`,
+    ).then((response) => response.data),
   topologyDevices: (olt: string, pon: string, cto: string) => {
-    const query = new URLSearchParams({ olt, pon, cto });
-    return request<EquipmentPath[]>(
-      `/api/network/topology/devices?${query.toString()}`,
+    const query = new URLSearchParams({
+      olt,
+      pon,
+      cto,
+      page: "1",
+      pageSize: "100",
+      sort: "customer_id_asc",
+    });
+    return request<{
+      data: EquipmentPath[];
+      page: number;
+      pageSize: number;
+      totalItems: number;
+      totalPages: number;
+    }>(`/api/network/topology/devices?${query.toString()}`).then(
+      (response) => response.data,
     );
   },
   tickets: (
@@ -87,7 +185,8 @@ export const api = {
   ) => {
     const params = new URLSearchParams({
       page: String(page),
-      limit: "25",
+      pageSize: "25",
+      sort: "opened_at_desc",
       category: filters.category,
       resolution: filters.resolution,
       channel: filters.channel,
@@ -108,7 +207,10 @@ export const api = {
       "POST",
       input,
     ),
-  nocQueue: () => request<NocQueue>("/api/tickets/noc-queue"),
+  nocQueue: () =>
+    request<NocQueue>(
+      "/api/tickets/noc-queue?page=1&pageSize=100&sort=opened_at_asc",
+    ),
   updateNocTicketStatus: (ticketId: string, status: "in_progress" | "closed") =>
     mutate<{ ticket_id: string; noc_status: "in_progress" | "closed" }>(
       `/api/tickets/${encodeURIComponent(ticketId)}/noc-status`,
@@ -116,7 +218,9 @@ export const api = {
       { status },
     ),
   operationalIncidents: () =>
-    request<OperationalIncidentPage>("/api/incidents"),
+    request<OperationalIncidentPage>(
+      "/api/incidents?page=1&pageSize=100&sort=severity_desc",
+    ),
   incidentOptions: (input: {
     type: IncidentOptionType;
     query?: string;
@@ -128,7 +232,9 @@ export const api = {
       q: input.query ?? "",
       olt: input.olt ?? "",
       pon: input.pon ?? "",
-      limit: "40",
+      page: "1",
+      pageSize: "40",
+      sort: "value_asc",
     });
     return request<IncidentOptions>(`/api/incidents/options?${params}`);
   },
@@ -172,17 +278,26 @@ export const api = {
   ) => {
     const params = new URLSearchParams({
       page: String(page),
-      limit: "25",
+      pageSize: "25",
+      sort: "ts_desc",
       state: filters.state,
       requestedBy: filters.requestedBy,
     });
     if (query.trim()) params.set("q", query.trim());
     return request<DiagnosticsPage>(`/api/diagnostics?${params.toString()}`);
   },
-  investigations: () => request<InvestigationPage>("/api/investigations"),
+  investigations: () =>
+    request<InvestigationPage>(
+      "/api/investigations?page=1&pageSize=100&sort=created_at_desc",
+    ),
   triggerMetricInvestigations: () =>
     mutate<Record<string, unknown>>(
       "/api/investigations/trigger/metrics",
+      "POST",
+    ),
+  triggerGroupingInvestigations: () =>
+    mutate<Record<string, unknown>>(
+      "/api/investigations/trigger/groupings",
       "POST",
     ),
   triggerScheduledInvestigation: () =>

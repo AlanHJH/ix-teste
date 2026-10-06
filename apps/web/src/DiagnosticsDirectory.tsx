@@ -113,9 +113,7 @@ export function DiagnosticsDirectory({
     setFilters((current) => ({ ...current, [name]: value }));
   }
 
-  const totalPages = result
-    ? Math.max(1, Math.ceil(result.total / result.limit))
-    : 1;
+  const totalPages = result ? Math.max(1, result.totalPages) : 1;
 
   return (
     <section className="diagnostics-page">
@@ -149,21 +147,21 @@ export function DiagnosticsDirectory({
           <Metric
             icon={Activity}
             label="Diagnósticos"
-            value={number.format(result.summary.total)}
+            value={number.format(result.meta.summary.total)}
             note="na seleção atual"
             tone="neutral"
           />
           <Metric
             icon={CheckCircle2}
             label="Concluídos"
-            value={number.format(result.summary.completed)}
+            value={number.format(result.meta.summary.completed)}
             note="medição retornada pela CPE"
             tone="money"
           />
           <Metric
             icon={AlertTriangle}
             label="Falhas"
-            value={number.format(result.summary.errors)}
+            value={number.format(result.meta.summary.errors)}
             note="timeout ou sem resposta"
             tone="danger"
           />
@@ -171,14 +169,14 @@ export function DiagnosticsDirectory({
             icon={Gauge}
             label="Média de download"
             value={
-              result.summary.avg_download_mbps == null
+              result.meta.summary.avg_download_mbps == null
                 ? "n/d"
-                : `${result.summary.avg_download_mbps} Mbps`
+                : `${result.meta.summary.avg_download_mbps} Mbps`
             }
             note={
-              result.summary.avg_upload_mbps == null
+              result.meta.summary.avg_upload_mbps == null
                 ? "sem upload mensurável"
-                : `${result.summary.avg_upload_mbps} Mbps de upload`
+                : `${result.meta.summary.avg_upload_mbps} Mbps de upload`
             }
             tone="warning"
             help={`Média das medições concluídas pelo TR-143. ${providerGlossary.tr143.description} Não mede todo o Wi-Fi do cliente.`}
@@ -197,8 +195,8 @@ export function DiagnosticsDirectory({
           </div>
           {result && (
             <span>
-              {number.format(result.total)} registros · página {result.page} de{" "}
-              {totalPages}
+              {number.format(result.totalItems)} registros · página{" "}
+              {result.page} de {totalPages}
             </span>
           )}
         </header>
@@ -225,7 +223,7 @@ export function DiagnosticsDirectory({
               onChange={(event) => changeFilter("state", event.target.value)}
             >
               <option value="all">Todos</option>
-              {result?.filters.states.map((state) => (
+              {result?.meta.filters.states.map((state) => (
                 <option key={state} value={state}>
                   {state === "Completed" ? "Concluído" : state}
                 </option>
@@ -241,7 +239,7 @@ export function DiagnosticsDirectory({
               }
             >
               <option value="all">Todos</option>
-              {result?.filters.requested_by.map((requestedBy) => (
+              {result?.meta.filters.requested_by.map((requestedBy) => (
                 <option key={requestedBy} value={requestedBy}>
                   {requestedBy}
                 </option>
@@ -298,7 +296,7 @@ export function DiagnosticsDirectory({
               </tr>
             </thead>
             <tbody>
-              {result?.items.map((item) => (
+              {result?.data.map((item) => (
                 <tr key={`${item.serial}-${item.ts}`}>
                   <td>
                     <strong>{formatTimestamp(item.ts)}</strong>
@@ -370,7 +368,7 @@ export function DiagnosticsDirectory({
               ))}
             </tbody>
           </table>
-          {!loading && result?.items.length === 0 && (
+          {!loading && result?.data.length === 0 && (
             <div className="diagnostics-empty">
               <Wifi size={30} />
               <p>Nenhum diagnóstico corresponde aos filtros atuais.</p>

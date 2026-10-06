@@ -27,7 +27,7 @@ const statusLabel: Record<Investigation["status"], string> = {
 };
 
 const triggerLabel = {
-  metric: "Métrica",
+  metric: "Detector de grupos",
   schedule: "Agendamento",
   manual: "Operador",
 };
@@ -185,8 +185,8 @@ function InvestigationCard({
             <ShieldCheck size={19} />
             <p>
               <strong>Decisão humana obrigatória</strong>
-              Aprovar cria um incidente operacional. Rejeitar preserva o
-              resultado como feedback auditável.
+              Aprovar cria o agrupamento ativo para o NOC e para o contexto do
+              N1. Rejeitar preserva o resultado como feedback auditável.
             </p>
           </div>
           <textarea
@@ -209,7 +209,7 @@ function InvestigationCard({
               disabled={busy || !reviewer.trim()}
               onClick={() => onReview("approve")}
             >
-              <Check size={15} /> Aprovar e abrir incidente
+              <Check size={15} /> Aprovar e criar agrupamento
             </button>
           </div>
         </div>
@@ -228,8 +228,10 @@ function InvestigationCard({
 
 export function InvestigationReview({
   mode = "full",
+  onGroupingChanged,
 }: {
   mode?: "full" | "noc";
+  onGroupingChanged?: () => void;
 }) {
   const [page, setPage] = useState<InvestigationPage | null>(null);
   const [objective, setObjective] = useState("");
@@ -287,39 +289,40 @@ export function InvestigationReview({
     ) {
       return;
     }
-    void run(investigation.investigation_id, () =>
-      api.reviewInvestigation(
+    void run(investigation.investigation_id, async () => {
+      await api.reviewInvestigation(
         investigation.investigation_id,
         decision,
         reviewer,
         notes[investigation.investigation_id] ?? "",
-      ),
-    );
+      );
+      if (decision === "approve") onGroupingChanged?.();
+    });
   }
 
-  const configured = page?.config.openaiConfigured ?? false;
+  const configured = page?.meta.config.openaiConfigured ?? false;
   const isNoc = mode === "noc";
   const investigations = isNoc
-    ? (page?.investigations.filter(
+    ? (page?.data.filter(
         (investigation) =>
           investigation.trigger_type === "metric" &&
           ["queued", "running", "pending_review", "failed"].includes(
             investigation.status,
           ),
       ) ?? [])
-    : (page?.investigations ?? []);
+    : (page?.data ?? []);
   const pending = isNoc
     ? investigations.filter(
         (investigation) => investigation.status === "pending_review",
       ).length
-    : (page?.summary.pending_review ?? 0);
+    : (page?.meta.summary.pending_review ?? 0);
   const active = isNoc
     ? investigations.filter((investigation) =>
         ["queued", "running"].includes(investigation.status),
       ).length
-    : (page?.summary.queued ?? 0) + (page?.summary.running ?? 0);
+    : (page?.meta.summary.queued ?? 0) + (page?.meta.summary.running ?? 0);
   const intervalMinutes = Math.round(
-    (page?.config.metricTriggerIntervalMs ?? 300_000) / 60_000,
+    (page?.meta.config.metricTriggerIntervalMs ?? 300_000) / 60_000,
   );
 
   return (
@@ -335,15 +338,16 @@ export function InvestigationReview({
             <span className="section-label">Vigilância automática com IA</span>
             <h2>Novos problemas passam pela aprovação do NOC</h2>
             <p>
-              A cada {intervalMinutes} minutos, os detectores verificam o
-              parque. O agente confirma os candidatos consultando o{" "}
-              <ProviderTerm term="mcp" /> somente leitura e apresenta apenas
-              problemas novos nesta fila.
+              A cada {intervalMinutes} minutos, os detectores procuram possíveis
+              problemas por parque, OLT, PON, CTO, região, firmware, equipamento
+              e cliente. O agente confirma os candidatos consultando o{" "}
+              <ProviderTerm term="mcp" /> somente leitura e propõe o menor
+              alcance que explique o problema.
             </p>
           </div>
           <div
             className={`automatic-status ${
-              page?.config.metricTriggerEnabled && configured
+              page?.meta.config.metricTriggerEnabled && configured
                 ? "ready"
                 : "paused"
             }`}
@@ -351,7 +355,7 @@ export function InvestigationReview({
             <Clock3 size={17} />
             <div>
               <strong>
-                {page?.config.metricTriggerEnabled && configured
+                {page?.meta.config.metricTriggerEnabled && configured
                   ? `Ativo · ${intervalMinutes} min`
                   : "Automação pausada"}
               </strong>
@@ -359,10 +363,22 @@ export function InvestigationReview({
                 Deduplicação e validação humana
                 <HelpTooltip
                   term="Deduplicação automática"
-                  description="A mesma regra, problema e janela de dados não geram outra investigação. Mesmo quando a IA confirma um problema, só o NOC pode abrir o incidente."
+                  description="A mesma regra, problema e janela de dados não geram outra investigação. Mesmo quando a IA confirma um problema, só o NOC pode aprovar e criar o agrupamento."
                 />
               </span>
             </div>
+            <button
+              type="button"
+              className="noc-agent-run"
+              disabled={!configured || Boolean(busy)}
+              onClick={() =>
+                void run("groupings", api.triggerGroupingInvestigations)
+              }
+              title="Executa agora os detectores de agrupamento e envia novos candidatos ao agente."
+            >
+              <SearchCheck size={14} />
+              {busy === "groupings" ? "Buscando…" : "Buscar agora"}
+            </button>
           </div>
         </section>
       ) : (
@@ -385,12 +401,12 @@ export function InvestigationReview({
               <strong>
                 {configured ? "OpenAI configurada" : "Chave OpenAI pendente"}
               </strong>
-              <span>{page?.config.model ?? "carregando…"}</span>
+              <span>{page?.meta.config.model ?? "carregando…"}</span>
               {page && (
                 <span>
-                  até {page.config.toolCallBudgets.manual} consultas · contexto
-                  de evidências{" "}
-                  {Math.round(page.config.maxContextCharacters / 1000)}
+                  até {page.meta.config.toolCallBudgets.manual} consultas ·
+                  contexto de evidências{" "}
+                  {Math.round(page.meta.config.maxContextCharacters / 1000)}
                   mil caracteres
                   <HelpTooltip
                     term="Orçamento adaptativo"
@@ -418,14 +434,15 @@ export function InvestigationReview({
         <section className="agent-controls">
           <div className="agent-control-card">
             <span>Métrica</span>
-            <h2>Validar candidatos atuais</h2>
+            <h2>Buscar agrupamentos problemáticos</h2>
             <p>
-              Envia os quatro grupos detectados pelas regras para investigação.
+              Procura concentrações por todos os escopos válidos e envia apenas
+              candidatos delimitados para investigação.
             </p>
             <button
               disabled={!configured || Boolean(busy)}
               onClick={() =>
-                void run("metrics", api.triggerMetricInvestigations)
+                void run("metrics", api.triggerGroupingInvestigations)
               }
             >
               <SearchCheck size={16} />
@@ -480,7 +497,7 @@ export function InvestigationReview({
             </span>
             <h2>
               {isNoc
-                ? "Problemas novos propostos pelo agente"
+                ? "Agrupamentos propostos pelo agente"
                 : "Incidentes propostos pelo agente"}
             </h2>
           </div>

@@ -123,9 +123,7 @@ export function SupportTickets({
     setFilters((current) => ({ ...current, [name]: value }));
   }
 
-  const totalPages = result
-    ? Math.max(1, Math.ceil(result.total / result.limit))
-    : 1;
+  const totalPages = result ? Math.max(1, result.totalPages) : 1;
 
   return (
     <section className="tickets-page">
@@ -159,14 +157,14 @@ export function SupportTickets({
           <Metric
             icon={TicketCheck}
             label="Tickets encontrados"
-            value={number.format(result.summary.total)}
+            value={number.format(result.meta.summary.total)}
             note="na seleção atual"
             tone="neutral"
           />
           <Metric
             icon={Wrench}
             label="Chamados técnicos"
-            value={number.format(result.summary.technical)}
+            value={number.format(result.meta.summary.technical)}
             note="Lentidão, queda ou Wi‑Fi"
             tone="warning"
             help={providerGlossary.wifi.description}
@@ -174,7 +172,7 @@ export function SupportTickets({
           <Metric
             icon={AlertTriangle}
             label="Escalados ao NOC"
-            value={number.format(result.summary.escalated)}
+            value={number.format(result.meta.summary.escalated)}
             note="exigem investigação de rede"
             tone="danger"
             help={`${providerGlossary.noc.description} Um ticket escalado requer investigação além do atendimento inicial.`}
@@ -183,9 +181,9 @@ export function SupportTickets({
             icon={Clock3}
             label="Tempo médio"
             value={
-              result.summary.avg_handling_minutes == null
+              result.meta.summary.avg_handling_minutes == null
                 ? "n/d"
-                : `${result.summary.avg_handling_minutes} min`
+                : `${result.meta.summary.avg_handling_minutes} min`
             }
             note="da abertura ao encerramento"
             tone="money"
@@ -204,8 +202,8 @@ export function SupportTickets({
           </div>
           {result && (
             <span>
-              {number.format(result.total)} registros · página {result.page} de{" "}
-              {totalPages}
+              {number.format(result.totalItems)} registros · página{" "}
+              {result.page} de {totalPages}
             </span>
           )}
         </header>
@@ -232,7 +230,7 @@ export function SupportTickets({
               onChange={(event) => changeFilter("category", event.target.value)}
             >
               <option value="all">Todas</option>
-              {result?.filters.categories.map((category) => (
+              {result?.meta.filters.categories.map((category) => (
                 <option key={category} value={category}>
                   {category}
                 </option>
@@ -248,7 +246,7 @@ export function SupportTickets({
               }
             >
               <option value="all">Todas</option>
-              {result?.filters.resolutions.map((resolution) => (
+              {result?.meta.filters.resolutions.map((resolution) => (
                 <option key={resolution} value={resolution}>
                   {resolution}
                 </option>
@@ -262,7 +260,7 @@ export function SupportTickets({
               onChange={(event) => changeFilter("channel", event.target.value)}
             >
               <option value="all">Todos</option>
-              {result?.filters.channels.map((channel) => (
+              {result?.meta.filters.channels.map((channel) => (
                 <option key={channel} value={channel}>
                   {channel}
                 </option>
@@ -307,7 +305,7 @@ export function SupportTickets({
               </tr>
             </thead>
             <tbody>
-              {result?.items.map((ticket) => (
+              {result?.data.map((ticket) => (
                 <tr key={ticket.ticket_id}>
                   <td>
                     <strong>{ticket.ticket_id}</strong>
@@ -379,7 +377,7 @@ export function SupportTickets({
               ))}
             </tbody>
           </table>
-          {!loading && result?.items.length === 0 && (
+          {!loading && result?.data.length === 0 && (
             <div className="tickets-empty">
               <Headphones size={30} />
               <p>Nenhum ticket corresponde aos filtros atuais.</p>

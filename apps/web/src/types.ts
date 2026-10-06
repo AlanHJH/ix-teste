@@ -19,6 +19,8 @@ export type Overview = {
   asOf: string;
   kpis: {
     activeCpes: number;
+    oltCount: number;
+    ponCount: number;
     ticketGrowthPct: number;
     affectedCpes: number;
     repeatCustomers: number;
@@ -33,6 +35,79 @@ export type Overview = {
   }>;
   incidents: Incident[];
   readout: { headline: string; summary: string };
+};
+
+export type DashboardBinding =
+  | "overview.activeCpes"
+  | "overview.oltCount"
+  | "overview.ponCount"
+  | "overview.affectedCpes"
+  | "overview.repeatCustomers"
+  | "overview.ticketGrowthPct"
+  | "overview.estimatedImpact"
+  | "overview.weeklyTickets"
+  | "overview.detectedIncidents"
+  | "overview.executiveReadout"
+  | "overview.ticketMix"
+  | "network.topology"
+  | "inventory.customers"
+  | "inventory.equipment"
+  | "telemetry.dailyMetrics"
+  | "diagnostics.list"
+  | "operations.activeIncidents"
+  | "operations.nocQueue";
+
+export type DashboardWidget = {
+  id: string;
+  kind:
+    | "metric"
+    | "timeseries"
+    | "bar"
+    | "pie"
+    | "multiseries"
+    | "alerts"
+    | "queue"
+    | "narrative"
+    | "table"
+    | "topology"
+    | "map";
+  size: "compact" | "half" | "wide";
+  columns: number;
+  title: string;
+  description: string;
+  binding: DashboardBinding;
+  tone: "neutral" | "positive" | "warning" | "critical";
+  config?: {
+    limit: 5 | 10 | 15;
+    formula: null | {
+      operation: "sum" | "average" | "difference" | "ratio" | "percentage";
+      operands: DashboardBinding[];
+      decimals: 0 | 1 | 2;
+      suffix: string;
+    };
+  };
+};
+
+export type DashboardComposition = {
+  version: "1.0";
+  title: string;
+  subtitle: string;
+  refreshSeconds: number;
+  widgets: DashboardWidget[];
+  objective: string;
+  generatedAt: string;
+  generatedBy: "openai" | "fallback";
+  model: string | null;
+  discovery: {
+    protocol: "OpenAPI";
+    mode: "contract-only";
+    resourceCount: number;
+    document: "/api/openapi.json";
+  };
+  runtimeData: {
+    protocol: "REST";
+    endpoints: string[];
+  };
 };
 
 export type SupportProfile = {
@@ -76,6 +151,27 @@ export type SupportProfile = {
     relatedProblemTitle: string | null;
     relatedProblemKind: "incident" | "signal" | null;
   };
+  activeIncidents: Array<{
+    incidentId: string;
+    title: string;
+    severity: "critical" | "high" | "medium" | "low";
+    category: string;
+    scope: {
+      type?: string;
+      identifier?: string;
+      olt?: string | null;
+      pon?: string | null;
+      cto?: string | null;
+    };
+    affectedCpes: number;
+    confidence: number;
+    probableCause: string;
+    recommendedAction: string;
+    openedAt: string;
+    openedBy: string;
+    source: "agent" | "manual";
+    originTicketId: string | null;
+  }>;
   recentTickets: Array<{
     ticket_id: string;
     opened_at: string;
@@ -109,6 +205,24 @@ export type TopologySnapshot = {
     hasLogicalDropIds: boolean;
     message: string;
   };
+};
+
+export type N1ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type N1AdvisorReply = {
+  assistantMessage: string;
+  nextSteps: string[];
+  options: Array<{
+    id: string;
+    label: string;
+    description: string;
+  }>;
+  documentation: string;
+  disposition: "continue" | "resolve_phone" | "escalate_noc" | "schedule_visit";
+  model: "openai" | "fallback";
 };
 
 export type EquipmentPath = {
@@ -148,10 +262,34 @@ export type InventoryRecord = {
 };
 
 export type InventoryPage = {
+  data: InventoryRecord[];
   page: number;
-  limit: number;
-  total: number;
-  items: InventoryRecord[];
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+};
+
+export type InventoryFilterKind =
+  | "customer"
+  | "serial"
+  | "vendor"
+  | "model"
+  | "firmware"
+  | "plan"
+  | "olt"
+  | "cto"
+  | "city"
+  | "neighborhood";
+
+export type InventoryFilter = {
+  kind: InventoryFilterKind;
+  value: string;
+  label: string;
+  detail: string;
+};
+
+export type InventoryFilterOption = InventoryFilter & {
+  count: number;
 };
 
 export type SupportTicket = {
@@ -177,9 +315,12 @@ export type SupportTicket = {
 };
 
 export type NocQueue = {
-  total: number;
-  summary: { received: number; inProgress: number };
-  items: SupportTicket[];
+  data: SupportTicket[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  meta: { summary: { received: number; inProgress: number } };
 };
 
 export type OperationalIncident = {
@@ -209,34 +350,44 @@ export type OperationalIncident = {
 };
 
 export type OperationalIncidentPage = {
-  total: number;
-  items: OperationalIncident[];
+  data: OperationalIncident[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
 };
 
 export type IncidentOptionType =
   "olt" | "pon" | "cto" | "customer" | "firmware" | "equipment" | "region";
 
 export type IncidentOptions = {
-  type: IncidentOptionType;
-  items: Array<{ value: string; label: string }>;
+  data: Array<{ value: string; label: string }>;
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  meta: { type: IncidentOptionType };
 };
 
 export type TicketPage = {
+  data: SupportTicket[];
   page: number;
-  limit: number;
-  total: number;
-  summary: {
-    total: number;
-    technical: number;
-    escalated: number;
-    visits: number;
-    avg_handling_minutes: number | null;
-  };
-  items: SupportTicket[];
-  filters: {
-    categories: string[];
-    resolutions: string[];
-    channels: string[];
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  meta: {
+    summary: {
+      total: number;
+      technical: number;
+      escalated: number;
+      visits: number;
+      avg_handling_minutes: number | null;
+    };
+    filters: {
+      categories: string[];
+      resolutions: string[];
+      channels: string[];
+    };
   };
 };
 
@@ -261,18 +412,60 @@ export type DiagnosticRecord = {
 };
 
 export type DiagnosticsPage = {
+  data: DiagnosticRecord[];
   page: number;
-  limit: number;
-  total: number;
-  summary: {
-    total: number;
-    completed: number;
-    errors: number;
-    avg_download_mbps: number | null;
-    avg_upload_mbps: number | null;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  meta: {
+    summary: {
+      total: number;
+      completed: number;
+      errors: number;
+      avg_download_mbps: number | null;
+      avg_upload_mbps: number | null;
+    };
+    filters: { states: string[]; requested_by: string[] };
   };
-  items: DiagnosticRecord[];
-  filters: { states: string[]; requested_by: string[] };
+};
+
+export type DailyMetricRecord = {
+  day: string;
+  serial: string;
+  customer_id: string;
+  vendor: string;
+  model: string;
+  software_version: string;
+  plan_mbps: number;
+  olt: string;
+  pon_port: string;
+  cto: string;
+  city: string;
+  neighborhood: string;
+  inform_count: number;
+  mem_min_pct: number | null;
+  reboot_count: number;
+  fec_errors: number;
+  optical_rx_min_dbm: number | null;
+};
+
+export type DailyMetricPage = {
+  data: DailyMetricRecord[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+};
+
+export type DashboardRuntimeData = {
+  overview: Overview;
+  activeIncidents: OperationalIncidentPage;
+  nocQueue: NocQueue;
+  topology: TopologySnapshot;
+  inventory: InventoryPage;
+  telemetry: DailyMetricPage;
+  diagnostics: DiagnosticsPage;
+  fetchedAt: string;
 };
 
 export type InvestigationFinding = {
@@ -283,10 +476,20 @@ export type InvestigationFinding = {
   severity: "critical" | "high" | "medium" | "low";
   confidence: number;
   scope: {
-    type: "park" | "network" | "firmware" | "equipment" | "customer";
+    type:
+      | "park"
+      | "olt"
+      | "pon"
+      | "cto"
+      | "customer"
+      | "firmware"
+      | "equipment"
+      | "region"
+      | "network";
     identifier: string;
     olt: string | null;
     pon: string | null;
+    cto: string | null;
   };
   affectedCpes: number;
   summary: string;
@@ -335,25 +538,32 @@ export type Investigation = {
 };
 
 export type InvestigationPage = {
-  config: {
-    openaiConfigured: boolean;
-    model: string;
-    mcpBaseUrl: string;
-    scheduleEnabled: boolean;
-    metricTriggerEnabled: boolean;
-    metricTriggerIntervalMs: number;
-    maxConcurrency: number;
-    reasoningEffort: "none" | "low";
-    maxContextCharacters: number;
-    toolCallBudgets: {
-      metric: number;
-      schedule: number;
-      manual: number;
+  data: Investigation[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  meta: {
+    config: {
+      openaiConfigured: boolean;
+      model: string;
+      mcpBaseUrl: string;
+      scheduleEnabled: boolean;
+      metricTriggerEnabled: boolean;
+      metricTriggerIntervalMs: number;
+      maxConcurrency: number;
+      groupingMaxCandidates: number;
+      reasoningEffort: "none" | "low";
+      maxContextCharacters: number;
+      toolCallBudgets: {
+        metric: number;
+        schedule: number;
+        manual: number;
+      };
+      humanApprovalRequired: boolean;
+      writeToolsAvailableToAgent: boolean;
     };
-    humanApprovalRequired: boolean;
-    writeToolsAvailableToAgent: boolean;
+    summary: Record<string, number>;
+    incidents: Array<Record<string, unknown>>;
   };
-  summary: Record<string, number>;
-  investigations: Investigation[];
-  incidents: Array<Record<string, unknown>>;
 };
