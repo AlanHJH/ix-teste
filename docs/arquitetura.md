@@ -12,6 +12,18 @@ O desenho separa três responsabilidades:
 
 O modelo de linguagem não processa cada Inform e não controla dispositivos. Regras e agregações funcionam mesmo quando o agente estiver indisponível.
 
+## Dashboard adaptativo: controle e dados separados
+
+O dashboard usa IA no plano de apresentação, não no transporte contínuo dos dados:
+
+1. o backend seleciona no contrato OpenAPI apenas operações REST marcadas com `x-dashboard-resource`;
+2. o modelo recebe um catálogo compacto com método, rota, finalidade, parâmetros e schema de resposta, além do objetivo escrito pelo usuário;
+3. a resposta contém somente o plano visual: ordem, tamanho, tipo de bloco e um binding de uma lista fechada;
+4. o frontend busca os valores reais por REST em `/api/network/overview`, `/api/incidents` e `/api/tickets/noc-queue`;
+5. o layout é reutilizado durante o dia e os dados são renovados no intervalo definido, sem nova chamada ao modelo.
+
+Essa separação evita transformar telemetria, tickets ou listas de clientes em tokens. O Swagger UI em `/api/docs` atende pessoas, enquanto `/api/openapi.json` é o contrato canônico consumível pelo editor e por geradores. Também reduz a superfície para alucinação: o modelo não escreve números e não cria uma URL arbitrária; ele escolhe apenas bindings compatíveis validados pelo backend. Uma nova chamada OpenAI ocorre somente quando o usuário pede outra composição. Sem chave configurada, o backend retorna uma composição determinística identificada como demonstração, sem simular uso de IA.
+
 ## Protótipo entregue
 
 ```mermaid
@@ -23,7 +35,9 @@ flowchart LR
   Rules --> API[NestJS REST + MCP]
   API --> NOC[React: visão NOC]
   API --> N1[React: atendimento N1]
-  Rules --> Review[Revisão humana]
+  Rules --> Agent[Agente de agrupamentos]
+  Agent --> Review[Revisão humana]
+  Review -->|aprovação| API
 ```
 
 O `data-loader` valida os quatro arquivos, faz `COPY FROM STDIN` sem carregar o GZIP inteiro em memória, cria índices e o agregado diário. A carga é idempotente por chave de dataset. O Compose inicia a API somente após a carga e o front-end somente após o healthcheck da API.
@@ -53,11 +67,12 @@ flowchart LR
   Aggregate --> Ops[(PostgreSQL operacional)]
   Aggregate --> Investigate[Fila de investigação]
   Investigate --> Agent[Agente + MCP read-only]
-  Agent --> Validate[Validação estruturada]
-  Validate --> Ops
+  Agent --> Validate[Proposta estruturada]
+  Validate --> Human[Validação do NOC]
+  Human -->|aprovação| Ops
   Ops --> API[NestJS API]
   API --> UI[NOC + N1]
-  UI --> Human[Decisão humana]
+  UI --> Action[Decisão operacional]
 ```
 
 Kafka/Pulsar não é necessário pela média de 42 eventos por segundo; ele existe para absorver rajadas, desacoplar o ACS, permitir replay e transformar indisponibilidade de consumidores em atraso observável, não em perda.
@@ -69,10 +84,11 @@ Kafka/Pulsar não é necessário pela média de 42 eventos por segundo; ele exis
 3. **Enriquecimento temporal.** O evento recebe plano, firmware e caminho OLT → PON → CTO válidos no instante observado, sem usar apenas o inventário atual.
 4. **Persistência.** O bruto vai para object storage em Parquet particionado por provedor/data. Métricas normalizadas e agregados recentes vão para ClickHouse ou TimescaleDB. Estado de incidentes e ações permanece em PostgreSQL.
 5. **Detecção.** Processadores mantêm janelas por CPE, firmware, CTO, PON, OLT, região e provedor. Regras determinísticas cobrem limites conhecidos; baselines robustos detectam mudança relativa ao histórico.
-6. **Agrupamento.** Sinais equivalentes tornam-se um único candidato por `provider_id + tipo + escopo + janela`. Sessenta CPEs com FEC na mesma PON geram um incidente compartilhado, não sessenta alertas.
-7. **Investigação.** Para casos delimitados, o agente começa por agregados e consulta detalhes via MCP somente leitura. O orquestrador impõe tempo, custo, escopo, número de ferramentas e tamanho de respostas.
-8. **Validação.** A conclusão precisa obedecer a um schema versionado e conter alcance, evidências rastreáveis, contraindícios, confiança e ação recomendada. Resultado incompleto permanece inconclusivo.
-9. **Entrega.** A API alimenta NOC e N1. Um operador confirma, corrige ou descarta. Reboot, rollback, configuração ou ordem de serviço continuam fora do ciclo automático.
+6. **Candidato.** Sinais equivalentes tornam-se um candidato por `provider_id + tipo + escopo + janela`. O escopo pode ser parque, OLT, PON, CTO, cliente, firmware, equipamento ou região.
+7. **Investigação.** Para casos delimitados, o agente começa pelo ranking de candidatos e consulta detalhes via MCP somente leitura. O orquestrador impõe tempo, custo, escopo, número de ferramentas e tamanho de respostas.
+8. **Proposta.** A conclusão precisa obedecer a um schema versionado e conter alcance, evidências rastreáveis, contraindícios, confiança e ação recomendada. Resultado incompleto permanece inconclusivo; o agente não grava incidentes.
+9. **Validação humana.** O NOC confirma ou descarta na seção **Onde agir primeiro**. Ao aprovar, o backend recalcula o alcance no inventário e cria o agrupamento ativo pela API REST.
+10. **Entrega.** O N1 recebe o protocolo do agrupamento quando consulta um cliente pertencente ao alcance aprovado. Reboot, rollback, configuração ou ordem de serviço continuam fora do ciclo automático.
 
 Ausência de Inform é inferida por temporizador, porque não existe um evento de “não recebimento”. Eventos atrasados são tratados por `event_time`, watermark e janela de tolerância.
 

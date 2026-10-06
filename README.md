@@ -113,35 +113,57 @@ docs/       diagnóstico, arquitetura, decisões e consultas de evidência
 
 O PostgreSQL guarda os dados do protótipo e produz uma visão materializada diária por CPE/firmware. A tabela bruta de Informs é `UNLOGGED` por ser reconstruível a partir do pacote; os dados de negócio permanecem em tabelas normais.
 
-A aplicação NestJS publica REST e MCP na mesma porta e compartilha o mesmo pool PostgreSQL. A interface MCP oferece acesso somente leitura por rotas independentes de clientes, inventário, telemetria, diagnósticos, chamados e operação. Consulte o [contrato e as instruções de conexão](docs/mcp.md). Nesta fase ela não possui autenticação e deve permanecer restrita ao ambiente local.
+A aplicação NestJS publica REST e MCP na mesma porta e compartilha o mesmo pool PostgreSQL. Os seis domínios de dados MCP permanecem somente leitura; o domínio `application` espelha as jornadas REST, inclusive mutações validadas. O agente de investigação carrega apenas uma allowlist de consultas e não recebe essas ferramentas de escrita. Consulte o [contrato e as instruções de conexão](docs/mcp.md). Nesta fase a interface não possui autenticação e deve permanecer restrita ao ambiente local.
+
+A documentação REST é publicada em três formatos sincronizados: Swagger UI em [`/api/docs`](http://localhost:8080/api/docs), OpenAPI JSON em [`/api/openapi.json`](http://localhost:8080/api/openapi.json) e OpenAPI YAML em [`/api/openapi.yaml`](http://localhost:8080/api/openapi.yaml). O JSON é a entrada recomendada para o editor de dashboard: ele inclui descrições de rotas e campos, parâmetros, valores de ordenação, schemas, exemplos, erros e as extensões `x-dashboard-resource`, `x-read-only` e `x-pagination`.
 
 Principais rotas:
 
 - `GET /api` (catálogo unificado)
 - `GET /health`
+- `GET /api/docs` (Swagger UI)
+- `GET /api/openapi.json` e `GET /api/openapi.yaml` (contrato para ferramentas)
 - `GET /api/network/overview`
-- `GET /api/network/incidents`
-- `GET /api/network/topology/devices?olt=OLT-2&pon=1/1&cto=CTO-2-11-01`
-- `GET /api/customers?q=C373254&page=1&status=active`
-- `GET /api/customers/search?q=C545`
+- `POST /api/dashboard/compose` (gera somente o plano visual; não envia dados operacionais ao modelo)
+- `GET /api/network/incidents?page=1&pageSize=25&sort=score_desc`
+- `GET /api/network/topology/devices?olt=OLT-2&pon=1/1&cto=CTO-2-11-01&page=1&pageSize=50&sort=customer_id_asc`
+- `GET /api/customers?q=C373254&page=1&pageSize=25&sort=relevance&status=active`
+- `GET /api/customers/search?q=C545&page=1&pageSize=8&sort=customer_id_asc&status=all`
+- `GET /api/customers/:customerId` (cadastro e histórico de equipamentos)
 - `GET /api/customers/:customerId/support`
-- `GET /api/tickets`
+- `GET /api/inventory?page=1&pageSize=50&sort=customer_id_asc`
+- `GET /api/inventory/:serial`
+- `GET /api/inventory/topology?olt=OLT-2&pon=1/7&page=1&pageSize=50&sort=customer_id_asc`
+- `GET /api/telemetry/informs?serial=SERIAL&page=1&pageSize=50&sort=ts_desc`
+- `GET /api/telemetry/daily-metrics?page=1&pageSize=50&sort=day_desc`
+- `GET /api/tickets?page=1&pageSize=25&sort=opened_at_desc`
+- `GET /api/tickets/:ticketId`
 - `POST /api/tickets`
-- `GET /api/investigations`
-- `POST /api/investigations/trigger/metrics`
+- `GET /api/investigations?page=1&pageSize=25&sort=created_at_desc`
+- `POST /api/investigations/trigger/groupings` (varredura especializada por candidatos de agrupamento)
+- `POST /api/investigations/trigger/metrics` (alias compatível)
 - `POST /api/investigations/:investigationId/retry`
 - `PATCH /api/investigations/:investigationId/review`
-- `GET /api/tickets/noc-queue` (chamados N1 ativos no Kanban do NOC)
+- `GET /api/tickets/noc-queue?page=1&pageSize=100&sort=opened_at_asc` (chamados N1 ativos no Kanban do NOC)
 - `PATCH /api/tickets/:ticketId/noc-status` (move um chamado recebido para em andamento)
-- `GET /api/incidents`, `POST /api/incidents` e `PATCH /api/incidents/:incidentId/status` (agrupamentos criados pelo NOC)
+- `GET /api/incidents?page=1&pageSize=25&sort=severity_desc`, `POST /api/incidents` e `PATCH /api/incidents/:incidentId/status` (agrupamentos criados pelo NOC)
 - `PATCH /api/network/incidents/:groupingId/status` (encerramento persistente de agrupamentos detectados)
 - `GET /api/incidents/options` (autocomplete de OLT, PON, CTO, cliente/CPE, firmware, equipamento e região)
+- `GET /api/operations/dataset-loads?page=1&pageSize=50&sort=started_at_desc`
+- `GET /api/operations/grouping-candidates?page=1&pageSize=25&sort=priority_desc`
+- `GET /api/operations/active-groupings?page=1&pageSize=25&sort=severity_desc`
 - `GET /mcp` (catálogo MCP)
-- `/mcp/customers`, `/mcp/inventory`, `/mcp/telemetry`, `/mcp/diagnostics`, `/mcp/tickets` e `/mcp/operations` (Streamable HTTP)
+- `/mcp/customers`, `/mcp/inventory`, `/mcp/telemetry`, `/mcp/diagnostics`, `/mcp/tickets`, `/mcp/operations` e `/mcp/application` (Streamable HTTP)
+
+Todas as rotas REST de coleção usam `page`, `pageSize` e `sort`. O retorno mantém o mesmo envelope em todos os domínios: `data`, `page`, `pageSize`, `totalItems` e `totalPages`. Resumos e opções auxiliares aparecem em `meta`, sem alterar o contrato principal. O MCP usa o mesmo modelo de paginação e oferece no domínio `application` as jornadas REST que não pertencem aos seis domínios de dados.
 
 Na interface, a aba **Cadastros** oferece uma listagem paginada de clientes e equipamentos, com pesquisa por código, serial, fabricante, modelo, CTO ou localidade e atalho para testar um cliente ativo no N1. A aba **Mapa de entidades** torna visível a relação entre a topologia física (OLT, PON, CTO e CPE), as tabelas de sinais, a visão materializada, as regras e as jornadas NOC/N1. A visão **Hardware e capacidade** detalha a cadeia fabricante/modelo/revisão/firmware/LAN/plano até as ações de rollback ou bloqueio e troca. A visão **Infraestrutura física** inclui um grafo navegável com zoom e arraste: a seleção expande OLT → PON → CTO → CPE/cliente e permite ver as conexões reais de cada ramo. O dataset não fornece IDs individuais de cabo, splitter ou drop; essa limitação fica visível na tela para que o grafo não invente uma rastreabilidade física.
 
-Um **chamado de suporte** registra o contato de um cliente e é aberto pelo N1. Quando o encaminhamento é “Escalar para o NOC”, ele entra no Kanban sem virar automaticamente um agrupamento. O quadro de operação humana tem somente duas colunas — **Chamado recebido** e **Chamado em andamento** — e contém apenas chamados individuais. Um **agrupamento** representa um problema técnico compartilhado e pode explicar muitos chamados. Seja detectado automaticamente ou criado pelo NOC, ele tem exatamente a mesma estrutura, o mesmo card, o mesmo ciclo de vida e a mesma ação de encerramento; a origem é apenas metadado, e o vínculo com um chamado é opcional. Todos ficam juntos na seção **Agrupamentos detectados** e nunca ocupam uma coluna do Kanban. O operador pode criar um agrupamento escolhendo parque, OLT, PON, CTO, cliente/CPE, firmware, equipamento ou região. Esses vínculos usam autocomplete alimentado pelo inventário; PON depende da OLT e CTO depende de OLT e PON. A API valida novamente o valor escolhido e calcula o impacto potencial. Quando o agrupamento nasce de um chamado escalado, os dois registros ficam vinculados, o chamado é encerrado e desaparece do Kanban. O NOC também pode encerrar diretamente um chamado em andamento ou qualquer agrupamento ativo. O agrupamento encerrado deixa de aparecer ao N1 e não aceita novos vínculos, enquanto os registros permanecem no histórico para auditoria. Não existe uma terceira coluna de finalizados. O MCP continua somente leitura; essas escritas acontecem pela API REST validada.
+O **Dashboard adaptativo** é editado somente por conversa. O OpenAPI entra apenas como catálogo de descoberta: o compositor recebe uma versão compacta das rotas marcadas com `x-dashboard-resource`, incluindo descrições, parâmetros e schemas, sem receber telemetria, clientes, chamados ou incidentes. A IA devolve um plano validado com blocos e bindings permitidos. Depois, o navegador resolve esses bindings diretamente pelas APIs REST de visão geral, incidentes e fila NOC. A composição fica em cache diário por usuário; atualizações periódicas e o botão **Atualizar dados** não chamam o modelo nem consomem tokens. O MCP permanece como interface de investigação e integração por ferramentas.
+
+Um **chamado de suporte** registra o contato de um cliente e é aberto pelo N1. Quando o encaminhamento é “Escalar para o NOC”, ele entra no Kanban sem virar automaticamente um agrupamento. O quadro de operação humana tem somente duas colunas — **Chamado recebido** e **Chamado em andamento** — e contém apenas chamados individuais. Um **agrupamento** representa um problema técnico compartilhado e pode explicar muitos chamados. Seja proposto pela IA ou criado pelo NOC, depois da aprovação ele tem exatamente a mesma estrutura, o mesmo card, o mesmo ciclo de vida e a mesma ação de encerramento; a origem é apenas metadado, e o vínculo com um chamado é opcional. Todos ficam juntos na seção **Agrupamentos detectados** e nunca ocupam uma coluna do Kanban. O operador pode criar um agrupamento escolhendo parque, OLT, PON, CTO, cliente/CPE, firmware, equipamento ou região. Esses vínculos usam autocomplete alimentado pelo inventário; PON depende da OLT e CTO depende de OLT e PON. A API valida novamente o valor escolhido e calcula o impacto potencial.
+
+Na seção **Onde agir primeiro**, o detector procura candidatos nos mesmos oito escopos a cada cinco minutos. O agente consulta evidências somente leitura pelo MCP e entrega uma proposta para validação humana. O sinal analítico não aparece como agrupamento ativo: somente a aprovação do NOC faz a API recalcular o alcance no inventário, criar o agrupamento e disponibilizar seu protocolo ao N1. Quando o agrupamento nasce de um chamado escalado, os dois registros ficam vinculados, o chamado é encerrado e desaparece do Kanban. O NOC também pode encerrar diretamente um chamado em andamento ou qualquer agrupamento ativo. O agrupamento encerrado deixa de aparecer ao N1 e não aceita novos vínculos, enquanto os registros permanecem no histórico para auditoria. Não existe uma terceira coluna de finalizados. A allowlist MCP usada pelo agente continua somente leitura; escritas REST e MCP interativas passam pelos mesmos serviços validados.
 
 ## Desenvolvimento e validação
 
