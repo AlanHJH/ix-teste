@@ -49,7 +49,7 @@ describe("McpGateway", () => {
     };
     assert.equal(body.restBasePath, "/api");
     assert.equal(body.mcpBasePath, "/mcp");
-    assert.equal(body.endpoints.length, 7);
+    assert.equal(body.endpoints.length, 8);
   });
 
   it("deixa rotas não MCP seguirem para o NestJS", async () => {

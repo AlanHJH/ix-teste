@@ -80,9 +80,10 @@ export type DashboardComposition = DashboardPlan & {
   generatedBy: "openai" | "fallback";
   model: string | null;
   discovery: {
-    protocol: "OpenAPI";
-    mode: "contract-only";
+    protocol: "MCP";
+    mode: "openapi-bridge";
     resourceCount: number;
+    endpoint: "/mcp/openapi";
     document: "/api/openapi.json";
   };
   runtimeData: {

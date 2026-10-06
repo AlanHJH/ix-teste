@@ -16,7 +16,7 @@ O modelo de linguagem não processa cada Inform e não controla dispositivos. Re
 
 O dashboard usa IA no plano de apresentação, não no transporte contínuo dos dados:
 
-1. o backend seleciona no contrato OpenAPI apenas operações REST marcadas com `x-dashboard-resource`;
+1. o bridge `/mcp/openapi` deriva do contrato Swagger as ferramentas MCP e seleciona para o compositor apenas operações REST marcadas com `x-dashboard-resource` e `x-read-only`;
 2. o modelo recebe um catálogo compacto com método, rota, finalidade, parâmetros e schema de resposta, além do objetivo escrito pelo usuário;
 3. a resposta contém somente o plano visual: ordem, tamanho, tipo de bloco e um binding de uma lista fechada;
 4. o frontend busca os valores reais por REST em `/api/network/overview`, `/api/incidents` e `/api/tickets/noc-queue`;

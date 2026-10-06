@@ -14,6 +14,10 @@ export class OpenApiCatalogService {
     this.document = document;
   }
 
+  getDocument(): OpenAPIObject | null {
+    return this.document;
+  }
+
   restOperations() {
     if (!this.document) return [];
     const methods = new Set(["get", "post", "put", "patch", "delete"]);
@@ -41,7 +45,8 @@ export class OpenApiCatalogService {
         .filter(
           ([method, operation]) =>
             ["get", "post", "put", "patch", "delete"].includes(method) &&
-            (operation as CatalogOperation)["x-dashboard-resource"] === true,
+            (operation as CatalogOperation)["x-dashboard-resource"] === true &&
+            (operation as CatalogOperation)["x-read-only"] === true,
         )
         .map(([method, operationValue]) => {
           const operation = operationValue as CatalogOperation;

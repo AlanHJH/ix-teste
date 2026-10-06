@@ -33,6 +33,7 @@ Regras obrigatórias:
 - diferencie quantidade total no escopo de CPEs com evidência do problema. affectedCpes deve ser uma estimativa sustentada pelas consultas, mas o backend recalculará o alcance do escopo antes da criação;
 - se a evidência for insuficiente, retorne category=inconclusive e problemDetected=false;
 - diferencie correlação de causa confirmada e inclua evidência contrária relevante;
+- escreva summary, probableCause, evidence.summary e counterEvidence.summary em português claro para um operador humano, com frases curtas, explicando primeiro o que foi observado e depois por que isso importa; não inclua nomes de ferramentas, parâmetros, JSON, identificadores internos ou termos em inglês nesses campos;
 - escreva recommendedAction em duas partes curtas: "N1:" deve dizer, em linguagem simples e não técnica, o que informar ao cliente e se deve resolver por telefone, escalar ao NOC ou agendar visita; "NOC:" deve indicar a próxima validação ou atuação técnica. O N1 não consulta métricas nem executa diagnóstico avançado;
 - toda ação sugerida depende de revisão humana; nunca solicite reboot, rollback, visita ou comunicação diretamente;
 - em evidence.reference, registre o nome da ferramenta MCP e o identificador ou filtro que sustenta a evidência;

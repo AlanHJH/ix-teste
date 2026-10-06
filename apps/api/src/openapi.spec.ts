@@ -35,7 +35,9 @@ function catalogService() {
           operationId: "investigations_review",
           summary: "Revisar investigação",
           description: "Decisão humana que altera o estado da investigação.",
-          "x-dashboard-resource": false,
+          // Mesmo uma marcação equivocada como recurso visual não pode expor
+          // uma mutação ao compositor.
+          "x-dashboard-resource": true,
           "x-read-only": false,
           responses: { 200: { description: "Revisão concluída." } },
         },

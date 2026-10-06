@@ -1,8 +1,9 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useId, useState } from "react";
 import {
   AlertTriangle,
   Bot,
   Check,
+  ChevronRight,
   Clock3,
   Play,
   RefreshCw,
@@ -12,7 +13,7 @@ import {
 } from "lucide-react";
 import { api } from "./api";
 import { HelpTooltip } from "./HelpTooltip";
-import { ProviderTerm, TechnicalText } from "./ProviderGlossary";
+import { ProviderTerm } from "./ProviderGlossary";
 import type { Investigation, InvestigationPage } from "./types";
 
 const statusLabel: Record<Investigation["status"], string> = {
@@ -32,6 +33,103 @@ const triggerLabel = {
   manual: "Operador",
 };
 
+const evidenceSourceLabel: Record<string, string> = {
+  operations: "Detecção inicial",
+  inventory: "Inventário da rede",
+  telemetry: "Medições dos equipamentos",
+  diagnostics: "Testes técnicos",
+  tickets: "Chamados de clientes",
+  customers: "Contexto do cliente",
+};
+
+const toolLabel: Record<string, string> = {
+  operations_list_grouping_candidates: "Detector de agrupamentos",
+  inventory_topology: "Inventário e topologia",
+  telemetry_list_daily_metrics: "Métricas diárias dos equipamentos",
+  diagnostics_list: "Diagnósticos técnicos",
+  tickets_list: "Chamados de clientes",
+  customers_list: "Clientes",
+};
+
+const argumentLabel: Record<string, string> = {
+  day: "Dia",
+  fromDay: "De",
+  toDay: "Até",
+  firmware: "Firmware",
+  softwareVersion: "Firmware",
+  olt: "OLT",
+  pon: "PON",
+  cto: "CTO",
+  serial: "Serial",
+  query: "Busca",
+  limit: "Máximo de resultados",
+  page: "Página",
+  pageSize: "Itens por página",
+  offset: "Após o registro",
+  scopeType: "Tipo de agrupamento",
+};
+
+function humanizeEvidenceSummary(value: string) {
+  return value
+    .replace(
+      /^Candidato (?:pré-calculado|reporta|registra|indica):?\s*/i,
+      "O detector identificou ",
+    )
+    .replace(/sinal stability\.?/gi, "indícios de instabilidade.")
+    .replace(
+      /^Nenhum chamado correspondente retornado/i,
+      "Não foram encontrados chamados relacionados",
+    )
+    .replace(
+      /^A consulta retornou zero registros/i,
+      "Não foram encontrados registros no período consultado",
+    )
+    .replace(/CPEs afetadas/gi, "CPEs afetados")
+    .replace(
+      /; ausência de resultado não confirma nem refuta a ([^.]+)\./i,
+      ". Isso não confirma nem descarta a $1.",
+    );
+}
+
+function humanizeAnalysisSummary(value: string) {
+  return value.replace(/^Candidato aponta\s*/i, "A análise identificou ");
+}
+
+function confidenceDescription(confidence: number) {
+  if (confidence >= 0.85)
+    return "Evidências fortes, ainda sujeitas à validação";
+  if (confidence >= 0.7) return "Evidências moderadas; revise os contrapontos";
+  return "Evidências limitadas; exige análise cuidadosa";
+}
+
+function recommendedActionSteps(value: string) {
+  const pattern = /\b(N1|NOC):\s*/g;
+  const matches = Array.from(value.matchAll(pattern));
+  if (!matches.length) return [{ label: "Próxima ação", text: value }];
+
+  return matches.map((match, index) => {
+    const start = (match.index ?? 0) + match[0].length;
+    const end = matches[index + 1]?.index ?? value.length;
+    return {
+      label: match[1] === "N1" ? "Atendimento N1" : "Equipe NOC",
+      text: value.slice(start, end).trim(),
+    };
+  });
+}
+
+function formatToolArgument(key: string, value: unknown) {
+  if (value === null || value === undefined || value === "")
+    return "Não informado";
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "object") return JSON.stringify(value);
+  if (key === "scopeType" && value === "firmware") return "Firmware";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-");
+    return `${day}/${month}/${year}`;
+  }
+  return String(value);
+}
+
 function formatDate(value: string | null) {
   return value
     ? new Date(value).toLocaleString("pt-BR", {
@@ -43,186 +141,354 @@ function formatDate(value: string | null) {
 
 function InvestigationCard({
   investigation,
-  reviewer,
-  note,
-  onNote,
-  onReview,
-  onRetry,
-  busy,
+  onOpen,
 }: {
   investigation: Investigation;
-  reviewer: string;
-  note: string;
-  onNote: (value: string) => void;
-  onReview: (decision: "approve" | "reject") => void;
-  onRetry: () => void;
-  busy: boolean;
+  onOpen: () => void;
 }) {
   const finding = investigation.finding;
   return (
     <article className={`investigation-card ${investigation.status}`}>
-      <header>
-        <div>
+      <button
+        type="button"
+        className="investigation-card-open"
+        onClick={onOpen}
+        aria-haspopup="dialog"
+        aria-label={`Abrir análise: ${finding?.title ?? investigation.trigger_label}`}
+      >
+        <header>
           <div className="investigation-tags">
             <span>{triggerLabel[investigation.trigger_type]}</span>
             <span className={`investigation-status ${investigation.status}`}>
               {statusLabel[investigation.status]}
             </span>
           </div>
+          {finding && (
+            <div className="investigation-confidence compact">
+              <strong>{Math.round(finding.confidence * 100)}%</strong>
+              <span>confiança</span>
+            </div>
+          )}
+        </header>
+
+        <div className="investigation-card-copy">
           <h3>{finding?.title ?? investigation.trigger_label}</h3>
           <small>
             {investigation.investigation_id} ·{" "}
             {formatDate(investigation.created_at)}
           </small>
         </div>
-        {finding && (
-          <div className="investigation-confidence">
-            <strong>{Math.round(finding.confidence * 100)}%</strong>
-            <span>
-              confiança
-              <HelpTooltip
-                term="Confiança do agente"
-                description="Estimativa do modelo apoiada pelas evidências consultadas. Não substitui a validação do operador."
-              />
-            </span>
-          </div>
-        )}
-      </header>
 
-      {!finding && !investigation.error && (
-        <p className="investigation-objective">{investigation.objective}</p>
-      )}
-      {investigation.error && (
-        <div className="investigation-error">
-          <p>
-            <AlertTriangle size={15} /> {investigation.error}
-          </p>
-          {investigation.status === "failed" && (
-            <button disabled={busy} onClick={onRetry}>
-              <RefreshCw size={14} />
-              {busy ? "Reenfileirando…" : "Tentar novamente"}
-            </button>
-          )}
-        </div>
-      )}
-
-      {finding && (
-        <>
-          <div className="investigation-summary">
+        {finding ? (
+          <div className="investigation-card-preview">
             <div>
               <span>Alcance</span>
               <strong>{finding.scope.identifier}</strong>
-              <small>{finding.affectedCpes} CPEs estimadas</small>
             </div>
             <div>
-              <span>Causa provável</span>
-              <strong>
-                <TechnicalText text={finding.probableCause} />
-              </strong>
+              <span>Impacto estimado</span>
+              <strong>{finding.affectedCpes} CPEs</strong>
             </div>
-            <div>
-              <span>Ação sugerida</span>
-              <strong>
-                <TechnicalText text={finding.recommendedAction} />
-              </strong>
-            </div>
+            <p>{finding.probableCause}</p>
           </div>
-          <p className="investigation-explanation">{finding.summary}</p>
-          <div className="investigation-evidence">
-            <div>
-              <span>Evidências favoráveis</span>
-              <ul>
-                {finding.evidence.map((evidence) => (
-                  <li key={`${evidence.source}-${evidence.reference}`}>
-                    <Check size={14} />
-                    <p>
-                      <strong>{evidence.source}</strong> · {evidence.summary}
-                      <small>{evidence.reference}</small>
-                    </p>
-                  </li>
-                ))}
-              </ul>
+        ) : (
+          <p className="investigation-card-objective">
+            {investigation.error ?? investigation.objective}
+          </p>
+        )}
+
+        <footer>
+          <span>Ver análise completa</span>
+          <ChevronRight size={16} />
+        </footer>
+      </button>
+    </article>
+  );
+}
+
+function InvestigationDetailModal({
+  investigation,
+  reviewer,
+  onReviewer,
+  note,
+  onNote,
+  onReview,
+  onRetry,
+  onClose,
+  busy,
+}: {
+  investigation: Investigation;
+  reviewer: string;
+  onReviewer: (value: string) => void;
+  note: string;
+  onNote: (value: string) => void;
+  onReview: (decision: "approve" | "reject") => void;
+  onRetry: () => void;
+  onClose: () => void;
+  busy: boolean;
+}) {
+  const finding = investigation.finding;
+  const titleId = useId();
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="entity-modal-backdrop investigation-modal-backdrop"
+      role="presentation"
+      onMouseDown={onClose}
+    >
+      <section
+        className={`investigation-modal ${investigation.status}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <button
+          className="entity-modal-close"
+          type="button"
+          onClick={onClose}
+          aria-label="Fechar análise"
+          title="Fechar análise"
+          autoFocus
+        >
+          <X size={19} />
+        </button>
+
+        <header className="investigation-modal-header">
+          <div>
+            <div className="investigation-tags">
+              <span>{triggerLabel[investigation.trigger_type]}</span>
+              <span className={`investigation-status ${investigation.status}`}>
+                {statusLabel[investigation.status]}
+              </span>
             </div>
-            <div>
-              <span>Evidências contrárias</span>
-              {finding.counterEvidence.length ? (
-                <ul>
-                  {finding.counterEvidence.map((evidence) => (
-                    <li key={`${evidence.source}-${evidence.reference}`}>
-                      <SearchCheck size={14} />
-                      <p>
-                        {evidence.summary}
-                        <small>{evidence.reference}</small>
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="investigation-none">Nenhuma registrada.</p>
+            <h2 id={titleId}>
+              {finding?.title ?? investigation.trigger_label}
+            </h2>
+            <small>
+              {investigation.investigation_id} ·{" "}
+              {formatDate(investigation.created_at)}
+            </small>
+          </div>
+          {finding && (
+            <div className="investigation-confidence">
+              <strong>{Math.round(finding.confidence * 100)}%</strong>
+              <span>Confiança estimada</span>
+              <small>{confidenceDescription(finding.confidence)}</small>
+            </div>
+          )}
+        </header>
+
+        <div className="investigation-modal-content">
+          {!finding && !investigation.error && (
+            <p className="investigation-objective">{investigation.objective}</p>
+          )}
+          {investigation.error && (
+            <div className="investigation-error">
+              <p>
+                <AlertTriangle size={15} /> {investigation.error}
+              </p>
+              {investigation.status === "failed" && (
+                <button disabled={busy} onClick={onRetry}>
+                  <RefreshCw size={14} />
+                  {busy ? "Reenfileirando…" : "Tentar novamente"}
+                </button>
               )}
             </div>
-          </div>
-          <details className="tool-trace">
-            <summary>
-              {investigation.tool_trace.length} consultas{" "}
-              <ProviderTerm term="mcp" /> auditadas
-            </summary>
-            <ol>
-              {investigation.tool_trace.map((trace, index) => (
-                <li key={`${trace.tool}-${index}`}>
-                  <strong>{trace.tool}</strong>
-                  <code>{JSON.stringify(trace.arguments)}</code>
-                </li>
-              ))}
-            </ol>
-          </details>
-        </>
-      )}
+          )}
 
-      {investigation.status === "pending_review" && (
-        <div className="human-review">
-          <div>
-            <ShieldCheck size={19} />
-            <p>
-              <strong>Decisão humana obrigatória</strong>
-              Aprovar cria o agrupamento ativo para o NOC e para o contexto do
-              N1. Rejeitar preserva o resultado como feedback auditável.
-            </p>
-          </div>
-          <textarea
-            value={note}
-            onChange={(event) => onNote(event.target.value)}
-            placeholder="Observação da revisão (opcional)"
-            aria-label={`Observação para ${investigation.investigation_id}`}
-            maxLength={1000}
-          />
-          <div className="review-actions">
-            <button
-              className="reject"
-              disabled={busy || !reviewer.trim()}
-              onClick={() => onReview("reject")}
-            >
-              <X size={15} /> Descartar
-            </button>
-            <button
-              className="approve"
-              disabled={busy || !reviewer.trim()}
-              onClick={() => onReview("approve")}
-            >
-              <Check size={15} /> Aprovar e criar agrupamento
-            </button>
-          </div>
-        </div>
-      )}
+          {finding && (
+            <>
+              <div className="investigation-overview">
+                <div>
+                  <span>Escopo analisado</span>
+                  <strong>{finding.scope.identifier}</strong>
+                  <small>Menor agrupamento sustentado pelos dados</small>
+                </div>
+                <div>
+                  <span>Impacto estimado</span>
+                  <strong>{finding.affectedCpes} CPEs</strong>
+                  <small>Equipamentos possivelmente afetados</small>
+                </div>
+              </div>
+              <div className="investigation-conclusion-grid">
+                <section>
+                  <span>Hipótese levantada pela IA</span>
+                  <h3>O que pode estar acontecendo</h3>
+                  <p>{finding.probableCause}</p>
+                </section>
+                <section>
+                  <span>Orientação operacional</span>
+                  <h3>O que fazer agora</h3>
+                  <ol className="investigation-actions-list">
+                    {recommendedActionSteps(finding.recommendedAction).map(
+                      (step) => (
+                        <li key={`${step.label}-${step.text}`}>
+                          <strong>{step.label}</strong>
+                          <p>{step.text}</p>
+                        </li>
+                      ),
+                    )}
+                  </ol>
+                </section>
+              </div>
+              <section className="investigation-rationale">
+                <span>Explicação em linguagem simples</span>
+                <h3>Como a IA chegou a essa conclusão</h3>
+                <p className="investigation-explanation">
+                  {humanizeAnalysisSummary(finding.summary)}
+                </p>
+              </section>
+              <div className="investigation-evidence">
+                <section>
+                  <span>Por que a hipótese faz sentido</span>
+                  <p className="investigation-evidence-intro">
+                    Sinais encontrados que reforçam a conclusão proposta.
+                  </p>
+                  <ol>
+                    {finding.evidence.map((evidence, index) => (
+                      <li key={`${evidence.source}-${evidence.reference}`}>
+                        <span className="investigation-evidence-index">
+                          {index + 1}
+                        </span>
+                        <div>
+                          <strong>
+                            {evidenceSourceLabel[evidence.source] ??
+                              "Fonte consultada"}
+                          </strong>
+                          <p>{humanizeEvidenceSummary(evidence.summary)}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+                <section>
+                  <span>O que ainda gera dúvida</span>
+                  <p className="investigation-evidence-intro">
+                    Limitações que precisam ser consideradas antes da decisão.
+                  </p>
+                  {finding.counterEvidence.length ? (
+                    <ol>
+                      {finding.counterEvidence.map((evidence, index) => (
+                        <li key={`${evidence.source}-${evidence.reference}`}>
+                          <span className="investigation-evidence-index counter">
+                            {index + 1}
+                          </span>
+                          <div>
+                            <strong>
+                              {evidenceSourceLabel[evidence.source] ??
+                                "Fonte consultada"}
+                            </strong>
+                            <p>{humanizeEvidenceSummary(evidence.summary)}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="investigation-none">
+                      A análise não encontrou contrapontos relevantes.
+                    </p>
+                  )}
+                </section>
+              </div>
+              <details className="tool-trace">
+                <summary>
+                  Auditoria técnica · {investigation.tool_trace.length}{" "}
+                  consultas MCP (opcional)
+                </summary>
+                <p>
+                  Registro das fontes e filtros usados pela IA. Esta seção não é
+                  necessária para a decisão operacional.
+                </p>
+                <ol>
+                  {investigation.tool_trace.map((trace, index) => (
+                    <li key={`${trace.tool}-${index}`}>
+                      <strong>{toolLabel[trace.tool] ?? trace.tool}</strong>
+                      <dl>
+                        {Object.entries(trace.arguments).map(([key, value]) => (
+                          <div key={key}>
+                            <dt>{argumentLabel[key] ?? key}</dt>
+                            <dd>{formatToolArgument(key, value)}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            </>
+          )}
 
-      {investigation.reviewed_by && (
-        <div className="reviewed-by">
-          Revisado por <strong>{investigation.reviewed_by}</strong> em{" "}
-          {formatDate(investigation.reviewed_at)}
-          {investigation.incident_id && ` · ${investigation.incident_id}`}
+          {investigation.status === "pending_review" && (
+            <div className="human-review">
+              <div>
+                <ShieldCheck size={19} />
+                <p>
+                  <strong>Decisão humana obrigatória</strong>
+                  Aprovar cria o agrupamento ativo para o NOC e para o contexto
+                  do N1. Rejeitar preserva o resultado como feedback auditável.
+                </p>
+              </div>
+              <label className="investigation-modal-reviewer">
+                Responsável pela decisão
+                <input
+                  value={reviewer}
+                  onChange={(event) => onReviewer(event.target.value)}
+                  placeholder="Nome ou matrícula"
+                  maxLength={120}
+                />
+              </label>
+              <textarea
+                value={note}
+                onChange={(event) => onNote(event.target.value)}
+                placeholder="Observação da revisão (opcional)"
+                aria-label={`Observação para ${investigation.investigation_id}`}
+                maxLength={1000}
+              />
+              <div className="review-actions">
+                <button
+                  className="reject"
+                  disabled={busy || !reviewer.trim()}
+                  onClick={() => onReview("reject")}
+                >
+                  <X size={15} /> Descartar
+                </button>
+                <button
+                  className="approve"
+                  disabled={busy || !reviewer.trim()}
+                  onClick={() => onReview("approve")}
+                >
+                  <Check size={15} /> Aprovar e criar agrupamento
+                </button>
+              </div>
+            </div>
+          )}
+
+          {investigation.reviewed_by && (
+            <div className="reviewed-by">
+              Revisado por <strong>{investigation.reviewed_by}</strong> em{" "}
+              {formatDate(investigation.reviewed_at)}
+              {investigation.incident_id && ` · ${investigation.incident_id}`}
+            </div>
+          )}
         </div>
-      )}
-    </article>
+      </section>
+    </div>
   );
 }
 
@@ -239,6 +505,7 @@ export function InvestigationReview({
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [selectedInvestigationId, setSelectedInvestigationId] = useState("");
 
   async function refresh() {
     try {
@@ -324,64 +591,16 @@ export function InvestigationReview({
   const intervalMinutes = Math.round(
     (page?.meta.config.metricTriggerIntervalMs ?? 300_000) / 60_000,
   );
+  const selectedInvestigation = investigations.find(
+    (investigation) =>
+      investigation.investigation_id === selectedInvestigationId,
+  );
 
   return (
     <section
       className={`investigations-page${isNoc ? " noc-investigations" : ""}`}
     >
-      {isNoc ? (
-        <section className="noc-agent-overview">
-          <div className="noc-agent-icon">
-            <Bot size={22} />
-          </div>
-          <div>
-            <span className="section-label">Vigilância automática com IA</span>
-            <h2>Novos problemas passam pela aprovação do NOC</h2>
-            <p>
-              A cada {intervalMinutes} minutos, os detectores procuram possíveis
-              problemas por parque, OLT, PON, CTO, região, firmware, equipamento
-              e cliente. O agente confirma os candidatos consultando o{" "}
-              <ProviderTerm term="mcp" /> somente leitura e propõe o menor
-              alcance que explique o problema.
-            </p>
-          </div>
-          <div
-            className={`automatic-status ${
-              page?.meta.config.metricTriggerEnabled && configured
-                ? "ready"
-                : "paused"
-            }`}
-          >
-            <Clock3 size={17} />
-            <div>
-              <strong>
-                {page?.meta.config.metricTriggerEnabled && configured
-                  ? `Ativo · ${intervalMinutes} min`
-                  : "Automação pausada"}
-              </strong>
-              <span>
-                Deduplicação e validação humana
-                <HelpTooltip
-                  term="Deduplicação automática"
-                  description="A mesma regra, problema e janela de dados não geram outra investigação. Mesmo quando a IA confirma um problema, só o NOC pode aprovar e criar o agrupamento."
-                />
-              </span>
-            </div>
-            <button
-              type="button"
-              className="noc-agent-run"
-              disabled={!configured || Boolean(busy)}
-              onClick={() =>
-                void run("groupings", api.triggerGroupingInvestigations)
-              }
-              title="Executa agora os detectores de agrupamento e envia novos candidatos ao agente."
-            >
-              <SearchCheck size={14} />
-              {busy === "groupings" ? "Buscando…" : "Buscar agora"}
-            </button>
-          </div>
-        </section>
-      ) : (
+      {!isNoc && (
         <section className="investigations-hero">
           <div>
             <span className="section-label">
@@ -513,36 +732,14 @@ export function InvestigationReview({
             </button>
           </div>
         </header>
-        {pending > 0 && (
-          <label className="reviewer-field">
-            Responsável pela decisão
-            <input
-              value={reviewer}
-              onChange={(event) => setReviewer(event.target.value)}
-              placeholder="Nome ou matrícula"
-            />
-          </label>
-        )}
         <div className="investigations-list">
           {investigations.map((investigation) => (
             <InvestigationCard
               key={investigation.investigation_id}
               investigation={investigation}
-              reviewer={reviewer}
-              note={notes[investigation.investigation_id] ?? ""}
-              onNote={(value) =>
-                setNotes((current) => ({
-                  ...current,
-                  [investigation.investigation_id]: value,
-                }))
+              onOpen={() =>
+                setSelectedInvestigationId(investigation.investigation_id)
               }
-              onReview={(decision) => review(investigation, decision)}
-              onRetry={() =>
-                void run(investigation.investigation_id, () =>
-                  api.retryInvestigation(investigation.investigation_id),
-                )
-              }
-              busy={busy === investigation.investigation_id}
             />
           ))}
           {page && investigations.length === 0 && (
@@ -562,6 +759,29 @@ export function InvestigationReview({
           )}
         </div>
       </section>
+
+      {selectedInvestigation && (
+        <InvestigationDetailModal
+          investigation={selectedInvestigation}
+          reviewer={reviewer}
+          onReviewer={setReviewer}
+          note={notes[selectedInvestigation.investigation_id] ?? ""}
+          onNote={(value) =>
+            setNotes((current) => ({
+              ...current,
+              [selectedInvestigation.investigation_id]: value,
+            }))
+          }
+          onReview={(decision) => review(selectedInvestigation, decision)}
+          onRetry={() =>
+            void run(selectedInvestigation.investigation_id, () =>
+              api.retryInvestigation(selectedInvestigation.investigation_id),
+            )
+          }
+          onClose={() => setSelectedInvestigationId("")}
+          busy={busy === selectedInvestigation.investigation_id}
+        />
+      )}
     </section>
   );
 }

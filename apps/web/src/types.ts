@@ -99,9 +99,10 @@ export type DashboardComposition = {
   generatedBy: "openai" | "fallback";
   model: string | null;
   discovery: {
-    protocol: "OpenAPI";
-    mode: "contract-only";
+    protocol: "MCP";
+    mode: "openapi-bridge";
     resourceCount: number;
+    endpoint: "/mcp/openapi";
     document: "/api/openapi.json";
   };
   runtimeData: {
@@ -537,6 +538,69 @@ export type Investigation = {
   incident_id: string | null;
 };
 
+export type AgentRuntimeConfiguration = {
+  openaiConfigured: boolean;
+  model: string;
+  mcpBaseUrl: string;
+  scheduleEnabled: boolean;
+  metricTriggerEnabled: boolean;
+  metricTriggerIntervalMs: number;
+  maxConcurrency: number;
+  groupingMaxCandidates: number;
+  reasoningEffort: "none" | "low";
+  maxContextCharacters: number;
+  toolCallBudgets: {
+    metric: number;
+    schedule: number;
+    manual: number;
+  };
+  mcpPolicy: {
+    endpointCount: number;
+    toolCount: number;
+    domains: Array<{ domain: string; tools: string[] }>;
+  };
+  humanApprovalRequired: boolean;
+  writeToolsAvailableToAgent: boolean;
+};
+
+export type PlatformCatalog = {
+  name: string;
+  rest: {
+    basePath: string;
+    operationCount: number;
+    endpoints: string[];
+    operations: Array<{
+      method: string;
+      path: string;
+      operationId?: string;
+      summary?: string;
+      readOnly: boolean;
+      dashboardResource: boolean;
+    }>;
+  };
+  documentation: {
+    swagger: string;
+    openapiJson: string;
+    openapiYaml: string;
+  };
+  mcp: {
+    basePath: string;
+    transport: string;
+    endpoints: Array<{
+      path: string;
+      domain: string;
+      description: string;
+    }>;
+  };
+  health: string;
+};
+
+export type AiConfigurationSnapshot = {
+  runtime: AgentRuntimeConfiguration;
+  catalog: PlatformCatalog;
+  dashboardResourceCount: number;
+};
+
 export type InvestigationPage = {
   data: Investigation[];
   page: number;
@@ -544,25 +608,7 @@ export type InvestigationPage = {
   totalItems: number;
   totalPages: number;
   meta: {
-    config: {
-      openaiConfigured: boolean;
-      model: string;
-      mcpBaseUrl: string;
-      scheduleEnabled: boolean;
-      metricTriggerEnabled: boolean;
-      metricTriggerIntervalMs: number;
-      maxConcurrency: number;
-      groupingMaxCandidates: number;
-      reasoningEffort: "none" | "low";
-      maxContextCharacters: number;
-      toolCallBudgets: {
-        metric: number;
-        schedule: number;
-        manual: number;
-      };
-      humanApprovalRequired: boolean;
-      writeToolsAvailableToAgent: boolean;
-    };
+    config: AgentRuntimeConfiguration;
     summary: Record<string, number>;
     incidents: Array<Record<string, unknown>>;
   };

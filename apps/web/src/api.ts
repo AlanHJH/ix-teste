@@ -17,6 +17,9 @@ import type {
   N1ChatMessage,
   TicketPage,
   TopologySnapshot,
+  AgentRuntimeConfiguration,
+  AiConfigurationSnapshot,
+  PlatformCatalog,
 } from "./types";
 
 async function request<T>(path: string): Promise<T> {
@@ -292,6 +295,19 @@ export const api = {
     request<InvestigationPage>(
       "/api/investigations?page=1&pageSize=100&sort=created_at_desc",
     ),
+  aiConfiguration: async (): Promise<AiConfigurationSnapshot> => {
+    const [runtime, catalog] = await Promise.all([
+      request<AgentRuntimeConfiguration>("/api/investigations/config"),
+      request<PlatformCatalog>("/api"),
+    ]);
+    return {
+      runtime,
+      catalog,
+      dashboardResourceCount: catalog.rest.operations.filter(
+        (operation) => operation.readOnly && operation.dashboardResource,
+      ).length,
+    };
+  },
   triggerMetricInvestigations: () =>
     mutate<Record<string, unknown>>(
       "/api/investigations/trigger/metrics",

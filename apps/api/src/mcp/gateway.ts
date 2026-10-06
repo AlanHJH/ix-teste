@@ -29,6 +29,11 @@ import {
   ApplicationApi,
   createApplicationServer,
 } from "./contexts/application/presentation/application-server.js";
+import {
+  createOpenApiBridgeServer,
+  OpenApiBridgeOptions,
+  OpenApiDocumentProvider,
+} from "./contexts/openapi/presentation/openapi-bridge-server.js";
 
 export interface McpGatewayOptions {
   allowedHosts?: string[];
@@ -63,6 +68,10 @@ export class McpGateway {
     database: Queryable,
     options: McpGatewayOptions = {},
     application?: ApplicationApi,
+    openApi?: {
+      document: OpenApiDocumentProvider;
+      bridge: OpenApiBridgeOptions;
+    },
   ) {
     const customers = new CustomerQueries(
       new PostgresCustomerRepository(database),
@@ -108,6 +117,16 @@ export class McpGateway {
             [
               "/mcp/application",
               createMcpHandler(() => createApplicationServer(application)),
+            ],
+          ] as const)
+        : []),
+      ...(openApi
+        ? ([
+            [
+              "/mcp/openapi",
+              createMcpHandler(() =>
+                createOpenApiBridgeServer(openApi.document, openApi.bridge),
+              ),
             ],
           ] as const)
         : []),
@@ -173,6 +192,10 @@ export function createMcpGateway(
   database: Queryable,
   options?: McpGatewayOptions,
   application?: ApplicationApi,
+  openApi?: {
+    document: OpenApiDocumentProvider;
+    bridge: OpenApiBridgeOptions;
+  },
 ): McpGateway {
-  return new McpGateway(database, options, application);
+  return new McpGateway(database, options, application, openApi);
 }

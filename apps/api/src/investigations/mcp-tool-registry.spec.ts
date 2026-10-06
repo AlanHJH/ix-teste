@@ -2,8 +2,23 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   compactToolOutput,
+  investigationMcpPolicy,
   normalizeAgentToolArguments,
 } from "./mcp-tool-registry";
+
+describe("política MCP efetiva do agente", () => {
+  it("expõe os mesmos domínios e ferramentas usados pelo registro", () => {
+    const policy = investigationMcpPolicy();
+    assert.equal(policy.endpointCount, 7);
+    assert.equal(policy.toolCount, 26);
+    assert.ok(
+      policy.domains.some(
+        ({ domain, tools }) =>
+          domain === "application" && tools.includes("investigations_list"),
+      ),
+    );
+  });
+});
 
 describe("limites das ferramentas do agente", () => {
   it("reduz paginações grandes antes de consultar o MCP", () => {

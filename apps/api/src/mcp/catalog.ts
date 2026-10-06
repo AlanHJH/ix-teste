@@ -35,4 +35,10 @@ export const MCP_ENDPOINTS = [
     description:
       "Dashboard, topologia, suporte N1, operação NOC e revisão humana.",
   },
+  {
+    path: "/mcp/openapi",
+    domain: "openapi",
+    description:
+      "Bridge automático que transforma todas as operações REST documentadas em ferramentas MCP.",
+  },
 ] as const;

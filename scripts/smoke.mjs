@@ -119,8 +119,9 @@ expectPage(datasetLoads, "cargas do dataset");
 
 const catalog = await getJson("/api");
 expect(
-  catalog.mcp?.endpoints?.length === 7,
-  "catálogo MCP não contém os sete domínios",
+  catalog.mcp?.endpoints?.length === 8 &&
+    catalog.mcp.endpoints.some((endpoint) => endpoint.path === "/mcp/openapi"),
+  "catálogo MCP não contém os oito domínios e o bridge OpenAPI",
 );
 
 console.log(

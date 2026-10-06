@@ -134,6 +134,42 @@ describe("api client", () => {
     }
   });
 
+  it("combina configuração efetiva, catálogo MCP e recursos do dashboard", async () => {
+    const runtime = {
+      openaiConfigured: true,
+      model: "gpt-6-luna",
+      mcpPolicy: { endpointCount: 7, toolCount: 26, domains: [] },
+    };
+    const catalog = {
+      rest: {
+        operations: [
+          { readOnly: true, dashboardResource: true },
+          { readOnly: true, dashboardResource: false },
+          { readOnly: false, dashboardResource: false },
+        ],
+      },
+      mcp: { endpoints: [] },
+    };
+    const calls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (path: string | URL | Request) => {
+      calls.push(String(path));
+      return {
+        ok: true,
+        json: async () =>
+          String(path) === "/api/investigations/config" ? runtime : catalog,
+      } as Response;
+    }) as typeof fetch;
+    try {
+      const snapshot = await api.aiConfiguration();
+      assert.deepEqual(calls.sort(), ["/api", "/api/investigations/config"]);
+      assert.equal(snapshot.runtime.model, "gpt-6-luna");
+      assert.equal(snapshot.dashboardResourceCount, 1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("envia múltiplos filtros estruturados para as listas do dashboard", async () => {
     const payload = {
       data: [],

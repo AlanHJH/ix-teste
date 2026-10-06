@@ -13,6 +13,7 @@ import {
   InvestigationAgentError,
   OpenAIInvestigationAgent,
 } from "./openai-investigation-agent";
+import { investigationMcpPolicy } from "./mcp-tool-registry";
 import {
   InvestigationRequest,
   InvestigationStatus,
@@ -93,6 +94,7 @@ export class InvestigationsService {
       reasoningEffort: runtime.reasoningEffort,
       maxContextCharacters: runtime.maxContextCharacters,
       toolCallBudgets: runtime.toolCallBudgets,
+      mcpPolicy: investigationMcpPolicy(),
       humanApprovalRequired: true,
       writeToolsAvailableToAgent: false,
     };

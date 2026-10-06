@@ -39,9 +39,10 @@ function composition(): DashboardComposition {
     generatedBy: "fallback",
     model: null,
     discovery: {
-      protocol: "OpenAPI",
-      mode: "contract-only",
+      protocol: "MCP",
+      mode: "openapi-bridge",
       resourceCount: 23,
+      endpoint: "/mcp/openapi",
       document: "/api/openapi.json",
     },
     runtimeData: { protocol: "REST", endpoints: ["/api/network/overview"] },
@@ -59,12 +60,13 @@ describe("preferências do dashboard", () => {
     const service = new DashboardService(database, openApiCatalog());
     const preference = await service.getPreference("admin-marina");
     assert.equal(preference.composition?.title, saved.title);
-    assert.equal(preference.composition?.discovery.protocol, "OpenAPI");
+    assert.equal(preference.composition?.discovery.protocol, "MCP");
+    assert.equal(preference.composition?.discovery.endpoint, "/mcp/openapi");
     assert.ok((preference.composition?.discovery.resourceCount ?? 0) >= 15);
     assert.equal(preference.updatedAt, "2026-10-06T12:30:00.000Z");
   });
 
-  it("migra a descoberta MCP persistida para o contrato OpenAPI atual", async () => {
+  it("migra a descoberta MCP legada para o bridge OpenAPI atual", async () => {
     const saved = {
       ...composition(),
       discovery: {
@@ -80,7 +82,8 @@ describe("preferências do dashboard", () => {
     } as unknown as DatabaseService;
     const service = new DashboardService(database, openApiCatalog());
     const preference = await service.getPreference("admin-marina");
-    assert.equal(preference.composition?.discovery.protocol, "OpenAPI");
+    assert.equal(preference.composition?.discovery.protocol, "MCP");
+    assert.equal(preference.composition?.discovery.mode, "openapi-bridge");
     assert.equal(
       preference.composition?.discovery.document,
       "/api/openapi.json",

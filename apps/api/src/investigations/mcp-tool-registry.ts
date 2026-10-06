@@ -5,7 +5,7 @@ import {
 import type { FunctionTool } from "openai/resources/responses/responses";
 import { ToolTrace } from "./investigation.types";
 
-const domainTools = {
+export const investigationMcpTools = {
   customers: ["customers_search", "customers_get"],
   inventory: [
     "inventory_search_devices",
@@ -37,8 +37,19 @@ const domainTools = {
   ],
 } as const;
 
+export function investigationMcpPolicy() {
+  const domains = Object.entries(investigationMcpTools).map(
+    ([domain, tools]) => ({ domain, tools: [...tools] }),
+  );
+  return {
+    endpointCount: domains.length,
+    toolCount: domains.reduce((total, item) => total + item.tools.length, 0),
+    domains,
+  };
+}
+
 type RegisteredTool = {
-  domain: keyof typeof domainTools;
+  domain: keyof typeof investigationMcpTools;
   client: Client;
 };
 
@@ -131,9 +142,9 @@ export class McpToolRegistry {
 
   async load(): Promise<FunctionTool[]> {
     const tools: FunctionTool[] = [];
-    for (const [domain, allowedNames] of Object.entries(domainTools) as Array<
-      [keyof typeof domainTools, readonly string[]]
-    >) {
+    for (const [domain, allowedNames] of Object.entries(
+      investigationMcpTools,
+    ) as Array<[keyof typeof investigationMcpTools, readonly string[]]>) {
       const client = new Client({
         name: `ondaluz-agent-${domain}`,
         version: "1.0.0",

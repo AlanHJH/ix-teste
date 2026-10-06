@@ -11,6 +11,7 @@ import { InvestigationsService } from "./investigations/investigations.service";
 import { DashboardService } from "./dashboard/dashboard.service";
 import { paginate } from "./pagination";
 import { CreateIncidentInput } from "./incidents/incidents.service";
+import { OpenApiCatalogService } from "./openapi-catalog.service";
 
 @Injectable()
 export class McpGatewayService implements OnModuleDestroy {
@@ -25,6 +26,7 @@ export class McpGatewayService implements OnModuleDestroy {
     incidents: IncidentsService,
     investigations: InvestigationsService,
     dashboard: DashboardService,
+    openApiCatalog: OpenApiCatalogService,
   ) {
     const allowedHosts = (
       process.env.MCP_ALLOWED_HOSTS ?? "localhost,127.0.0.1,::1,api"
@@ -32,6 +34,9 @@ export class McpGatewayService implements OnModuleDestroy {
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean);
+    const restBaseUrl =
+      process.env.INTERNAL_REST_BASE_URL ??
+      `http://127.0.0.1:${process.env.PORT ?? "3000"}`;
     this.gateway = createMcpGateway(
       database,
       { allowedHosts },
@@ -168,6 +173,10 @@ export class McpGatewayService implements OnModuleDestroy {
         dashboardPreference: (userId) => dashboard.getPreference(userId),
         saveDashboardPreference: (userId, composition) =>
           dashboard.savePreference(userId, composition),
+      },
+      {
+        document: () => openApiCatalog.getDocument(),
+        bridge: { baseUrl: restBaseUrl },
       },
     );
   }

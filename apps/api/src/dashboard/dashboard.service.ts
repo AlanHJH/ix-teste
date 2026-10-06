@@ -232,9 +232,10 @@ export class DashboardService {
       generatedBy,
       model: generatedBy === "openai" ? this.model : null,
       discovery: {
-        protocol: "OpenAPI",
-        mode: "contract-only",
+        protocol: "MCP",
+        mode: "openapi-bridge",
         resourceCount: catalog.length,
+        endpoint: "/mcp/openapi",
         document: "/api/openapi.json",
       },
       runtimeData: { protocol: "REST", endpoints: runtimeEndpoints },
@@ -255,9 +256,10 @@ export class DashboardService {
     return {
       ...composition,
       discovery: {
-        protocol: "OpenAPI",
-        mode: "contract-only",
+        protocol: "MCP",
+        mode: "openapi-bridge",
         resourceCount: this.openApiCatalog.dashboardResources().length,
+        endpoint: "/mcp/openapi",
         document: "/api/openapi.json",
       },
     };

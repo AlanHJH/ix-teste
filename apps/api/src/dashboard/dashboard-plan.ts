@@ -552,10 +552,15 @@ export function validateDashboardComposition(
   const runtimeData = composition.runtimeData as Record<string, unknown> | null;
   const validDiscovery =
     !!discovery &&
-    ((discovery.protocol === "OpenAPI" &&
-      discovery.mode === "contract-only" &&
+    ((discovery.protocol === "MCP" &&
+      discovery.mode === "openapi-bridge" &&
       Number.isInteger(Number(discovery.resourceCount)) &&
+      discovery.endpoint === "/mcp/openapi" &&
       discovery.document === "/api/openapi.json") ||
+      (discovery.protocol === "OpenAPI" &&
+        discovery.mode === "contract-only" &&
+        Number.isInteger(Number(discovery.resourceCount)) &&
+        discovery.document === "/api/openapi.json") ||
       (discovery.protocol === "MCP" &&
         discovery.mode === "catalog-only" &&
         Number.isInteger(Number(discovery.toolCount))));

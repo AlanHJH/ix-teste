@@ -89,7 +89,7 @@ const dashboardCompositionSchema = {
     discovery: {
       type: "object" as const,
       description:
-        "Documento OpenAPI e quantidade de recursos usados no planejamento.",
+        "Bridge MCP, documento OpenAPI e quantidade de rotas REST usadas no planejamento.",
     },
     runtimeData: {
       type: "object" as const,

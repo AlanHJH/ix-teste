@@ -1,21 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   Bot,
+  Braces,
   Check,
   Database,
   History,
   LockKeyhole,
+  RefreshCw,
   RotateCcw,
   Save,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import { api } from "./api";
 import { HelpTooltip } from "./HelpTooltip";
 import {
   loadAgentPolicy,
   resetAgentPolicy,
   saveAgentPolicy,
 } from "./agentPolicy";
+import type { AiConfigurationSnapshot } from "./types";
 
 type ConfigurationOption = {
   id: string;
@@ -112,6 +117,14 @@ const defaultResources: ConfigurationOption[] = [
     checked: true,
     badge: "Somente leitura",
   },
+  {
+    id: "application",
+    label: "Aplicação",
+    description:
+      "Consultar visão geral, topologia, suporte N1, fila do NOC, incidentes e estado das investigações.",
+    checked: true,
+    badge: "Somente leitura",
+  },
 ];
 
 function optionsToMap(options: ConfigurationOption[]) {
@@ -133,10 +146,38 @@ function restoreOptions(
   }));
 }
 
+function effectiveResourceOptions(
+  domains: AiConfigurationSnapshot["runtime"]["mcpPolicy"]["domains"],
+  current: ConfigurationOption[],
+) {
+  const currentValues = optionsToMap(current);
+  return domains.map(({ domain, tools }) => {
+    const known = defaultResources.find((resource) => resource.id === domain);
+    return {
+      id: domain,
+      label: known?.label ?? domain,
+      description:
+        known?.description ??
+        `Contexto MCP publicado pelo backend com ${tools.length} ferramentas permitidas.`,
+      checked: currentValues[domain] ?? true,
+      badge: `${tools.length} ${tools.length === 1 ? "ferramenta" : "ferramentas"}`,
+    };
+  });
+}
+
+function formatCharacters(value: number) {
+  return new Intl.NumberFormat("pt-BR").format(value);
+}
+
 export function AgentConfiguration() {
   const [capabilities, setCapabilities] = useState(defaultCapabilities);
   const [resources, setResources] = useState(defaultResources);
   const [feedback, setFeedback] = useState("");
+  const [snapshot, setSnapshot] = useState<AiConfigurationSnapshot | null>(
+    null,
+  );
+  const [runtimeError, setRuntimeError] = useState("");
+  const [refreshing, setRefreshing] = useState(true);
 
   useEffect(() => {
     try {
@@ -146,7 +187,31 @@ export function AgentConfiguration() {
     } catch {
       // A configuração padrão continua válida se o armazenamento local estiver indisponível.
     }
+    void refreshRuntime();
   }, []);
+
+  async function refreshRuntime() {
+    setRefreshing(true);
+    setRuntimeError("");
+    try {
+      const current = await api.aiConfiguration();
+      setSnapshot(current);
+      setResources((resourcesValue) =>
+        effectiveResourceOptions(
+          current.runtime.mcpPolicy.domains,
+          resourcesValue,
+        ),
+      );
+    } catch (error) {
+      setRuntimeError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível consultar a configuração efetiva.",
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   const enabledCapabilities = useMemo(
     () => capabilities.filter((option) => option.checked).length,
@@ -156,6 +221,8 @@ export function AgentConfiguration() {
     () => resources.filter((option) => option.checked).length,
     [resources],
   );
+
+  const publishedMcpEndpoints = snapshot?.catalog.mcp.endpoints ?? [];
 
   function toggle(
     group: "capabilities" | "resources",
@@ -202,9 +269,9 @@ export function AgentConfiguration() {
           <span className="section-label">Governança do agente</span>
           <h1>Configuração do agente IA</h1>
           <p>
-            Defina o que o agente pode analisar e quais fontes ele pode
-            consultar. As permissões efetivas continuam controladas no servidor
-            MCP.
+            Consulte a configuração efetiva dos agentes e escolha preferências
+            locais de contexto. As permissões reais continuam controladas no
+            backend e nos servidores MCP.
           </p>
         </div>
         <div
@@ -214,7 +281,11 @@ export function AgentConfiguration() {
           <ShieldCheck size={20} />
           <span>
             <strong>Somente leitura</strong>
-            <small>Aprovação humana obrigatória</small>
+            <small>
+              {snapshot?.runtime.humanApprovalRequired === false
+                ? "Revisar política de aprovação"
+                : "Aprovação humana obrigatória"}
+            </small>
           </span>
         </div>
       </header>
@@ -247,19 +318,187 @@ export function AgentConfiguration() {
         </span>
         <span>
           <Database size={15} />
-          <strong>{enabledResources}</strong> recursos disponíveis para consulta
+          <strong>{enabledResources}</strong> preferências locais de fonte
         </span>
+        <span>
+          <Activity size={15} />
+          <strong>{snapshot?.runtime.mcpPolicy.toolCount ?? "—"}</strong>{" "}
+          ferramentas MCP efetivas
+        </span>
+        <span>
+          <Braces size={15} />
+          <strong>{snapshot?.dashboardResourceCount ?? "—"}</strong> recursos do
+          dashboard
+        </span>
+      </div>
+
+      <div className="agent-settings-runtime-grid">
+        <section className="panel agent-settings-runtime-card">
+          <header className="agent-settings-card-heading">
+            <div>
+              <span className="section-label">Estado efetivo</span>
+              <h2>Agente de investigação</h2>
+            </div>
+            <button
+              className="agent-settings-refresh"
+              type="button"
+              onClick={() => void refreshRuntime()}
+              disabled={refreshing}
+              aria-label="Atualizar configuração efetiva"
+              title="Atualizar configuração efetiva"
+            >
+              <RefreshCw size={16} />
+            </button>
+          </header>
+          {runtimeError ? (
+            <div className="agent-settings-runtime-error" role="alert">
+              <strong>Configuração indisponível</strong>
+              <span>{runtimeError}</span>
+            </div>
+          ) : refreshing && !snapshot ? (
+            <div className="agent-settings-runtime-loading">
+              <RefreshCw size={17} /> Consultando o backend…
+            </div>
+          ) : snapshot ? (
+            <>
+              <div className="agent-settings-runtime-status">
+                <span
+                  className={
+                    snapshot.runtime.openaiConfigured ? "ready" : "warning"
+                  }
+                >
+                  {snapshot.runtime.openaiConfigured
+                    ? "OpenAI configurada"
+                    : "OpenAI não configurada"}
+                </span>
+                <code>{snapshot.runtime.model}</code>
+              </div>
+              <dl className="agent-settings-runtime-facts">
+                <div>
+                  <dt>Allowlist MCP</dt>
+                  <dd>
+                    {snapshot.runtime.mcpPolicy.endpointCount} contextos ·{" "}
+                    {snapshot.runtime.mcpPolicy.toolCount} ferramentas
+                  </dd>
+                </div>
+                <div>
+                  <dt>Concorrência</dt>
+                  <dd>
+                    {snapshot.runtime.maxConcurrency} investigação por vez
+                  </dd>
+                </div>
+                <div>
+                  <dt>Contexto máximo</dt>
+                  <dd>
+                    {formatCharacters(snapshot.runtime.maxContextCharacters)}{" "}
+                    caracteres
+                  </dd>
+                </div>
+                <div>
+                  <dt>Orçamento de ferramentas</dt>
+                  <dd>
+                    {snapshot.runtime.toolCallBudgets.metric} métrica ·{" "}
+                    {snapshot.runtime.toolCallBudgets.schedule} agenda ·{" "}
+                    {snapshot.runtime.toolCallBudgets.manual} manual
+                  </dd>
+                </div>
+              </dl>
+              <div className="agent-settings-runtime-flags">
+                <span>
+                  Detector por métricas:{" "}
+                  <strong>
+                    {snapshot.runtime.metricTriggerEnabled
+                      ? "ativo"
+                      : "inativo"}
+                  </strong>
+                </span>
+                <span>
+                  Agenda automática:{" "}
+                  <strong>
+                    {snapshot.runtime.scheduleEnabled ? "ativa" : "inativa"}
+                  </strong>
+                </span>
+                <span>
+                  Ferramentas de escrita:{" "}
+                  <strong>
+                    {snapshot.runtime.writeToolsAvailableToAgent
+                      ? "disponíveis"
+                      : "bloqueadas"}
+                  </strong>
+                </span>
+              </div>
+            </>
+          ) : null}
+        </section>
+
+        <section className="panel agent-settings-runtime-card">
+          <header className="agent-settings-card-heading">
+            <div>
+              <span className="section-label">Descoberta de contratos</span>
+              <h2>Compositor do dashboard</h2>
+            </div>
+            <Braces size={23} />
+          </header>
+          <p className="agent-settings-card-note">
+            O compositor descobre estruturas pelo bridge MCP/OpenAPI. Os dados
+            operacionais continuam sendo carregados diretamente por REST no
+            navegador e não são enviados ao modelo.
+          </p>
+          <div className="agent-settings-contract-metrics">
+            <div>
+              <strong>{snapshot?.catalog.rest.operationCount ?? "—"}</strong>
+              <span>operações REST</span>
+            </div>
+            <div>
+              <strong>{snapshot?.dashboardResourceCount ?? "—"}</strong>
+              <span>recursos de leitura</span>
+            </div>
+            <div>
+              <strong>{publishedMcpEndpoints.length || "—"}</strong>
+              <span>endpoints MCP</span>
+            </div>
+          </div>
+          <div className="agent-settings-contract-paths">
+            <span>
+              <small>Bridge MCP</small>
+              <code>/mcp/openapi</code>
+            </span>
+            <span>
+              <small>Contrato canônico</small>
+              <a href="/api/openapi.json" target="_blank" rel="noreferrer">
+                /api/openapi.json
+              </a>
+            </span>
+            <span>
+              <small>Documentação humana</small>
+              <a href="/api/docs" target="_blank" rel="noreferrer">
+                /api/docs
+              </a>
+            </span>
+          </div>
+          <div className="agent-settings-endpoints" aria-label="Endpoints MCP">
+            {publishedMcpEndpoints.map((endpoint) => (
+              <span key={endpoint.path} title={endpoint.description}>
+                {endpoint.domain}
+              </span>
+            ))}
+          </div>
+        </section>
       </div>
 
       <div className="agent-settings-grid">
         <section className="panel agent-settings-card">
           <header className="agent-settings-card-heading">
             <div>
-              <span className="section-label">Comportamento</span>
-              <h2>O que o agente pode fazer</h2>
+              <span className="section-label">Preferência local</span>
+              <h2>Foco da investigação</h2>
             </div>
             <Bot size={23} />
           </header>
+          <p className="agent-settings-card-note">
+            Essas escolhas preparam o contexto preferido neste navegador. Elas
+            não alteram a allowlist nem habilitam capacidades no servidor.
+          </p>
           <div className="agent-settings-options">
             {capabilities.map((option) => (
               <label
@@ -302,14 +541,15 @@ export function AgentConfiguration() {
         <section className="panel agent-settings-card">
           <header className="agent-settings-card-heading">
             <div>
-              <span className="section-label">Fontes consultáveis</span>
-              <h2>Recursos MCP acessíveis</h2>
+              <span className="section-label">Preferência local</span>
+              <h2>Fontes priorizadas</h2>
             </div>
             <Database size={23} />
           </header>
           <p className="agent-settings-card-note">
-            Selecione os domínios que fazem parte do contexto da investigação.
-            Todos permanecem em modo somente leitura.
+            A lista vem da allowlist efetiva do backend. Desmarcar uma fonte só
+            registra uma preferência local; todas permanecem tecnicamente em
+            modo somente leitura.
           </p>
           <div className="agent-settings-options">
             {resources.map((option) => (
@@ -374,18 +614,19 @@ export function AgentConfiguration() {
       <section className="panel agent-settings-history">
         <header className="agent-settings-card-heading">
           <div>
-            <span className="section-label">Auditoria futura</span>
-            <h2>Histórico de ações do agente</h2>
+            <span className="section-label">Auditoria</span>
+            <h2>Rastreabilidade das investigações</h2>
           </div>
           <History size={23} />
         </header>
         <div className="agent-settings-empty">
           <History size={25} />
-          <h3>Nenhuma ação operacional registrada</h3>
+          <h3>Consultas e decisões permanecem auditáveis</h3>
           <p>
-            Este histórico será habilitado quando o agente puder executar ações.
-            Por enquanto, ele apenas consulta dados e envia propostas para
-            aprovação humana.
+            A tela Revisão IA registra modelo, ferramentas MCP consultadas,
+            argumentos, evidências, resultado, revisor e decisão. O agente não
+            recebe ferramentas de escrita; ações operacionais continuam fora do
+            fluxo autônomo.
           </p>
         </div>
       </section>

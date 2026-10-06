@@ -222,6 +222,33 @@ export class InvestigationsController {
           type: "object",
           description: "Orçamentos de chamadas por domínio MCP.",
         },
+        mcpPolicy: {
+          type: "object",
+          description:
+            "Allowlist efetiva do agente de investigação, derivada do mesmo registro usado em execução.",
+          properties: {
+            endpointCount: apiInteger(
+              "Quantidade de contextos MCP acessíveis ao agente.",
+            ),
+            toolCount: apiInteger(
+              "Quantidade total de ferramentas permitidas ao agente.",
+            ),
+            domains: {
+              type: "array",
+              description: "Domínios e ferramentas liberados para consulta.",
+              items: {
+                type: "object",
+                properties: {
+                  domain: apiString("Nome do domínio MCP."),
+                  tools: {
+                    type: "array",
+                    items: apiString("Nome da ferramenta permitida."),
+                  },
+                },
+              },
+            },
+          },
+        },
         humanApprovalRequired: {
           type: "boolean",
           description: "Confirma que achados não viram incidentes sem revisão.",
