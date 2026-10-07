@@ -1,19 +1,13 @@
-import { FormEvent, useEffect, useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   AlertTriangle,
-  Bot,
   Check,
   ChevronRight,
-  Clock3,
-  Play,
   RefreshCw,
-  SearchCheck,
   ShieldCheck,
   X,
 } from "lucide-react";
 import { api } from "./api";
-import { HelpTooltip } from "./HelpTooltip";
-import { ProviderTerm } from "./ProviderGlossary";
 import type { Investigation, InvestigationPage } from "./types";
 
 const statusLabel: Record<Investigation["status"], string> = {
@@ -493,14 +487,11 @@ function InvestigationDetailModal({
 }
 
 export function InvestigationReview({
-  mode = "full",
   onGroupingChanged,
 }: {
-  mode?: "full" | "noc";
   onGroupingChanged?: () => void;
 }) {
   const [page, setPage] = useState<InvestigationPage | null>(null);
-  const [objective, setObjective] = useState("");
   const [reviewer, setReviewer] = useState("");
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
@@ -537,15 +528,6 @@ export function InvestigationReview({
     }
   }
 
-  function submitManual(event: FormEvent) {
-    event.preventDefault();
-    if (objective.trim().length < 10) return;
-    void run("manual", async () => {
-      await api.triggerManualInvestigation(objective);
-      setObjective("");
-    });
-  }
-
   function review(
     investigation: Investigation,
     decision: "approve" | "reject",
@@ -567,27 +549,20 @@ export function InvestigationReview({
     });
   }
 
-  const configured = page?.meta.config.openaiConfigured ?? false;
-  const isNoc = mode === "noc";
-  const investigations = isNoc
-    ? (page?.data.filter(
-        (investigation) =>
-          investigation.trigger_type === "metric" &&
-          ["queued", "running", "pending_review", "failed"].includes(
-            investigation.status,
-          ),
-      ) ?? [])
-    : (page?.data ?? []);
-  const pending = isNoc
-    ? investigations.filter(
-        (investigation) => investigation.status === "pending_review",
-      ).length
-    : (page?.meta.summary.pending_review ?? 0);
-  const active = isNoc
-    ? investigations.filter((investigation) =>
-        ["queued", "running"].includes(investigation.status),
-      ).length
-    : (page?.meta.summary.queued ?? 0) + (page?.meta.summary.running ?? 0);
+  const investigations =
+    page?.data.filter(
+      (investigation) =>
+        investigation.trigger_type === "metric" &&
+        ["queued", "running", "pending_review", "failed"].includes(
+          investigation.status,
+        ),
+    ) ?? [];
+  const pending = investigations.filter(
+    (investigation) => investigation.status === "pending_review",
+  ).length;
+  const active = investigations.filter((investigation) =>
+    ["queued", "running"].includes(investigation.status),
+  ).length;
   const intervalMinutes = Math.round(
     (page?.meta.config.metricTriggerIntervalMs ?? 300_000) / 60_000,
   );
@@ -597,128 +572,14 @@ export function InvestigationReview({
   );
 
   return (
-    <section
-      className={`investigations-page${isNoc ? " noc-investigations" : ""}`}
-    >
-      {!isNoc && (
-        <section className="investigations-hero">
-          <div>
-            <span className="section-label">
-              Agente OpenAI + <ProviderTerm term="mcp" />
-            </span>
-            <h1>Investigar primeiro. Agir só depois da revisão.</h1>
-            <p>
-              Métricas, agenda ou operador iniciam a análise. O agente consulta
-              o
-              <ProviderTerm term="mcp" /> somente leitura e propõe um incidente;
-              nenhuma correção de rede é executada automaticamente.
-            </p>
-          </div>
-          <div className={`agent-config ${configured ? "ready" : "missing"}`}>
-            <Bot size={23} />
-            <div>
-              <strong>
-                {configured ? "OpenAI configurada" : "Chave OpenAI pendente"}
-              </strong>
-              <span>{page?.meta.config.model ?? "carregando…"}</span>
-              {page && (
-                <span>
-                  até {page.meta.config.toolCallBudgets.manual} consultas ·
-                  contexto de evidências{" "}
-                  {Math.round(page.meta.config.maxContextCharacters / 1000)}
-                  mil caracteres
-                  <HelpTooltip
-                    term="Orçamento adaptativo"
-                    description="Investigações manuais podem consultar mais fontes. O agente encerra antes se repetir uma consulta ou atingir o volume máximo de evidências."
-                  />
-                </span>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {!configured && page && (
-        <div className="agent-setup-warning">
-          <AlertTriangle size={19} />
-          <p>
-            Defina <code>OPENAI_API_KEY</code> no arquivo <code>.env</code> do
-            backend e reinicie o Compose. A chave não deve ser informada nesta
-            tela nem commitada no repositório.
-          </p>
-        </div>
-      )}
-
-      {!isNoc && (
-        <section className="agent-controls">
-          <div className="agent-control-card">
-            <span>Métrica</span>
-            <h2>Buscar agrupamentos problemáticos</h2>
-            <p>
-              Procura concentrações por todos os escopos válidos e envia apenas
-              candidatos delimitados para investigação.
-            </p>
-            <button
-              disabled={!configured || Boolean(busy)}
-              onClick={() =>
-                void run("metrics", api.triggerGroupingInvestigations)
-              }
-            >
-              <SearchCheck size={16} />
-              {busy === "metrics" ? "Criando…" : "Verificar métricas agora"}
-            </button>
-          </div>
-          <div className="agent-control-card">
-            <span>Agenda</span>
-            <h2>Revisão temática do parque</h2>
-            <p>
-              Executa agora o mesmo job que pode ser habilitado por intervalo.
-            </p>
-            <button
-              disabled={!configured || Boolean(busy)}
-              onClick={() =>
-                void run("schedule", api.triggerScheduledInvestigation)
-              }
-            >
-              <Clock3 size={16} />
-              {busy === "schedule" ? "Criando…" : "Executar job agora"}
-            </button>
-          </div>
-          <form className="agent-control-card manual" onSubmit={submitManual}>
-            <span>Operador</span>
-            <h2>Investigação sob demanda</h2>
-            <textarea
-              value={objective}
-              onChange={(event) => setObjective(event.target.value)}
-              placeholder="Ex.: investigue se as quedas de hoje estão concentradas por PON ou firmware"
-              aria-label="Objetivo da investigação"
-              maxLength={600}
-            />
-            <button
-              disabled={
-                !configured || Boolean(busy) || objective.trim().length < 10
-              }
-            >
-              <Play size={16} />
-              {busy === "manual" ? "Criando…" : "Iniciar investigação"}
-            </button>
-          </form>
-        </section>
-      )}
-
+    <section className="investigations-page noc-investigations">
       {error && <p className="investigations-error">{error}</p>}
 
       <section className="review-queue">
         <header>
           <div>
-            <span className="section-label">
-              {isNoc ? "Aprovação do NOC" : "Gate operacional"}
-            </span>
-            <h2>
-              {isNoc
-                ? "Agrupamentos propostos pelo agente"
-                : "Incidentes propostos pelo agente"}
-            </h2>
+            <span className="section-label">Aprovação do NOC</span>
+            <h2>Agrupamentos propostos pelo agente</h2>
           </div>
           <div className="queue-summary">
             <span>{active} em processamento</span>
@@ -744,16 +605,11 @@ export function InvestigationReview({
           ))}
           {page && investigations.length === 0 && (
             <div className="investigations-empty">
-              {isNoc ? <ShieldCheck size={34} /> : <Bot size={34} />}
-              <h3>
-                {isNoc
-                  ? "Nenhum problema novo aguardando o NOC"
-                  : "Nenhuma investigação executada"}
-              </h3>
+              <ShieldCheck size={34} />
+              <h3>Nenhum problema novo aguardando o NOC</h3>
               <p>
-                {isNoc
-                  ? `A busca automática roda a cada ${intervalMinutes} minutos e não repete candidatos da mesma janela.`
-                  : "Configure a OpenAI e escolha um dos gatilhos acima."}
+                A busca automática roda a cada {intervalMinutes} minutos e não
+                repete candidatos da mesma janela.
               </p>
             </div>
           )}

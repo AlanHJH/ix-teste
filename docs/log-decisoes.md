@@ -53,6 +53,34 @@ Essas decisões não tratam correlação como prova absoluta. Fibra é confirmad
 - Separei o dashboard em plano e dados. Usei o MCP somente para descobrir o catálogo de recursos e pedi ao modelo apenas a composição com bindings permitidos; os valores reais chegam depois por REST. Assim, atualizar alertas e indicadores não reenviará o dataset ao modelo nem consumirá tokens. O layout diário fica no navegador por usuário, e uma nova chamada OpenAI acontece somente quando a pessoa pede outra composição.
 - O pacote fornecido está ignorado no Git; o README descreve onde colocá-lo.
 
+## Conferência de aderência ao desafio - 06/10/2026
+
+Revisei o enunciado, a implementação e as jornadas executáveis antes de
+considerar esta versão pronta para avaliação. O foco foi utilidade para os dois
+perfis solicitados, e não acabamento visual isolado.
+
+| Pedido do desafio                                                                                         | Decisão e estado verificável                                                                                                                                                                                                                                          |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Diagnóstico curto para a diretoria, com causa, custo, prioridade e resposta às propostas dos stakeholders | Mantive o diagnóstico em [`diagnostico-diretoria.md`](diagnostico-diretoria.md), com três causas separadas, custo direto, nível de confiança e propostas explicitamente aceitas ou recusadas. O PDF correspondente continua limitado a três páginas.                  |
+| Arquitetura para detectar continuamente problemas em 300 mil CPEs                                         | Mantive o fluxo Inform -> ingestão -> agregados -> candidato -> validação humana -> agrupamento ativo em [`arquitetura.md`](arquitetura.md). O protótipo usa PostgreSQL e, para produção, separa armazenamento bruto/analítico do estado operacional.                 |
+| Operador NOC vê onde agir antes de o suporte escalar                                                      | A Visão NOC agora concentra agrupamentos ativos e propostas da busca ativa. O detector usa somente o banco já carregado, consulta MCP de leitura e exige aprovação humana antes de criar estado operacional. Chamados individuais continuam na fila única de Tickets. |
+| Atendente N1 atende em poucos minutos sem conhecimento técnico profundo                                   | A jornada N1 parte do cliente, explica a causa provável e as evidências em linguagem de atendimento e decide entre orientar, escalar para o NOC ou agendar visita. Agrupamentos aprovados aparecem como contexto, sem transformar hipótese em certeza.                |
+| Hipóteses descartadas, ambiguidades e uso de IA registrados                                               | As seções anteriores preservam as hipóteses refutadas, decisões de normalização e limites da IA. O modelo não escreve incidentes, não define a lista final de CPEs e não executa ações de rede.                                                                       |
+| Node.js/TypeScript, React/TypeScript, banco justificado e execução por Docker                             | A API é NestJS/TypeScript, a interface é React/TypeScript e o PostgreSQL está justificado na arquitetura. `docker compose up --build` sobe banco, carga, API e web.                                                                                                   |
+| Entrega pública, sem dataset, com documentação e instruções de execução                                   | O remoto `AlanHJH/ix-teste` está público em GitHub; `.env`, pacote de dados e `enunciado.pdf` são ignorados. README aponta o local do pacote e os documentos obrigatórios permanecem em `docs/`.                                                                      |
+
+### Evidência da última validação
+
+- `npm run smoke` confirmou API saudável, **8.186 CPEs**, **4 agrupamentos** e **4 jornadas N1**.
+- A busca ativa de agrupamentos foi disparada contra o banco carregado: encontrou seis candidatos, reconheceu um já coberto por agrupamento ativo e reaproveitou cinco investigações existentes, sem duplicá-las.
+- O agente estava configurado, com gatilho métrico a cada cinco minutos e somente ferramentas MCP de leitura. Foram confirmadas propostas pendentes, uma aprovação e uma conclusão inconclusiva; todas preservam trilha de consultas para auditoria.
+- A revisão humana permanece obrigatória: só a aprovação recalcula o alcance pelo inventário e cria o agrupamento ativo. Encerrar o agrupamento preserva o histórico e remove seu contexto operacional do N1.
+
+O escopo deliberadamente não inclui autenticação de produção, execução remota de
+ações, rollback automático, abertura de ordens de serviço ou previsão causal
+sem confirmação de campo. Essas ausências são escolhas explícitas de segurança
+e não impedem a demonstração das jornadas pedidas no desafio.
+
 ## Uso de IA
 
 - Na fase inicial, foi usado Codex GPT-5.6 Sol para inventariar os arquivos e procurar indicadores de malware/exploit antes de abrir o pacote, motivado por riscos observados em processos seletivos.

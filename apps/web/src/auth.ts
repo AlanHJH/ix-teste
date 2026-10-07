@@ -4,7 +4,6 @@ export type AppView =
   | "dashboard"
   | "noc"
   | "support"
-  | "investigations"
   | "tickets"
   | "diagnostics"
   | "topology"
@@ -52,7 +51,6 @@ const viewsByRole: Record<UserRole, readonly AppView[]> = {
     "dashboard",
     "noc",
     "support",
-    "investigations",
     "agent-config",
     "tickets",
     "diagnostics",
@@ -60,15 +58,7 @@ const viewsByRole: Record<UserRole, readonly AppView[]> = {
     "inventory",
   ],
   n1: ["support", "tickets", "diagnostics", "inventory"],
-  noc: [
-    "dashboard",
-    "noc",
-    "investigations",
-    "tickets",
-    "diagnostics",
-    "topology",
-    "inventory",
-  ],
+  noc: ["dashboard", "noc", "tickets", "diagnostics", "topology", "inventory"],
 };
 
 const defaultViewByRole: Record<UserRole, AppView> = {

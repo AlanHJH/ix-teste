@@ -623,10 +623,10 @@ export function AgentConfiguration() {
           <History size={25} />
           <h3>Consultas e decisões permanecem auditáveis</h3>
           <p>
-            A tela Revisão IA registra modelo, ferramentas MCP consultadas,
-            argumentos, evidências, resultado, revisor e decisão. O agente não
-            recebe ferramentas de escrita; ações operacionais continuam fora do
-            fluxo autônomo.
+            A fila de aprovação do NOC registra modelo, ferramentas MCP
+            consultadas, argumentos, evidências, resultado, revisor e decisão. O
+            agente não recebe ferramentas de escrita; ações operacionais
+            continuam fora do fluxo autônomo.
           </p>
         </div>
       </section>

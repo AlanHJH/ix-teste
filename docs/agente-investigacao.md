@@ -36,7 +36,7 @@ O modelo não recebe ferramentas de escrita. Ele não cria o agrupamento diretam
 
 ## Configuração local
 
-Copie `.env.example` para `.env`, informe `OPENAI_API_KEY` e reinicie o Compose. As variáveis `AGENT_*` controlam concorrência, raciocínio, número máximo de ferramentas, paginação e contexto. `AGENT_GROUPING_MAX_CANDIDATES` limita quantos candidatos cada varredura pode encaminhar ao agente. Sem a chave, a revisão mostra o estado indisponível em vez de simular uma resposta.
+Copie `.env.example` para `.env`, informe `OPENAI_API_KEY` e reinicie o Compose. As variáveis `AGENT_*` controlam concorrência, raciocínio, número máximo de ferramentas, paginação e contexto. `AGENT_GROUPING_MAX_CANDIDATES` limita quantos candidatos cada varredura pode encaminhar ao agente. Sem a chave, o atendimento N1 usa a orientação determinística e a fila do NOC não simula uma proposta do modelo. O detector consulta apenas as tabelas já carregadas no banco; não há busca externa de dados operacionais.
 
 ## Limites para produção
 

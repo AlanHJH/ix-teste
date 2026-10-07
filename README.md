@@ -53,7 +53,7 @@ ondaluz-pack/
 docker compose up --build
 ```
 
-Para executar investigações reais com o agente, copie `.env.example` para `.env`, defina `OPENAI_API_KEY` localmente e reinicie o Compose. Sem a chave, todas as demais telas continuam funcionando e a aba **Revisão IA** mostra o estado de configuração sem simular uma resposta do modelo. Na visão do NOC, os detectores verificam o parque a cada cinco minutos, descartam candidatos duplicados e encaminham apenas problemas novos confirmados pelo agente para aprovação humana. O agente usa `gpt-6-luna` com raciocínio econômico e orçamento adaptativo de consultas; veja os controles de custo e contexto em [`docs/agente-investigacao.md`](docs/agente-investigacao.md).
+Para executar investigações reais com o agente, copie `.env.example` para `.env`, defina `OPENAI_API_KEY` localmente e reinicie o Compose. Sem a chave, o atendimento N1 continua disponível com orientação determinística; a fila de aprovação do NOC não simula respostas do modelo. Na visão do NOC, os detectores verificam somente o dataset já carregado no banco a cada cinco minutos, descartam candidatos duplicados e encaminham apenas problemas novos confirmados pelo agente para aprovação humana. O agente usa `gpt-6-luna` com raciocínio econômico e orçamento adaptativo de consultas; veja os controles de custo e contexto em [`docs/agente-investigacao.md`](docs/agente-investigacao.md).
 
 A primeira execução importa 5,5 milhões de Informs e gera agregados diários. O serviço `data-loader` termina após a carga; execuções seguintes reutilizam o volume de forma idempotente.
 
@@ -189,7 +189,7 @@ git status --short
 ```
 
 - confirme que `ondaluz-pack/`, `enunciado.pdf` e o ZIP original não aparecem no `git status`;
-- faça um teste visual nas abas **Visão NOC**, **Atendimento N1** e **Revisão IA**;
+- faça um teste visual nas áreas **Visão NOC** (incluindo a fila de aprovação), **Atendimento N1** e **Tickets**;
 - publique o repositório somente depois de revisar os documentos e o diff final;
 - não inclua credenciais, `.env`, dados ou artefatos de build.
 

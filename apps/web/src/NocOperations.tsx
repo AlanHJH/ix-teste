@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
+  ChevronRight,
   Network,
   Plus,
   TicketCheck,
@@ -86,19 +87,97 @@ type GroupingCardData = {
   signal: string;
   recommendation: string;
   owner: string;
-  evidence: string[];
+  evidence: Array<{ source: string; summary: string; reference: string }>;
   origin: string;
   originTicketId: string | null;
 };
 
+const evidenceSourceLabel: Record<string, string> = {
+  operations: "Detecção inicial",
+  inventory: "Inventário da rede",
+  telemetry: "Medições dos equipamentos",
+  diagnostics: "Medições técnicas",
+  tickets: "Chamados de clientes",
+  customers: "Contexto do cliente",
+};
+
+const evidenceReferenceLabel: Record<string, string> = {
+  operations_list_grouping_candidates: "Consulta do detector de agrupamentos",
+  inventory_topology: "Consulta de inventário e topologia",
+  telemetry_list_daily_metrics: "Consulta das medições dos equipamentos",
+  diagnostics_list: "Consulta das medições técnicas",
+  tickets_list: "Consulta dos chamados de clientes",
+  customers_list: "Consulta do contexto do cliente",
+};
+
+function textValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function humanizeEvidence(value: string) {
+  return value
+    .replace(
+      /^Candidato (?:pré-calculado|reporta|registra|indica):?\s*/i,
+      "O detector identificou ",
+    )
+    .replace(
+      /^Nenhum chamado correspondente retornado/i,
+      "Não foram encontrados chamados relacionados",
+    )
+    .replace(
+      /^A consulta retornou zero registros/i,
+      "Não foram encontrados registros no período consultado",
+    )
+    .replace(
+      /; ausência de resultado não confirma nem refuta a ([^.]+)\./i,
+      ". Isso não confirma nem descarta a $1.",
+    );
+}
+
+function humanizeEvidenceReference(value: string) {
+  if (!value) return "";
+  const tool = value.split(" — ", 1)[0];
+  return evidenceReferenceLabel[tool] ?? "Consulta registrada pelo sistema";
+}
+
+function recommendedActionSteps(value: string) {
+  const pattern = /\b(N1|NOC):\s*/g;
+  const matches = Array.from(value.matchAll(pattern));
+  if (!matches.length) return [{ label: "Próxima ação", text: value }];
+
+  return matches.map((match, index) => {
+    const start = (match.index ?? 0) + match[0].length;
+    const end = matches[index + 1]?.index ?? value.length;
+    return {
+      label: match[1] === "N1" ? "Atendimento N1" : "Equipe NOC",
+      text: value.slice(start, end).trim(),
+    };
+  });
+}
+
 function operationalGrouping(incident: OperationalIncident): GroupingCardData {
   const evidence = incident.evidence
-    .map((record) =>
-      Object.values(record)
-        .filter((value): value is string => typeof value === "string")
-        .join(" · "),
-    )
-    .filter(Boolean);
+    .map((record) => {
+      const source = textValue(record.source) || "operations";
+      const summary =
+        textValue(record.summary) ||
+        Object.entries(record)
+          .filter(
+            ([key, value]) =>
+              key !== "source" &&
+              key !== "reference" &&
+              typeof value === "string",
+          )
+          .map(([, value]) => textValue(value))
+          .filter(Boolean)
+          .join(" ");
+      return {
+        source,
+        summary: humanizeEvidence(summary),
+        reference: humanizeEvidenceReference(textValue(record.reference)),
+      };
+    })
+    .filter((item) => item.summary);
 
   return {
     id: incident.incident_id,
@@ -119,121 +198,58 @@ function operationalGrouping(incident: OperationalIncident): GroupingCardData {
 
 function GroupingCard({
   grouping,
-  closing,
-  onClose,
+  onOpen,
 }: {
   grouping: GroupingCardData;
-  closing: boolean;
-  onClose: () => void;
+  onOpen: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-
   return (
-    <article className={`incident-card grouping-card ${grouping.severity}`}>
-      <header>
-        <div className="incident-title">
-          <span className="scope-icon">
-            <Network size={19} aria-hidden="true" />
-          </span>
-          <div>
-            <div className="eyebrow-row">
-              <span className={`severity ${grouping.severity}`}>
-                {severityLabels[grouping.severity]}
-              </span>
-              <span className="scope-label">
-                Agrupamento ativo
-                <HelpTooltip
-                  term="Agrupamento ativo"
-                  description="Problema compartilhado que reúne clientes por uma causa ou parte da rede em comum."
-                />
-              </span>
-              <span>{grouping.id}</span>
-            </div>
-            <h3>
-              <TechnicalText text={grouping.title} />
-            </h3>
-            <p>
-              <TechnicalText text={grouping.location} />
-            </p>
+    <article className={`active-grouping-card ${grouping.severity}`}>
+      <button
+        type="button"
+        className="active-grouping-card-open"
+        onClick={onOpen}
+        aria-haspopup="dialog"
+        aria-label={`Abrir detalhes do agrupamento: ${grouping.title}`}
+      >
+        <header>
+          <div className="investigation-tags">
+            <span>Agrupamento ativo</span>
+            <span className={`active-grouping-severity ${grouping.severity}`}>
+              {severityLabels[grouping.severity]}
+            </span>
           </div>
+          <div className="investigation-confidence compact">
+            <strong>{grouping.confidence}</strong>
+            <span>confiança</span>
+          </div>
+        </header>
+        <div className="investigation-card-copy">
+          <h3>
+            <TechnicalText text={grouping.title} />
+          </h3>
+          <small>{grouping.id}</small>
         </div>
-        <div className="score">
-          <strong>{grouping.confidence}</strong>
-          <span>confiança</span>
-        </div>
-      </header>
-      <div className="incident-stats">
-        <div>
-          <strong>{grouping.affected.toLocaleString("pt-BR")}</strong>
-          <span>
-            CPEs afetadas
-            <HelpTooltip
-              term="CPEs potencialmente afetadas"
-              description="Quantidade calculada no inventário para o escopo definido. Representa impacto potencial, não confirmação individual."
-            />
-          </span>
-        </div>
-        <div>
-          <strong>
+        <div className="investigation-card-preview">
+          <div>
+            <span>Alcance</span>
+            <strong>
+              <TechnicalText text={grouping.location} />
+            </strong>
+          </div>
+          <div>
+            <span>Impacto estimado</span>
+            <strong>{grouping.affected.toLocaleString("pt-BR")} CPEs</strong>
+          </div>
+          <p>
             <TechnicalText text={grouping.signal} />
-          </strong>
-          <span>Sinal dominante</span>
+          </p>
         </div>
-        <div>
-          <strong>
-            <TechnicalText text={grouping.owner} />
-          </strong>
-          <span>Responsável</span>
-        </div>
-      </div>
-      <div className="recommendation">
-        <ArrowRight size={17} aria-hidden="true" />
-        <p>
-          <strong>Próxima ação</strong>
-          <TechnicalText text={grouping.recommendation} />
-        </p>
-      </div>
-      {expanded && grouping.evidence.length > 0 && (
-        <ul className="evidence">
-          {grouping.evidence.map((item, index) => (
-            <li key={`${grouping.id}-${index}`}>
-              <CheckCircle2 size={15} aria-hidden="true" />
-              <TechnicalText text={item} />
-            </li>
-          ))}
-        </ul>
-      )}
-      <footer className="grouping-card-footer">
-        <div className="grouping-card-metadata">
-          <span>Origem: {grouping.origin}</span>
-          {grouping.originTicketId && (
-            <span>Chamado vinculado: {grouping.originTicketId}</span>
-          )}
-        </div>
-        <div className="grouping-card-actions">
-          {grouping.evidence.length > 0 && (
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => setExpanded((value) => !value)}
-              aria-expanded={expanded}
-            >
-              {expanded ? "Ocultar evidências" : "Ver evidências"}
-            </button>
-          )}
-          <button
-            type="button"
-            className="close-grouping"
-            onClick={onClose}
-            disabled={closing}
-            aria-label={`Encerrar agrupamento ${grouping.title}`}
-            title="Encerra o agrupamento nas visões do NOC e do N1, preservando o histórico."
-          >
-            <CheckCircle2 size={15} aria-hidden="true" />
-            <span>{closing ? "Encerrando…" : "Encerrar"}</span>
-          </button>
-        </div>
-      </footer>
+        <footer>
+          <span>Ver detalhes do agrupamento</span>
+          <ChevronRight size={16} aria-hidden="true" />
+        </footer>
+      </button>
     </article>
   );
 }
@@ -260,6 +276,7 @@ export function NocOperations({
   const [closedGrouping, setClosedGrouping] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [closingGrouping, setClosingGrouping] = useState("");
+  const [selectedGroupingId, setSelectedGroupingId] = useState("");
   async function refresh() {
     try {
       const nextIncidents = await api.operationalIncidents();
@@ -293,6 +310,17 @@ export function NocOperations({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [busy, modalOpen]);
+
+  useEffect(() => {
+    if (!selectedGroupingId) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !closingGrouping) {
+        setSelectedGroupingId("");
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [closingGrouping, selectedGroupingId]);
 
   useEffect(() => {
     if (!modalOpen) return;
@@ -421,6 +449,7 @@ export function NocOperations({
       await api.closeOperationalIncident(incident.incident_id);
       setClosedGrouping(incident.incident_id);
       await refresh();
+      setSelectedGroupingId("");
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -499,6 +528,12 @@ export function NocOperations({
   const hasSelectedPon = catalogOptions.pon.some(
     (option) => option.value.toLowerCase() === form.pon.toLowerCase(),
   );
+  const selectedGrouping = incidents?.data.find(
+    (incident) => incident.incident_id === selectedGroupingId,
+  );
+  const selectedGroupingData = selectedGrouping
+    ? operationalGrouping(selectedGrouping)
+    : null;
   return (
     <>
       <section className="incidents-section">
@@ -549,10 +584,7 @@ export function NocOperations({
         )}
 
         {showGroupingAgent && (
-          <InvestigationReview
-            mode="noc"
-            onGroupingChanged={() => void refresh()}
-          />
+          <InvestigationReview onGroupingChanged={() => void refresh()} />
         )}
 
         <div className="incidents-list">
@@ -560,12 +592,185 @@ export function NocOperations({
             <GroupingCard
               key={incident.incident_id}
               grouping={operationalGrouping(incident)}
-              closing={closingGrouping === incident.incident_id}
-              onClose={() => void closeOperationalGrouping(incident)}
+              onOpen={() => setSelectedGroupingId(incident.incident_id)}
             />
           ))}
         </div>
       </section>
+
+      {selectedGrouping && selectedGroupingData && (
+        <div
+          className="entity-modal-backdrop grouping-detail-backdrop"
+          role="presentation"
+          onMouseDown={() => !closingGrouping && setSelectedGroupingId("")}
+        >
+          <section
+            className={`grouping-detail-modal ${selectedGroupingData.severity}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="grouping-detail-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              className="entity-modal-close"
+              type="button"
+              onClick={() => setSelectedGroupingId("")}
+              aria-label="Fechar detalhes do agrupamento"
+              disabled={Boolean(closingGrouping)}
+            >
+              <X size={19} />
+            </button>
+            <header className="grouping-detail-header">
+              <div>
+                <div className="investigation-tags">
+                  <span>Agrupamento ativo</span>
+                  <span
+                    className={`active-grouping-severity ${selectedGroupingData.severity}`}
+                  >
+                    {severityLabels[selectedGroupingData.severity]}
+                  </span>
+                </div>
+                <h2 id="grouping-detail-title">
+                  <TechnicalText text={selectedGroupingData.title} />
+                </h2>
+                <small>{selectedGroupingData.id}</small>
+              </div>
+              <div className="investigation-confidence">
+                <strong>{selectedGroupingData.confidence}</strong>
+                <span>confiança da correlação</span>
+                <small>
+                  Estimativa calculada a partir dos sinais que sustentam este
+                  agrupamento.
+                </small>
+              </div>
+            </header>
+
+            <div className="grouping-detail-content">
+              <div className="grouping-detail-overview">
+                <div>
+                  <span>Alcance</span>
+                  <strong>
+                    <TechnicalText text={selectedGroupingData.location} />
+                  </strong>
+                  <small>Escopo comum investigado</small>
+                </div>
+                <div>
+                  <span>Impacto estimado</span>
+                  <strong>
+                    {selectedGroupingData.affected.toLocaleString("pt-BR")} CPEs
+                  </strong>
+                  <small>Potencialmente afetadas</small>
+                </div>
+                <div>
+                  <span>Responsável</span>
+                  <strong>
+                    <TechnicalText text={selectedGroupingData.owner} />
+                  </strong>
+                  <small>{selectedGroupingData.origin}</small>
+                </div>
+                <div>
+                  <span>Chamado de origem</span>
+                  <strong>
+                    {selectedGroupingData.originTicketId ?? "Sem vínculo"}
+                  </strong>
+                  <small>Referência preservada no histórico</small>
+                </div>
+              </div>
+
+              <div className="grouping-detail-analysis">
+                <section>
+                  <span>Causa provável</span>
+                  <p>
+                    <TechnicalText text={selectedGroupingData.signal} />
+                  </p>
+                </section>
+                <section>
+                  <span>Orientação operacional</span>
+                  <ul className="grouping-action-list">
+                    {recommendedActionSteps(
+                      selectedGroupingData.recommendation,
+                    ).map((action) => (
+                      <li key={`${action.label}-${action.text}`}>
+                        <strong>{action.label}</strong>
+                        <p>
+                          <TechnicalText text={action.text} />
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              </div>
+
+              <section className="grouping-detail-evidence">
+                <div>
+                  <span>Evidências disponíveis</span>
+                  <p>
+                    Resumo dos sinais registrados para este agrupamento. As
+                    referências técnicas permanecem acessíveis sem expor dados
+                    brutos como conteúdo principal.
+                  </p>
+                </div>
+                {selectedGroupingData.evidence.length > 0 ? (
+                  <ul>
+                    {selectedGroupingData.evidence.map((item, index) => (
+                      <li key={`${selectedGroupingData.id}-${index}`}>
+                        <CheckCircle2 size={15} aria-hidden="true" />
+                        <div>
+                          <strong>
+                            {evidenceSourceLabel[item.source] ??
+                              "Evidência operacional"}
+                          </strong>
+                          <p>
+                            <TechnicalText text={item.summary} />
+                          </p>
+                          {item.reference && <small>{item.reference}</small>}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="grouping-detail-empty">
+                    Nenhuma evidência complementar foi registrada para este
+                    agrupamento.
+                  </p>
+                )}
+              </section>
+
+              <footer className="grouping-detail-actions">
+                <p>
+                  Encerrar remove o agrupamento das visões ativas do NOC e do
+                  N1, mantendo o histórico para auditoria.
+                </p>
+                <div>
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => setSelectedGroupingId("")}
+                    disabled={Boolean(closingGrouping)}
+                  >
+                    Fechar
+                  </button>
+                  <button
+                    type="button"
+                    className="close-grouping"
+                    onClick={() =>
+                      void closeOperationalGrouping(selectedGrouping)
+                    }
+                    disabled={closingGrouping === selectedGrouping.incident_id}
+                  >
+                    <CheckCircle2 size={15} aria-hidden="true" />
+                    <span>
+                      {closingGrouping === selectedGrouping.incident_id
+                        ? "Encerrando…"
+                        : "Encerrar agrupamento"}
+                    </span>
+                  </button>
+                </div>
+              </footer>
+            </div>
+          </section>
+        </div>
+      )}
 
       {modalOpen && (
         <div

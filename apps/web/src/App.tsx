@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   ArrowRight,
   Boxes,
-  BrainCircuit,
   CheckCircle2,
   CircleDollarSign,
   Clock3,
@@ -41,16 +40,11 @@ import { InventoryDirectory } from "./InventoryDirectory";
 import { TopologyMap } from "./TopologyMap";
 import { SupportTickets } from "./SupportTickets";
 import { DiagnosticsDirectory } from "./DiagnosticsDirectory";
-import { InvestigationReview } from "./InvestigationReview";
 import { NocOperations } from "./NocOperations";
 import { AgentConfiguration } from "./AgentConfiguration";
 import { N1AdvisorChat } from "./N1AdvisorChat";
 import { DynamicDashboard } from "./DynamicDashboard";
-import {
-  groupingAgentEnabled,
-  n1GuidanceEnabled,
-  useAgentPolicy,
-} from "./agentPolicy";
+import { n1GuidanceEnabled, useAgentPolicy } from "./agentPolicy";
 import {
   canAccessView,
   clearSession,
@@ -772,8 +766,6 @@ function OperationsApp({
   user: DemoUser;
   onLogout: () => void;
 }) {
-  const agentPolicy = useAgentPolicy();
-  const showGroupingAgent = groupingAgentEnabled(agentPolicy);
   const [view, setView] = useState<View>(() => defaultViewFor(user.role));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [supportCustomer, setSupportCustomer] = useState<string>();
@@ -895,17 +887,6 @@ function OperationsApp({
               Atendimento N1
             </button>
           )}
-          {showGroupingAgent && canAccessView(user.role, "investigations") && (
-            <button
-              className={view === "investigations" ? "active" : ""}
-              title="Fila de investigações do agente com aprovação humana obrigatória."
-              aria-current={view === "investigations" ? "page" : undefined}
-              onClick={() => navigate("investigations")}
-            >
-              <BrainCircuit size={17} />
-              Revisão IA
-            </button>
-          )}
           {canAccessView(user.role, "agent-config") && (
             <button
               className={view === "agent-config" ? "active" : ""}
@@ -1025,8 +1006,6 @@ function OperationsApp({
                 navigate("support");
               }}
             />
-          ) : view === "investigations" && showGroupingAgent ? (
-            <InvestigationReview />
           ) : view === "agent-config" ? (
             <AgentConfiguration />
           ) : view === "topology" ? (
