@@ -31,9 +31,17 @@ const inventorySorts = [
   "customer_id_desc",
   "serial_asc",
   "serial_desc",
+  "equipment_asc",
+  "equipment_desc",
+  "firmware_plan_asc",
+  "firmware_plan_desc",
   "installed_at_desc",
   "plan_mbps_desc",
   "plan_mbps_asc",
+  "topology_asc",
+  "topology_desc",
+  "status_asc",
+  "status_desc",
 ] as const;
 
 const inventoryItemSchema = {

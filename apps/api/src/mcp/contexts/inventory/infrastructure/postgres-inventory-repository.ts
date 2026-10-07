@@ -22,9 +22,23 @@ const inventorySorts: Record<string, string> = {
   customer_id_desc: "i.customer_id DESC, i.serial ASC",
   serial_asc: "i.serial ASC",
   serial_desc: "i.serial DESC",
+  equipment_asc:
+    "i.vendor ASC, i.model ASC, i.hw_revision ASC, i.customer_id ASC",
+  equipment_desc:
+    "i.vendor DESC, i.model DESC, i.hw_revision DESC, i.customer_id ASC",
+  firmware_plan_asc:
+    "i.software_version ASC, i.plan_mbps ASC, i.customer_id ASC",
+  firmware_plan_desc:
+    "i.software_version DESC, i.plan_mbps DESC, i.customer_id ASC",
   installed_at_desc: "i.installed_at DESC, i.serial ASC",
   plan_mbps_desc: "i.plan_mbps DESC, i.serial ASC",
   plan_mbps_asc: "i.plan_mbps ASC, i.serial ASC",
+  topology_asc:
+    "i.olt ASC, i.pon_port ASC, i.cto ASC, i.customer_id ASC, i.serial ASC",
+  topology_desc:
+    "i.olt DESC, i.pon_port DESC, i.cto DESC, i.customer_id ASC, i.serial ASC",
+  status_asc: "i.status ASC, i.customer_id ASC, i.serial ASC",
+  status_desc: "i.status DESC, i.customer_id ASC, i.serial ASC",
 };
 
 export class PostgresInventoryRepository implements InventoryRepository {

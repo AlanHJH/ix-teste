@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from "@nestjs/common";
+import { BadRequestException, Controller, Get, Query } from "@nestjs/common";
 import { ApiQuery, ApiTags } from "@nestjs/swagger";
 import {
   DiagnosticsService,
@@ -24,6 +24,10 @@ const diagnosticFilterKinds = new Set<DiagnosticFilterKind>([
   "state",
   "requestedBy",
   "diagnostic",
+  "olt",
+  "pon",
+  "cto",
+  "testServer",
 ]);
 
 export function parseDiagnosticFilters(
@@ -82,7 +86,19 @@ export class DiagnosticsController {
     dashboardResource: true,
   })
   @ApiPagination({
-    sorts: ["ts_desc", "ts_asc", "serial_asc", "download_mbps_desc"],
+    sorts: [
+      "ts_desc",
+      "ts_asc",
+      "serial_asc",
+      "serial_desc",
+      "state_asc",
+      "state_desc",
+      "download_mbps_desc",
+      "download_mbps_asc",
+      "olt_asc",
+      "olt_desc",
+      "failures_first",
+    ],
     defaultSort: "ts_desc",
   })
   @ApiQuery({ name: "q", required: false, description: "Busca textual geral." })
@@ -110,9 +126,13 @@ export class DiagnosticsController {
   @ApiQuery({
     name: "from",
     required: false,
-    description: "Início em ISO 8601.",
+    description: "Data inicial inclusiva no formato YYYY-MM-DD ou ISO 8601.",
   })
-  @ApiQuery({ name: "to", required: false, description: "Fim em ISO 8601." })
+  @ApiQuery({
+    name: "to",
+    required: false,
+    description: "Data final inclusiva no formato YYYY-MM-DD ou ISO 8601.",
+  })
   @ApiQuery({
     name: "filter",
     required: false,
@@ -122,7 +142,7 @@ export class DiagnosticsController {
     schema: {
       type: "array",
       items: { type: "string" },
-      example: ["state:Completed", "requestedBy:NOC"],
+      example: ["state:Completed", "olt:OLT-2"],
     },
   })
   @ApiInvalidRequest("Filtro ou paginação inválida.")
@@ -143,7 +163,19 @@ export class DiagnosticsController {
   ) {
     const pagination = parsePageQuery(page, pageSize, sort, {
       defaultSort: "ts_desc",
-      allowedSorts: ["ts_desc", "ts_asc", "serial_asc", "download_mbps_desc"],
+      allowedSorts: [
+        "ts_desc",
+        "ts_asc",
+        "serial_asc",
+        "serial_desc",
+        "state_asc",
+        "state_desc",
+        "download_mbps_desc",
+        "download_mbps_asc",
+        "olt_asc",
+        "olt_desc",
+        "failures_first",
+      ],
     });
     return this.diagnostics.list({
       query,
@@ -162,7 +194,7 @@ export class DiagnosticsController {
   @ApiRead({
     summary: "Listar opções para filtros facetados dos diagnósticos",
     description:
-      "Sugere seriais, clientes, fabricantes, modelos, estados, solicitantes e tipos para o autocomplete de múltipla escolha da tela de Diagnósticos.",
+      "Sugere seriais, clientes, fabricantes, modelos, estados, solicitantes, tipos, servidor de teste e topologia para o autocomplete de múltipla escolha da tela de Diagnósticos.",
     responseDescription: "Página de opções de filtro com contagens.",
     schema: apiPageSchema(
       {
@@ -186,13 +218,24 @@ export class DiagnosticsController {
     maximumPageSize: 50,
   })
   @ApiQuery({ name: "q", required: false, description: "Texto digitado." })
+  @ApiQuery({
+    name: "kind",
+    required: false,
+    description:
+      "Restringe as sugestões a uma coluna específica da tabela, preservando o autocomplete de múltipla escolha.",
+    enum: [...diagnosticFilterKinds],
+  })
   @Get("filter-options")
   filterOptions(
     @Query("q") query = "",
+    @Query("kind") kind = "",
     @Query("page") page = "1",
     @Query("pageSize") pageSize = "20",
     @Query("sort") sort = "relevance",
   ) {
+    if (kind && !diagnosticFilterKinds.has(kind as DiagnosticFilterKind)) {
+      throw new BadRequestException("Tipo de filtro de diagnóstico inválido");
+    }
     const pagination = parsePageQuery(page, pageSize, sort, {
       defaultPageSize: 20,
       maximumPageSize: 50,
@@ -204,6 +247,7 @@ export class DiagnosticsController {
       pagination.page,
       pagination.pageSize,
       pagination.sort,
+      kind as DiagnosticFilterKind | "",
     );
   }
 }

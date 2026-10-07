@@ -1,4 +1,6 @@
-import { TicketCheck } from "lucide-react";
+import { useState } from "react";
+import { CheckCircle2, Play, TicketCheck } from "lucide-react";
+import { api } from "./api";
 import { EntityDetailModal } from "./EntityDetailModal";
 import type { EntityDetailItem } from "./EntityDetailModal";
 import type { SupportTicket } from "./types";
@@ -26,11 +28,17 @@ function formatDateTime(value: string | null) {
 
 export function TicketDetailModal({
   ticket,
+  canManageNoc = false,
+  onNocStatusChanged,
   onClose,
 }: {
   ticket: SupportTicket;
+  canManageNoc?: boolean;
+  onNocStatusChanged?: () => void | Promise<void>;
   onClose: () => void;
 }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const location =
     ticket.neighborhood && ticket.city
       ? `${ticket.neighborhood} · ${ticket.city}`
@@ -71,6 +79,32 @@ export function TicketDetailModal({
     { label: "Resolução registrada", value: ticket.resolution, wide: true },
   ];
 
+  async function updateNocStatus(status: "in_progress" | "closed") {
+    if (
+      status === "closed" &&
+      !window.confirm(
+        `Encerrar a análise do ticket ${ticket.ticket_id}? O histórico será preservado.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await api.updateNocTicketStatus(ticket.ticket_id, status);
+      await onNocStatusChanged?.();
+      onClose();
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível atualizar o ticket.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <EntityDetailModal
       variant="ticket"
@@ -81,6 +115,43 @@ export function TicketDetailModal({
       details={details}
       note="Os dados exibidos correspondem ao registro completo disponível para este ticket."
       onClose={onClose}
-    />
+    >
+      {canManageNoc &&
+        ["pending", "in_progress"].includes(ticket.noc_status) && (
+          <div className="entity-modal-children ticket-noc-actions">
+            <div>
+              <span>Operação do NOC</span>
+              <p>
+                {ticket.noc_status === "pending"
+                  ? "Assuma este ticket para registrar que a investigação começou."
+                  : "Encerre a análise quando o atendimento individual estiver concluído."}
+              </p>
+              {error && (
+                <small className="ticket-noc-action-error">{error}</small>
+              )}
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void updateNocStatus(
+                  ticket.noc_status === "pending" ? "in_progress" : "closed",
+                )
+              }
+            >
+              {ticket.noc_status === "pending" ? (
+                <Play size={16} aria-hidden="true" />
+              ) : (
+                <CheckCircle2 size={16} aria-hidden="true" />
+              )}
+              {busy
+                ? "Atualizando…"
+                : ticket.noc_status === "pending"
+                  ? "Iniciar análise"
+                  : "Encerrar análise"}
+            </button>
+          </div>
+        )}
+    </EntityDetailModal>
   );
 }

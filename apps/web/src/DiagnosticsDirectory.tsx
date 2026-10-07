@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -6,14 +6,23 @@ import {
   ChevronLeft,
   ChevronRight,
   Gauge,
-  ServerCog,
   Wifi,
 } from "lucide-react";
 import { api } from "./api";
+import { DateRangeFilter, type DateRange } from "./DateRangeFilter";
 import { DiagnosticFilterSelect } from "./DiagnosticFilterSelect";
 import { HelpTooltip } from "./HelpTooltip";
-import { providerGlossary, TechnicalText } from "./ProviderGlossary";
-import type { DiagnosticFilter, DiagnosticsPage } from "./types";
+import {
+  InventoryContextModal,
+  type InventoryContext,
+} from "./InventoryContextModal";
+import { providerGlossary } from "./ProviderGlossary";
+import { SortableHeader } from "./SortableHeader";
+import type {
+  DiagnosticFilter,
+  DiagnosticsPage,
+  DiagnosticSort,
+} from "./types";
 
 const number = new Intl.NumberFormat("pt-BR");
 
@@ -59,25 +68,26 @@ function Metric({
   );
 }
 
-export function DiagnosticsDirectory({
-  onOpenSupport,
-}: {
-  onOpenSupport: (customerId: string) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
+export function DiagnosticsDirectory() {
   const [filters, setFilters] = useState<DiagnosticFilter[]>([]);
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<DiagnosticSort>("ts_desc");
+  const [range, setRange] = useState<DateRange>({ from: "", to: "" });
   const [result, setResult] = useState<DiagnosticsPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [contextModal, setContextModal] = useState<InventoryContext | null>(
+    null,
+  );
+  const [equipmentLoading, setEquipmentLoading] = useState("");
+  const equipmentRequest = useRef(0);
 
   useEffect(() => {
     let canceled = false;
     setLoading(true);
     setError("");
     api
-      .diagnostics(submittedQuery, page, filters)
+      .diagnostics("", page, filters, sort, range)
       .then((response) => {
         if (!canceled) setResult(response);
       })
@@ -96,34 +106,39 @@ export function DiagnosticsDirectory({
     return () => {
       canceled = true;
     };
-  }, [submittedQuery, page, filters]);
+  }, [page, filters, sort, range]);
+
+  async function openEquipment(serial: string) {
+    const request = ++equipmentRequest.current;
+    setEquipmentLoading(serial);
+    setError("");
+    try {
+      const inventory = await api.inventory("", 1, "all", [
+        { kind: "serial", value: serial, label: serial, detail: "CPE" },
+      ]);
+      if (request !== equipmentRequest.current) return;
+      const item = inventory.data[0];
+      if (!item) {
+        setError(`A CPE ${serial} não foi localizada no inventário.`);
+        return;
+      }
+      setContextModal({ kind: "customer", item });
+    } catch (reason) {
+      if (request !== equipmentRequest.current) return;
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível carregar os detalhes da CPE.",
+      );
+    } finally {
+      if (request === equipmentRequest.current) setEquipmentLoading("");
+    }
+  }
 
   const totalPages = result ? Math.max(1, result.totalPages) : 1;
 
   return (
     <section className="diagnostics-page">
-      <section className="diagnostics-hero">
-        <div>
-          <span className="section-label">
-            TR-143 · diagnostics.csv
-            <HelpTooltip
-              term="TR-143"
-              description={providerGlossary.tr143.description}
-            />
-          </span>
-          <h1>Diagnósticos de CPE.</h1>
-          <p>
-            Consulte as medições de download e upload executadas no equipamento,
-            diferenciando testes concluídos de <TechnicalText text="timeout" />{" "}
-            e ausência de resposta.
-          </p>
-        </div>
-        <div className="diagnostics-source">
-          <ServerCog size={20} />
-          <span>Testes pela CPE</span>
-        </div>
-      </section>
-
       {result && (
         <section
           className="metrics-grid diagnostics-metrics"
@@ -191,13 +206,16 @@ export function DiagnosticsDirectory({
             filters={filters}
             onChange={(nextFilters) => {
               setFilters(nextFilters);
-              setSubmittedQuery("");
               setPage(1);
             }}
-            query={query}
-            onQueryChange={setQuery}
-            onFreeSearch={(nextQuery) => {
-              setSubmittedQuery(nextQuery);
+          />
+        </div>
+
+        <div className="directory-advanced-controls">
+          <DateRangeFilter
+            value={range}
+            onChange={(nextRange) => {
+              setRange(nextRange);
               setPage(1);
             }}
           />
@@ -209,30 +227,71 @@ export function DiagnosticsDirectory({
           <table className="diagnostics-table">
             <thead>
               <tr>
-                <th>Execução</th>
-                <th>
-                  CPE e cliente
+                <SortableHeader
+                  label="Execução"
+                  ascending="ts_asc"
+                  descending="ts_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                />
+                <SortableHeader
+                  label="CPE e cliente"
+                  ascending="serial_asc"
+                  descending="serial_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                >
                   <HelpTooltip
                     term="CPE"
                     description={`${providerGlossary.cpe.description} ${providerGlossary.serial.description}`}
                   />
-                </th>
-                <th>Resultado</th>
-                <th>
-                  Velocidade medida
+                </SortableHeader>
+                <SortableHeader
+                  label="Resultado"
+                  ascending="state_asc"
+                  descending="state_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                />
+                <SortableHeader
+                  label="Velocidade medida"
+                  ascending="download_mbps_asc"
+                  descending="download_mbps_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                >
                   <HelpTooltip
                     term="Download e upload"
                     description={`${providerGlossary.tr143.description} ${providerGlossary.mbps.description}`}
                   />
-                </th>
-                <th>
-                  Rede
+                </SortableHeader>
+                <SortableHeader
+                  label="Rede"
+                  ascending="olt_asc"
+                  descending="olt_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                >
                   <HelpTooltip
                     term="OLT, PON e CTO"
                     description={`${providerGlossary.olt.description} ${providerGlossary.pon.description} ${providerGlossary.cto.description}`}
                   />
-                </th>
-                <th aria-label="Abrir atendimento" />
+                </SortableHeader>
               </tr>
             </thead>
             <tbody>
@@ -243,21 +302,23 @@ export function DiagnosticsDirectory({
                     <small>{item.requested_by}</small>
                   </td>
                   <td>
-                    <code>{item.serial}</code>
-                    <strong>
-                      {item.vendor && item.model
-                        ? `${item.vendor} ${item.model}`
-                        : "Equipamento fora do inventário"}
-                    </strong>
-                    {item.customer_id && (
-                      <button
-                        type="button"
-                        className="diagnostic-customer"
-                        onClick={() => onOpenSupport(item.customer_id ?? "")}
-                      >
-                        {item.customer_id}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="diagnostic-equipment-action"
+                      onClick={() => void openEquipment(item.serial)}
+                      disabled={equipmentLoading === item.serial}
+                      title="Ver todos os detalhes da CPE e do cliente"
+                    >
+                      <code>{item.serial}</code>
+                      <strong>
+                        {equipmentLoading === item.serial
+                          ? "Carregando…"
+                          : item.vendor && item.model
+                            ? `${item.vendor} ${item.model}`
+                            : "Equipamento fora do inventário"}
+                      </strong>
+                      {item.customer_id && <span>{item.customer_id}</span>}
+                    </button>
                   </td>
                   <td>
                     <span
@@ -291,18 +352,6 @@ export function DiagnosticsDirectory({
                         item.test_server ??
                         "Sem topologia associada"}
                     </small>
-                  </td>
-                  <td>
-                    {item.customer_id && (
-                      <button
-                        type="button"
-                        className="diagnostic-open-support"
-                        title="Abre o roteiro do atendimento N1 para este cliente."
-                        onClick={() => onOpenSupport(item.customer_id ?? "")}
-                      >
-                        Abrir no N1
-                      </button>
-                    )}
                   </td>
                 </tr>
               ))}
@@ -338,6 +387,15 @@ export function DiagnosticsDirectory({
           </footer>
         )}
       </section>
+      {contextModal && (
+        <InventoryContextModal
+          context={contextModal}
+          canOpenSupport={false}
+          showSupportAction={false}
+          onOpenSupport={() => undefined}
+          onClose={() => setContextModal(null)}
+        />
+      )}
     </section>
   );
 }

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -39,6 +40,12 @@ const ticketFilterKinds = new Set<TicketFilterKind>([
   "category",
   "resolution",
   "channel",
+  "nocStatus",
+  "source",
+  "openedBy",
+  "olt",
+  "pon",
+  "cto",
 ]);
 
 export function parseTicketFilters(
@@ -143,6 +150,13 @@ export class TicketsController {
       "opened_at_asc",
       "customer_id_asc",
       "customer_id_desc",
+      "category_asc",
+      "category_desc",
+      "resolution_asc",
+      "resolution_desc",
+      "handling_minutes_desc",
+      "handling_minutes_asc",
+      "noc_priority_desc",
     ],
     defaultSort: "opened_at_desc",
   })
@@ -170,9 +184,13 @@ export class TicketsController {
   @ApiQuery({
     name: "from",
     required: false,
-    description: "Início em ISO 8601.",
+    description: "Data inicial inclusiva no formato YYYY-MM-DD ou ISO 8601.",
   })
-  @ApiQuery({ name: "to", required: false, description: "Fim em ISO 8601." })
+  @ApiQuery({
+    name: "to",
+    required: false,
+    description: "Data final inclusiva no formato YYYY-MM-DD ou ISO 8601.",
+  })
   @ApiQuery({
     name: "filter",
     required: false,
@@ -182,7 +200,7 @@ export class TicketsController {
     schema: {
       type: "array",
       items: { type: "string" },
-      example: ["category:Lentidão", "channel:WhatsApp"],
+      example: ["nocStatus:pending", "olt:OLT-2"],
     },
   })
   @ApiInvalidRequest("Filtro ou paginação inválida.")
@@ -207,6 +225,13 @@ export class TicketsController {
         "opened_at_asc",
         "customer_id_asc",
         "customer_id_desc",
+        "category_asc",
+        "category_desc",
+        "resolution_asc",
+        "resolution_desc",
+        "handling_minutes_desc",
+        "handling_minutes_asc",
+        "noc_priority_desc",
       ],
     });
     return this.tickets.list({
@@ -225,7 +250,7 @@ export class TicketsController {
   @ApiRead({
     summary: "Listar opções para filtros facetados dos chamados",
     description:
-      "Sugere identificadores, clientes, categorias, resoluções e canais para o autocomplete de múltipla escolha da tela de Tickets.",
+      "Sugere identificadores, clientes, categorias, resoluções, situação NOC, origem, responsável e topologia para o autocomplete de múltipla escolha da tela de Tickets.",
     responseDescription: "Página de opções de filtro com contagens.",
     schema: apiPageSchema(
       {
@@ -249,13 +274,24 @@ export class TicketsController {
     maximumPageSize: 50,
   })
   @ApiQuery({ name: "q", required: false, description: "Texto digitado." })
+  @ApiQuery({
+    name: "kind",
+    required: false,
+    description:
+      "Restringe as sugestões a uma coluna específica da tabela, preservando o autocomplete de múltipla escolha.",
+    enum: [...ticketFilterKinds],
+  })
   @Get("filter-options")
   filterOptions(
     @Query("q") query = "",
+    @Query("kind") kind = "",
     @Query("page") page = "1",
     @Query("pageSize") pageSize = "20",
     @Query("sort") sort = "relevance",
   ) {
+    if (kind && !ticketFilterKinds.has(kind as TicketFilterKind)) {
+      throw new BadRequestException("Tipo de filtro de ticket inválido");
+    }
     const pagination = parsePageQuery(page, pageSize, sort, {
       defaultPageSize: 20,
       maximumPageSize: 50,
@@ -267,6 +303,7 @@ export class TicketsController {
       pagination.page,
       pagination.pageSize,
       pagination.sort,
+      kind as TicketFilterKind | "",
     );
   }
 

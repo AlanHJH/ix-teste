@@ -9,11 +9,15 @@ describe("parseDiagnosticFilters", () => {
         "state:Completed",
         "state:Error_Internal",
         "requestedBy:NOC",
+        "olt:OLT-2",
+        "testServer:speed.ondaluz.net.br",
       ]),
       [
         { kind: "state", value: "Completed" },
         { kind: "state", value: "Error_Internal" },
         { kind: "requestedBy", value: "NOC" },
+        { kind: "olt", value: "OLT-2" },
+        { kind: "testServer", value: "speed.ondaluz.net.br" },
       ],
     );
   });

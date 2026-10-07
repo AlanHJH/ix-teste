@@ -10,11 +10,13 @@ import { NetworkEntityModal } from "./NetworkEntityModal";
 import type { NetworkEntity } from "./NetworkEntityModal";
 import { InventoryFilterSelect } from "./InventoryFilterSelect";
 import { providerGlossary, TechnicalText } from "./ProviderGlossary";
+import { SortableHeader } from "./SortableHeader";
 import type {
   EquipmentPath,
   InventoryFilter,
   InventoryPage,
   InventoryRecord,
+  InventorySort,
   TopologySnapshot,
 } from "./types";
 
@@ -38,6 +40,7 @@ export function InventoryDirectory({
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [status, setStatus] = useState<InventoryStatus>("active");
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<InventorySort>("customer_id_asc");
   const [data, setData] = useState<InventoryPage | null>(null);
   const [topology, setTopology] = useState<TopologySnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,7 +54,7 @@ export function InventoryDirectory({
 
   useEffect(() => {
     void load();
-  }, [submittedQuery, page, status, filters]);
+  }, [submittedQuery, page, status, filters, sort]);
 
   useEffect(() => {
     api
@@ -70,7 +73,7 @@ export function InventoryDirectory({
     setLoading(true);
     setError("");
     try {
-      setData(await api.inventory(submittedQuery, page, status, filters));
+      setData(await api.inventory(submittedQuery, page, status, filters, sort));
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -303,23 +306,56 @@ export function InventoryDirectory({
           <table className="inventory-table">
             <thead>
               <tr>
-                <th>Cliente</th>
-                <th>
-                  Serial da CPE
+                <SortableHeader
+                  label="Cliente"
+                  ascending="customer_id_asc"
+                  descending="customer_id_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                />
+                <SortableHeader
+                  label="Serial da CPE"
+                  ascending="serial_asc"
+                  descending="serial_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                >
                   <HelpTooltip
                     term="CPE e serial"
                     description={`${providerGlossary.cpe.description} ${providerGlossary.serial.description}`}
                   />
-                </th>
-                <th>
-                  Equipamento
+                </SortableHeader>
+                <SortableHeader
+                  label="Equipamento"
+                  ascending="equipment_asc"
+                  descending="equipment_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                >
                   <HelpTooltip
                     term="Revisão de hardware"
                     description={providerGlossary.hardware.description}
                   />
-                </th>
-                <th>
-                  Firmware / plano
+                </SortableHeader>
+                <SortableHeader
+                  label="Firmware / plano"
+                  ascending="firmware_plan_asc"
+                  descending="firmware_plan_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                >
                   <HelpTooltip
                     term="Firmware"
                     description={providerGlossary.firmware.description}
@@ -328,15 +364,32 @@ export function InventoryDirectory({
                     term="Plano"
                     description={`Velocidade contratada pelo cliente. ${providerGlossary.mbps.description}`}
                   />
-                </th>
-                <th>
-                  Topologia
+                </SortableHeader>
+                <SortableHeader
+                  label="Topologia"
+                  ascending="topology_asc"
+                  descending="topology_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                >
                   <HelpTooltip
                     term="OLT, PON e CTO"
                     description={`${providerGlossary.olt.description} ${providerGlossary.pon.description} ${providerGlossary.cto.description}`}
                   />
-                </th>
-                <th>Situação</th>
+                </SortableHeader>
+                <SortableHeader
+                  label="Situação"
+                  ascending="status_asc"
+                  descending="status_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                />
               </tr>
             </thead>
             <tbody>

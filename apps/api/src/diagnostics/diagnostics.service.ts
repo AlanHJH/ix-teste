@@ -52,7 +52,11 @@ export type DiagnosticFilterKind =
   | "model"
   | "state"
   | "requestedBy"
-  | "diagnostic";
+  | "diagnostic"
+  | "olt"
+  | "pon"
+  | "cto"
+  | "testServer";
 
 export type DiagnosticFilter = {
   kind: DiagnosticFilterKind;
@@ -93,7 +97,11 @@ export class DiagnosticsService {
       AND ($5 = '' OR i.customer_id = $5)
       AND ($6 = '' OR d.diagnostic = $6)
       AND ($7 = '' OR d.ts >= NULLIF($7, '')::timestamptz)
-      AND ($8 = '' OR d.ts <= NULLIF($8, '')::timestamptz)`,
+      AND ($8 = '' OR d.ts < CASE
+        WHEN $8 ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+          THEN NULLIF($8, '')::date + INTERVAL '1 day'
+        ELSE NULLIF($8, '')::timestamptz + INTERVAL '1 microsecond'
+      END)`,
     ];
     const columns: Record<DiagnosticFilterKind, string> = {
       serial: "d.serial",
@@ -103,6 +111,10 @@ export class DiagnosticsService {
       state: "d.state",
       requestedBy: "d.requested_by",
       diagnostic: "d.diagnostic",
+      olt: "i.olt",
+      pon: "i.pon_port",
+      cto: "i.cto",
+      testServer: "d.test_server",
     };
     const groupedFilters = new Map<DiagnosticFilterKind, string[]>();
     for (const filter of input.filters) {
@@ -121,7 +133,17 @@ export class DiagnosticsService {
       ts_desc: "d.ts DESC, d.serial ASC",
       ts_asc: "d.ts ASC, d.serial ASC",
       serial_asc: "d.serial ASC, d.ts DESC",
+      serial_desc: "d.serial DESC, d.ts DESC",
+      state_asc: "d.state ASC, d.ts DESC, d.serial ASC",
+      state_desc: "d.state DESC, d.ts DESC, d.serial ASC",
       download_mbps_desc: "d.download_mbps DESC NULLS LAST, d.ts DESC",
+      download_mbps_asc: "d.download_mbps ASC NULLS LAST, d.ts DESC",
+      olt_asc:
+        "i.olt ASC NULLS LAST, i.pon_port ASC NULLS LAST, i.cto ASC NULLS LAST, d.ts DESC",
+      olt_desc:
+        "i.olt DESC NULLS LAST, i.pon_port DESC NULLS LAST, i.cto DESC NULLS LAST, d.ts DESC",
+      failures_first:
+        "CASE WHEN d.state = 'Completed' THEN 1 ELSE 0 END, d.ts DESC, d.serial ASC",
     };
 
     const [summaryResult, itemsResult, optionsResult] = await Promise.all([
@@ -174,6 +196,7 @@ export class DiagnosticsService {
     page: number,
     pageSize: number,
     sort: string,
+    kind: DiagnosticFilterKind | "" = "",
   ) {
     const search = query.trim().slice(0, 120);
     const result = await this.database.query<{
@@ -186,7 +209,8 @@ export class DiagnosticsService {
     }>(
       `WITH base AS (
          SELECT d.serial, d.requested_by, d.diagnostic, d.state,
-           i.customer_id, i.vendor, i.model
+           d.test_server, i.customer_id, i.vendor, i.model, i.olt,
+           i.pon_port AS pon, i.cto
          FROM diagnostics d
          LEFT JOIN inventory i USING(serial)
        ), options AS (
@@ -212,12 +236,25 @@ export class DiagnosticsService {
          UNION ALL
          SELECT 'diagnostic', diagnostic, diagnostic, 'Tipo de diagnóstico', count(*)::int
            FROM base GROUP BY diagnostic
+         UNION ALL
+         SELECT 'olt', olt, olt, 'OLT', count(*)::int
+           FROM base WHERE olt IS NOT NULL GROUP BY olt
+         UNION ALL
+         SELECT 'pon', pon, pon, 'Porta PON', count(*)::int
+           FROM base WHERE pon IS NOT NULL GROUP BY pon
+         UNION ALL
+         SELECT 'cto', cto, cto, 'CTO', count(*)::int
+           FROM base WHERE cto IS NOT NULL GROUP BY cto
+         UNION ALL
+         SELECT 'testServer', test_server, test_server, 'Servidor de teste', count(*)::int
+           FROM base WHERE test_server IS NOT NULL GROUP BY test_server
        )
        SELECT kind, value, label, detail, count,
          count(*) OVER()::int AS total_items
        FROM options
-       WHERE ($1 = '' AND kind IN ('state', 'requestedBy', 'diagnostic'))
-          OR ($1 <> '' AND (value ILIKE $1 OR label ILIKE $1 OR detail ILIKE $1))
+       WHERE (($1 = '' AND kind IN ('state', 'requestedBy', 'diagnostic', 'olt'))
+          OR ($1 <> '' AND (value ILIKE $1 OR label ILIKE $1 OR detail ILIKE $1)))
+         AND ($4 = '' OR kind = $4)
        ORDER BY ${
          sort === "label_desc"
            ? "label DESC, kind ASC"
@@ -230,12 +267,14 @@ export class DiagnosticsService {
                  ELSE 3 END,
                CASE kind
                  WHEN 'state' THEN 0 WHEN 'requestedBy' THEN 1
-                 WHEN 'diagnostic' THEN 2 WHEN 'customer' THEN 3
-                 WHEN 'serial' THEN 4 WHEN 'vendor' THEN 5 ELSE 6 END,
+                 WHEN 'diagnostic' THEN 2 WHEN 'olt' THEN 3
+                 WHEN 'pon' THEN 4 WHEN 'cto' THEN 5
+                 WHEN 'customer' THEN 6 WHEN 'serial' THEN 7
+                 WHEN 'vendor' THEN 8 ELSE 9 END,
                count DESC, label ASC`
        }
        LIMIT $2 OFFSET $3`,
-      [search ? `%${search}%` : "", pageSize, (page - 1) * pageSize],
+      [search ? `%${search}%` : "", pageSize, (page - 1) * pageSize, kind],
     );
     const totalItems = result.rows[0]?.total_items ?? 0;
     return paginate(

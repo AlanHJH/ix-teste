@@ -52,7 +52,17 @@ type ListInput = {
 };
 
 export type TicketFilterKind =
-  "ticket" | "customer" | "category" | "resolution" | "channel";
+  | "ticket"
+  | "customer"
+  | "category"
+  | "resolution"
+  | "channel"
+  | "nocStatus"
+  | "source"
+  | "openedBy"
+  | "olt"
+  | "pon"
+  | "cto";
 
 export type TicketFilter = { kind: TicketFilterKind; value: string };
 
@@ -252,7 +262,7 @@ export class TicketsService {
 
   async updateNocStatus(ticketId: string, status: "in_progress" | "closed") {
     if (!new Set(["in_progress", "closed"]).has(status)) {
-      throw new BadRequestException("Movimentação do Kanban inválida.");
+      throw new BadRequestException("Transição de estado do NOC inválida.");
     }
     const closing = status === "closed";
     const result = await this.database.query<TicketRow>(
@@ -308,7 +318,11 @@ export class TicketsService {
       AND ($4 = '' OR t.channel = $4)
       AND ($5 = '' OR t.customer_id = $5)
       AND ($6 = '' OR t.opened_at >= NULLIF($6, '')::timestamptz)
-      AND ($7 = '' OR t.opened_at <= NULLIF($7, '')::timestamptz)`,
+      AND ($7 = '' OR t.opened_at < CASE
+        WHEN $7 ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+          THEN NULLIF($7, '')::date + INTERVAL '1 day'
+        ELSE NULLIF($7, '')::timestamptz + INTERVAL '1 microsecond'
+      END)`,
     ];
     const columns: Record<TicketFilterKind, string> = {
       ticket: "t.ticket_id",
@@ -316,6 +330,12 @@ export class TicketsService {
       category: "t.category",
       resolution: "t.resolution",
       channel: "t.channel",
+      nocStatus: "t.noc_status",
+      source: "t.source",
+      openedBy: "t.opened_by",
+      olt: "equipment.olt",
+      pon: "equipment.pon_port",
+      cto: "equipment.cto",
     };
     const groupedFilters = new Map<TicketFilterKind, string[]>();
     for (const filter of input.filters) {
@@ -335,7 +355,26 @@ export class TicketsService {
       opened_at_asc: "t.opened_at ASC, t.ticket_id ASC",
       customer_id_asc: "t.customer_id ASC, t.opened_at DESC",
       customer_id_desc: "t.customer_id DESC, t.opened_at DESC",
+      category_asc: "t.category ASC, t.opened_at DESC, t.ticket_id ASC",
+      category_desc: "t.category DESC, t.opened_at DESC, t.ticket_id ASC",
+      resolution_asc: "t.resolution ASC, t.opened_at DESC, t.ticket_id ASC",
+      resolution_desc: "t.resolution DESC, t.opened_at DESC, t.ticket_id ASC",
+      handling_minutes_desc:
+        "coalesce(t.closed_at, now()) - t.opened_at DESC, t.ticket_id DESC",
+      handling_minutes_asc:
+        "coalesce(t.closed_at, now()) - t.opened_at ASC, t.ticket_id ASC",
+      noc_priority_desc:
+        "CASE t.noc_status WHEN 'pending' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END, t.opened_at ASC, t.ticket_id ASC",
     };
+
+    const inventoryJoin = `
+      LEFT JOIN LATERAL (
+        SELECT city, neighborhood, olt, pon_port, cto
+        FROM inventory
+        WHERE customer_id = t.customer_id AND status = 'active'
+        ORDER BY installed_at DESC
+        LIMIT 1
+      ) equipment ON true`;
 
     const [summaryResult, itemsResult, optionsResult] = await Promise.all([
       this.database.query<SummaryRow>(
@@ -347,6 +386,7 @@ export class TicketsService {
             count(*) FILTER (WHERE t.resolution = 'Visita técnica agendada')::int AS visits,
             round(avg(extract(epoch FROM (t.closed_at - t.opened_at)) / 60)::numeric, 1) AS avg_handling_minutes
           FROM tickets t
+          ${inventoryJoin}
           WHERE ${where}`,
         params,
       ),
@@ -359,13 +399,7 @@ export class TicketsService {
             equipment.city, equipment.neighborhood, equipment.olt,
             equipment.pon_port AS pon, equipment.cto
           FROM tickets t
-          LEFT JOIN LATERAL (
-            SELECT city, neighborhood, olt, pon_port, cto
-            FROM inventory
-            WHERE customer_id = t.customer_id AND status = 'active'
-            ORDER BY installed_at DESC
-            LIMIT 1
-          ) equipment ON true
+          ${inventoryJoin}
           WHERE ${where}
           ORDER BY ${orderBy[input.sort] ?? orderBy.opened_at_desc}
           LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -399,6 +433,7 @@ export class TicketsService {
     page: number,
     pageSize: number,
     sort: string,
+    kind: TicketFilterKind | "" = "",
   ) {
     const search = query.trim().slice(0, 120);
     const result = await this.database.query<{
@@ -409,28 +444,66 @@ export class TicketsService {
       count: number;
       total_items: number;
     }>(
-      `WITH options AS (
+      `WITH base AS (
+         SELECT t.ticket_id, t.customer_id, t.category, t.resolution, t.channel,
+           t.noc_status, t.source, t.opened_by, equipment.olt,
+           equipment.pon_port AS pon, equipment.cto
+         FROM tickets t
+         LEFT JOIN LATERAL (
+           SELECT olt, pon_port, cto
+           FROM inventory
+           WHERE customer_id = t.customer_id AND status = 'active'
+           ORDER BY installed_at DESC
+           LIMIT 1
+         ) equipment ON true
+       ), options AS (
          SELECT 'ticket'::text AS kind, ticket_id::text AS value,
            ticket_id::text AS label, min(category)::text AS detail,
-           count(*)::int AS count FROM tickets GROUP BY ticket_id
+           count(*)::int AS count FROM base GROUP BY ticket_id
          UNION ALL
          SELECT 'customer', customer_id, customer_id, 'Cliente', count(*)::int
-           FROM tickets GROUP BY customer_id
+           FROM base GROUP BY customer_id
          UNION ALL
          SELECT 'category', category, category, 'Categoria', count(*)::int
-           FROM tickets GROUP BY category
+           FROM base GROUP BY category
          UNION ALL
          SELECT 'resolution', resolution, resolution, 'Resolução', count(*)::int
-           FROM tickets GROUP BY resolution
+           FROM base GROUP BY resolution
          UNION ALL
          SELECT 'channel', channel, channel, 'Canal', count(*)::int
-           FROM tickets GROUP BY channel
+           FROM base GROUP BY channel
+         UNION ALL
+         SELECT 'nocStatus', noc_status,
+           CASE noc_status
+             WHEN 'pending' THEN 'Aguardando NOC'
+             WHEN 'in_progress' THEN 'Em análise pelo NOC'
+             WHEN 'linked' THEN 'Vinculado a agrupamento'
+             WHEN 'closed' THEN 'Encerrado pelo NOC'
+             ELSE 'Sem atribuição ao NOC' END,
+           'Situação NOC', count(*)::int FROM base GROUP BY noc_status
+         UNION ALL
+         SELECT 'source', source,
+           CASE source WHEN 'n1' THEN 'Aberto pelo N1' ELSE 'Histórico importado' END,
+           'Origem', count(*)::int FROM base GROUP BY source
+         UNION ALL
+         SELECT 'openedBy', opened_by, opened_by, 'Responsável pela abertura', count(*)::int
+           FROM base WHERE opened_by IS NOT NULL GROUP BY opened_by
+         UNION ALL
+         SELECT 'olt', olt, olt, 'OLT', count(*)::int
+           FROM base WHERE olt IS NOT NULL GROUP BY olt
+         UNION ALL
+         SELECT 'pon', pon, pon, 'Porta PON', count(*)::int
+           FROM base WHERE pon IS NOT NULL GROUP BY pon
+         UNION ALL
+         SELECT 'cto', cto, cto, 'CTO', count(*)::int
+           FROM base WHERE cto IS NOT NULL GROUP BY cto
        )
        SELECT kind, value, label, detail, count,
          count(*) OVER()::int AS total_items
        FROM options
-       WHERE ($1 = '' AND kind IN ('category', 'resolution', 'channel'))
-          OR ($1 <> '' AND (value ILIKE $1 OR label ILIKE $1))
+       WHERE (($1 = '' AND kind IN ('nocStatus', 'source', 'category', 'resolution', 'channel', 'olt'))
+          OR ($1 <> '' AND (value ILIKE $1 OR label ILIKE $1 OR detail ILIKE $1)))
+         AND ($4 = '' OR kind = $4)
        ORDER BY ${
          sort === "label_desc"
            ? "label DESC, kind ASC"
@@ -442,12 +515,15 @@ export class TicketsService {
                  WHEN label ILIKE $1 THEN 2
                  ELSE 3 END,
                CASE kind
-                 WHEN 'category' THEN 0 WHEN 'resolution' THEN 1
-                 WHEN 'channel' THEN 2 WHEN 'customer' THEN 3 ELSE 4 END,
+                 WHEN 'nocStatus' THEN 0 WHEN 'source' THEN 1
+                 WHEN 'category' THEN 2 WHEN 'resolution' THEN 3
+                 WHEN 'channel' THEN 4 WHEN 'olt' THEN 5
+                 WHEN 'pon' THEN 6 WHEN 'cto' THEN 7
+                 WHEN 'customer' THEN 8 ELSE 9 END,
                count DESC, label ASC`
        }
        LIMIT $2 OFFSET $3`,
-      [search ? `%${search}%` : "", pageSize, (page - 1) * pageSize],
+      [search ? `%${search}%` : "", pageSize, (page - 1) * pageSize, kind],
     );
     const totalItems = result.rows[0]?.total_items ?? 0;
     return paginate(

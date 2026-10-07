@@ -60,7 +60,7 @@ import {
   saveSession,
 } from "./auth";
 import type { AppView, DemoUser } from "./auth";
-import type { Overview, SupportProfile } from "./types";
+import type { Overview, SupportProfile, TicketFilter } from "./types";
 
 const number = new Intl.NumberFormat("pt-BR");
 const money = new Intl.NumberFormat("pt-BR", {
@@ -209,8 +209,19 @@ function ExecutiveDashboard({ overview }: { overview: Overview }) {
   );
 }
 
-function NocDashboard() {
-  return <NocOperations />;
+function NocDashboard({
+  nocTicketCount,
+  onOpenNocTickets,
+}: {
+  nocTicketCount: number;
+  onOpenNocTickets: () => void;
+}) {
+  return (
+    <NocOperations
+      nocTicketCount={nocTicketCount}
+      onOpenNocTickets={onOpenNocTickets}
+    />
+  );
 }
 
 const examples = [
@@ -767,6 +778,11 @@ function OperationsApp({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [supportCustomer, setSupportCustomer] = useState<string>();
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [nocTicketCount, setNocTicketCount] = useState(0);
+  const [ticketPreset, setTicketPreset] = useState<{
+    key: number;
+    filters: TicketFilter[];
+  } | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     api
@@ -776,6 +792,46 @@ function OperationsApp({
         setError(reason instanceof Error ? reason.message : "Erro ao carregar"),
       );
   }, []);
+
+  async function refreshNocTicketCount() {
+    if (!canAccessView(user.role, "noc")) return;
+    try {
+      const queue = await api.nocQueue();
+      setNocTicketCount(queue.totalItems);
+    } catch {
+      // A fila principal continua utilizável mesmo se o contador falhar.
+    }
+  }
+
+  useEffect(() => {
+    void refreshNocTicketCount();
+    const timer = window.setInterval(
+      () => void refreshNocTicketCount(),
+      10_000,
+    );
+    return () => window.clearInterval(timer);
+  }, [user.role]);
+
+  function openNocTickets() {
+    setTicketPreset({
+      key: Date.now(),
+      filters: [
+        {
+          kind: "nocStatus",
+          value: "pending",
+          label: "Aguardando NOC",
+          detail: "Situação NOC",
+        },
+        {
+          kind: "nocStatus",
+          value: "in_progress",
+          label: "Em análise pelo NOC",
+          detail: "Situação NOC",
+        },
+      ],
+    });
+    navigate("tickets");
+  }
   function navigate(nextView: View) {
     if (!canAccessView(user.role, nextView)) return;
     setView(nextView);
@@ -865,10 +921,21 @@ function OperationsApp({
             <button
               className={view === "tickets" ? "active" : ""}
               aria-current={view === "tickets" ? "page" : undefined}
-              onClick={() => navigate("tickets")}
+              onClick={() => {
+                setTicketPreset(null);
+                navigate("tickets");
+              }}
             >
               <TicketCheck size={17} />
               Tickets
+              {canAccessView(user.role, "noc") && nocTicketCount > 0 && (
+                <span
+                  className="sidebar-ticket-badge"
+                  aria-label={`${nocTicketCount} tickets atribuídos ao NOC`}
+                >
+                  {nocTicketCount > 99 ? "99+" : nocTicketCount}
+                </span>
+              )}
             </button>
           )}
           {canAccessView(user.role, "diagnostics") && (
@@ -966,18 +1033,16 @@ function OperationsApp({
             <TopologyMap />
           ) : view === "tickets" ? (
             <SupportTickets
+              canManageNoc={canAccessView(user.role, "noc")}
+              preset={ticketPreset}
+              onNocQueueChanged={refreshNocTicketCount}
               onOpenSupport={(customerId) => {
                 setSupportCustomer(customerId);
                 navigate("support");
               }}
             />
           ) : view === "diagnostics" ? (
-            <DiagnosticsDirectory
-              onOpenSupport={(customerId) => {
-                setSupportCustomer(customerId);
-                navigate("support");
-              }}
-            />
+            <DiagnosticsDirectory />
           ) : view === "support" ? (
             <SupportDesk initialCustomer={supportCustomer} />
           ) : error ? (
@@ -997,7 +1062,10 @@ function OperationsApp({
               fallback={<ExecutiveDashboard overview={overview} />}
             />
           ) : (
-            <NocDashboard />
+            <NocDashboard
+              nocTicketCount={nocTicketCount}
+              onOpenNocTickets={openNocTickets}
+            />
           )}
         </main>
         {view !== "topology" && (

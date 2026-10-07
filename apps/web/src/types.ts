@@ -270,6 +270,20 @@ export type InventoryPage = {
   totalPages: number;
 };
 
+export type InventorySort =
+  | "customer_id_asc"
+  | "customer_id_desc"
+  | "serial_asc"
+  | "serial_desc"
+  | "equipment_asc"
+  | "equipment_desc"
+  | "firmware_plan_asc"
+  | "firmware_plan_desc"
+  | "topology_asc"
+  | "topology_desc"
+  | "status_asc"
+  | "status_desc";
+
 export type InventoryFilterKind =
   | "customer"
   | "serial"
@@ -316,7 +330,30 @@ export type SupportTicket = {
 };
 
 export type TicketFilterKind =
-  "ticket" | "customer" | "category" | "resolution" | "channel";
+  | "ticket"
+  | "customer"
+  | "category"
+  | "resolution"
+  | "channel"
+  | "nocStatus"
+  | "source"
+  | "openedBy"
+  | "olt"
+  | "pon"
+  | "cto";
+
+export type TicketSort =
+  | "opened_at_desc"
+  | "opened_at_asc"
+  | "customer_id_asc"
+  | "customer_id_desc"
+  | "category_asc"
+  | "category_desc"
+  | "resolution_asc"
+  | "resolution_desc"
+  | "handling_minutes_desc"
+  | "handling_minutes_asc"
+  | "noc_priority_desc";
 
 export type TicketFilter = {
   kind: TicketFilterKind;
@@ -449,7 +486,24 @@ export type DiagnosticFilterKind =
   | "model"
   | "state"
   | "requestedBy"
-  | "diagnostic";
+  | "diagnostic"
+  | "olt"
+  | "pon"
+  | "cto"
+  | "testServer";
+
+export type DiagnosticSort =
+  | "ts_desc"
+  | "ts_asc"
+  | "serial_asc"
+  | "serial_desc"
+  | "state_asc"
+  | "state_desc"
+  | "download_mbps_desc"
+  | "download_mbps_asc"
+  | "olt_asc"
+  | "olt_desc"
+  | "failures_first";
 
 export type DiagnosticFilter = {
   kind: DiagnosticFilterKind;

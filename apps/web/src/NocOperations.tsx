@@ -4,9 +4,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Network,
-  Play,
   Plus,
-  RefreshCw,
   TicketCheck,
   X,
 } from "lucide-react";
@@ -17,10 +15,8 @@ import { groupingAgentEnabled, useAgentPolicy } from "./agentPolicy";
 import { providerGlossary, TechnicalText } from "./ProviderGlossary";
 import type {
   IncidentOptionType,
-  NocQueue,
   OperationalIncident,
   OperationalIncidentPage,
-  SupportTicket,
 } from "./types";
 
 type IncidentOption = { value: string; label: string };
@@ -79,133 +75,6 @@ const severityLabels = {
   medium: "Médio",
   low: "Baixo",
 };
-
-function formatDate(value: string) {
-  return new Date(value).toLocaleString("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-}
-
-function NocTicketCard({
-  ticket,
-  stage,
-  busy,
-  onStart,
-  onClose,
-  onCreateIncident,
-}: {
-  ticket: SupportTicket;
-  stage: "received" | "in_progress";
-  busy: boolean;
-  onStart: () => void;
-  onClose: () => void;
-  onCreateIncident: () => void;
-}) {
-  const inProgress = stage === "in_progress";
-  return (
-    <article
-      className={`incident-card high noc-escalated-card ${stage}`}
-      key={ticket.ticket_id}
-    >
-      <header>
-        <div className="incident-title">
-          <span className="scope-icon">
-            <TicketCheck size={19} />
-          </span>
-          <div>
-            <div className="eyebrow-row">
-              <span className="severity">
-                {inProgress ? "Em andamento" : "Recebido"}
-              </span>
-              <span className="scope-label">
-                Chamado N1
-                <HelpTooltip
-                  term="Chamado escalado pelo N1"
-                  description="Atendimento individual encaminhado ao NOC. Ainda não é um incidente compartilhado."
-                />
-              </span>
-              <time>{formatDate(ticket.opened_at)}</time>
-            </div>
-            <h3>
-              <TechnicalText text={ticket.category} /> · {ticket.customer_id}
-            </h3>
-            <p>
-              {ticket.olt && ticket.pon
-                ? `${ticket.olt} · PON ${ticket.pon}${ticket.cto ? ` · ${ticket.cto}` : ""}`
-                : "Topologia não localizada"}
-            </p>
-          </div>
-        </div>
-        <div className="score">
-          <strong>N1</strong>
-          <span>origem</span>
-        </div>
-      </header>
-      <div className="incident-stats">
-        <div>
-          <strong>{ticket.customer_id}</strong>
-          <span>Cliente</span>
-        </div>
-        <div>
-          <strong>
-            {ticket.olt && ticket.pon
-              ? `${ticket.olt} / ${ticket.pon}`
-              : "Não localizada"}
-          </strong>
-          <span>
-            Escopo inicial
-            <HelpTooltip
-              term="Escopo inicial"
-              description="Topologia do cliente usada como ponto de partida. O NOC ainda deve confirmar a área real de impacto."
-            />
-          </span>
-        </div>
-        <div>
-          <strong>{ticket.opened_by ?? "Não informado"}</strong>
-          <span>Atendente responsável</span>
-        </div>
-      </div>
-      <div className="recommendation noc-ticket-report">
-        <AlertTriangle size={17} />
-        <p>
-          <strong>Relato recebido · {ticket.ticket_id}</strong>
-          {ticket.description}
-        </p>
-      </div>
-      {inProgress ? (
-        <div className="noc-ticket-actions">
-          <button
-            className="noc-escalated-action close-ticket"
-            disabled={busy}
-            onClick={onClose}
-            title="Encerra o chamado no NOC e o remove do Kanban, preservando o histórico."
-          >
-            <CheckCircle2 size={14} />
-            {busy ? "Encerrando…" : "Encerrar chamado"}
-          </button>
-          <button
-            className="noc-escalated-action"
-            disabled={busy}
-            onClick={onCreateIncident}
-          >
-            Criar agrupamento para este chamado
-            <ArrowRight size={14} />
-          </button>
-        </div>
-      ) : (
-        <button
-          className="noc-escalated-action"
-          disabled={busy}
-          onClick={onStart}
-        >
-          <Play size={14} />
-          {busy ? "Movendo…" : "Iniciar análise"}
-        </button>
-      )}
-    </article>
-  );
-}
 
 type GroupingCardData = {
   id: string;
@@ -369,10 +238,15 @@ function GroupingCard({
   );
 }
 
-export function NocOperations() {
+export function NocOperations({
+  nocTicketCount,
+  onOpenNocTickets,
+}: {
+  nocTicketCount: number;
+  onOpenNocTickets: () => void;
+}) {
   const agentPolicy = useAgentPolicy();
   const showGroupingAgent = groupingAgentEnabled(agentPolicy);
-  const [queue, setQueue] = useState<NocQueue | null>(null);
   const [incidents, setIncidents] = useState<OperationalIncidentPage | null>(
     null,
   );
@@ -385,16 +259,10 @@ export function NocOperations() {
   const [created, setCreated] = useState("");
   const [closedGrouping, setClosedGrouping] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [movingTicket, setMovingTicket] = useState("");
-  const [closingTicket, setClosingTicket] = useState("");
   const [closingGrouping, setClosingGrouping] = useState("");
   async function refresh() {
     try {
-      const [nextQueue, nextIncidents] = await Promise.all([
-        api.nocQueue(),
-        api.operationalIncidents(),
-      ]);
-      setQueue(nextQueue);
+      const nextIncidents = await api.operationalIncidents();
       setIncidents(nextIncidents);
       setError("");
     } catch (reason) {
@@ -536,62 +404,6 @@ export function NocOperations() {
     setForm((current) => ({ ...current, pon, cto: "" }));
   }
 
-  function useTicket(ticket: SupportTicket) {
-    setCreated("");
-    setForm((current) => ({
-      ...current,
-      title: `${ticket.category} com possível impacto compartilhado`,
-      scopeType: ticket.olt && ticket.pon ? "pon" : "customer",
-      identifier: ticket.customer_id,
-      olt: ticket.olt ?? "",
-      pon: ticket.pon ?? "",
-      cto: ticket.cto ?? "",
-      probableCause: ticket.description,
-      recommendedAction:
-        "Correlacionar telemetria e atuar no ponto comum confirmado.",
-      originTicketId: ticket.ticket_id,
-    }));
-    setError("");
-    setModalOpen(true);
-  }
-
-  async function startTicket(ticket: SupportTicket) {
-    setMovingTicket(ticket.ticket_id);
-    setError("");
-    try {
-      await api.updateNocTicketStatus(ticket.ticket_id, "in_progress");
-      await refresh();
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Falha ao mover o chamado",
-      );
-    } finally {
-      setMovingTicket("");
-    }
-  }
-
-  async function closeTicket(ticket: SupportTicket) {
-    const confirmed = window.confirm(
-      `Encerrar o chamado ${ticket.ticket_id}?\n\nEle sairá do Kanban do NOC e continuará disponível no histórico de tickets.`,
-    );
-    if (!confirmed) return;
-
-    setClosingTicket(ticket.ticket_id);
-    setError("");
-    try {
-      await api.updateNocTicketStatus(ticket.ticket_id, "closed");
-      await refresh();
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Falha ao encerrar o chamado",
-      );
-    } finally {
-      setClosingTicket("");
-    }
-  }
-
   function confirmGroupingClosure(title: string) {
     return window.confirm(
       `Encerrar o agrupamento “${title}”?\n\nEle deixará de aparecer para o NOC e para o atendente N1. O registro continuará preservado no histórico.`,
@@ -687,109 +499,8 @@ export function NocOperations() {
   const hasSelectedPon = catalogOptions.pon.some(
     (option) => option.value.toLowerCase() === form.pon.toLowerCase(),
   );
-  const receivedTickets =
-    queue?.data.filter((ticket) => ticket.noc_status === "pending") ?? [];
-  const inProgressTickets =
-    queue?.data.filter((ticket) => ticket.noc_status === "in_progress") ?? [];
-
   return (
     <>
-      <section className="noc-operations">
-        <header className="noc-operations-heading">
-          <div>
-            <span className="section-label">Operação humana</span>
-            <h2>Chamados escalados para o NOC</h2>
-            <p>
-              Atendimentos individuais recebidos do N1, separados entre os que
-              aguardam análise e os que já estão em andamento.
-            </p>
-          </div>
-          <div className="noc-heading-actions">
-            <button
-              className="noc-refresh"
-              aria-label="Atualizar chamados do NOC"
-              title="Atualizar chamados do NOC"
-              onClick={() => void refresh()}
-            >
-              <RefreshCw size={16} /> Atualizar
-            </button>
-          </div>
-        </header>
-
-        <div className="noc-kanban-board" aria-label="Fluxo de chamados do NOC">
-          <section className="noc-kanban-column received">
-            <header>
-              <div>
-                <span>1</span>
-                <div>
-                  <strong>Chamado recebido</strong>
-                  <small>Aguardando início da análise</small>
-                </div>
-              </div>
-              <b>{queue?.meta.summary.received ?? 0}</b>
-            </header>
-            <div className="noc-kanban-list">
-              {receivedTickets.map((ticket) => (
-                <NocTicketCard
-                  key={ticket.ticket_id}
-                  ticket={ticket}
-                  stage="received"
-                  busy={movingTicket === ticket.ticket_id}
-                  onStart={() => void startTicket(ticket)}
-                  onClose={() => undefined}
-                  onCreateIncident={() => useTicket(ticket)}
-                />
-              ))}
-              {queue && receivedTickets.length === 0 && (
-                <div className="noc-column-empty">
-                  <TicketCheck size={27} />
-                  <strong>Nenhum chamado recebido</strong>
-                  <span>Novos escalonamentos do N1 aparecerão aqui.</span>
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="noc-kanban-column in-progress">
-            <header>
-              <div>
-                <span>2</span>
-                <div>
-                  <strong>Chamado em andamento</strong>
-                  <small>Atendimentos em análise pelo NOC</small>
-                </div>
-              </div>
-              <b>{queue?.meta.summary.inProgress ?? 0}</b>
-            </header>
-            <div className="noc-kanban-list">
-              {inProgressTickets.map((ticket) => (
-                <NocTicketCard
-                  key={ticket.ticket_id}
-                  ticket={ticket}
-                  stage="in_progress"
-                  busy={closingTicket === ticket.ticket_id}
-                  onStart={() => undefined}
-                  onClose={() => void closeTicket(ticket)}
-                  onCreateIncident={() => useTicket(ticket)}
-                />
-              ))}
-              {queue && inProgressTickets.length === 0 && (
-                <div className="noc-column-empty">
-                  <TicketCheck size={27} />
-                  <strong>Nenhum chamado em andamento</strong>
-                  <span>Inicie a análise de um chamado recebido.</span>
-                </div>
-              )}
-            </div>
-          </section>
-        </div>
-
-        <p className="noc-kanban-note">
-          Ao criar um agrupamento, o chamado de origem é encerrado e o novo
-          agrupamento passa para a seção abaixo.
-        </p>
-      </section>
-
       <section className="incidents-section">
         <div className="section-heading">
           <div>
@@ -803,6 +514,19 @@ export function NocOperations() {
             <h2>Onde agir primeiro</h2>
           </div>
           <div className="grouping-heading-actions">
+            <button
+              type="button"
+              className="noc-ticket-counter"
+              onClick={onOpenNocTickets}
+              title="Abrir a fila de Tickets já filtrada para pendências do NOC"
+            >
+              <span aria-hidden="true" />
+              <strong>{nocTicketCount}</strong>
+              {nocTicketCount === 1
+                ? " ticket atribuído ao NOC"
+                : " tickets atribuídos ao NOC"}
+              <ArrowRight size={15} aria-hidden="true" />
+            </button>
             <span>{incidents?.totalItems ?? 0} grupos ativos</span>
             <button className="noc-open-incident" onClick={openCreateGrouping}>
               <Plus size={16} /> Criar agrupamento

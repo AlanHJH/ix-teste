@@ -229,33 +229,42 @@ describe("api client", () => {
       return { ok: true, json: async () => payload } as Response;
     }) as typeof fetch;
     try {
-      await api.tickets("", 2, [
-        {
-          kind: "category",
-          value: "Lentidão",
-          label: "Lentidão",
-          detail: "Categoria",
-        },
-        {
-          kind: "category",
-          value: "Sem conexão",
-          label: "Sem conexão",
-          detail: "Categoria",
-        },
-        {
-          kind: "channel",
-          value: "WhatsApp",
-          label: "WhatsApp",
-          detail: "Canal",
-        },
-      ]);
+      await api.tickets(
+        "",
+        2,
+        [
+          {
+            kind: "category",
+            value: "Lentidão",
+            label: "Lentidão",
+            detail: "Categoria",
+          },
+          {
+            kind: "category",
+            value: "Sem conexão",
+            label: "Sem conexão",
+            detail: "Categoria",
+          },
+          {
+            kind: "nocStatus",
+            value: "pending",
+            label: "Aguardando NOC",
+            detail: "Situação NOC",
+          },
+        ],
+        "noc_priority_desc",
+        { from: "2026-08-01", to: "2026-08-31" },
+      );
       const url = new URL(requestedPath, "http://localhost");
       assert.equal(url.pathname, "/api/tickets");
       assert.equal(url.searchParams.get("page"), "2");
+      assert.equal(url.searchParams.get("sort"), "noc_priority_desc");
+      assert.equal(url.searchParams.get("from"), "2026-08-01");
+      assert.equal(url.searchParams.get("to"), "2026-08-31");
       assert.deepEqual(url.searchParams.getAll("filter"), [
         "category:Lentidão",
         "category:Sem conexão",
-        "channel:WhatsApp",
+        "nocStatus:pending",
       ]);
     } finally {
       globalThis.fetch = originalFetch;
@@ -285,10 +294,14 @@ describe("api client", () => {
       return { ok: true, json: async () => payload } as Response;
     }) as typeof fetch;
     try {
-      assert.deepEqual(await api.ticketFilterOptions("C545"), payload.data);
+      assert.deepEqual(
+        await api.ticketFilterOptions("C545", "customer"),
+        payload.data,
+      );
       const url = new URL(requestedPath, "http://localhost");
       assert.equal(url.pathname, "/api/tickets/filter-options");
       assert.equal(url.searchParams.get("q"), "C545");
+      assert.equal(url.searchParams.get("kind"), "customer");
       assert.equal(url.searchParams.get("pageSize"), "20");
     } finally {
       globalThis.fetch = originalFetch;
@@ -310,26 +323,35 @@ describe("api client", () => {
       return { ok: true, json: async () => payload } as Response;
     }) as typeof fetch;
     try {
-      await api.diagnostics("", 3, [
-        {
-          kind: "state",
-          value: "Completed",
-          label: "Concluído",
-          detail: "Estado do teste",
-        },
-        {
-          kind: "requestedBy",
-          value: "NOC",
-          label: "NOC",
-          detail: "Solicitado por",
-        },
-      ]);
+      await api.diagnostics(
+        "",
+        3,
+        [
+          {
+            kind: "state",
+            value: "Completed",
+            label: "Concluído",
+            detail: "Estado do teste",
+          },
+          {
+            kind: "olt",
+            value: "OLT-2",
+            label: "OLT-2",
+            detail: "OLT",
+          },
+        ],
+        "failures_first",
+        { from: "2026-08-20", to: "2026-08-30" },
+      );
       const url = new URL(requestedPath, "http://localhost");
       assert.equal(url.pathname, "/api/diagnostics");
       assert.equal(url.searchParams.get("page"), "3");
+      assert.equal(url.searchParams.get("sort"), "failures_first");
+      assert.equal(url.searchParams.get("from"), "2026-08-20");
+      assert.equal(url.searchParams.get("to"), "2026-08-30");
       assert.deepEqual(url.searchParams.getAll("filter"), [
         "state:Completed",
-        "requestedBy:NOC",
+        "olt:OLT-2",
       ]);
     } finally {
       globalThis.fetch = originalFetch;
@@ -360,12 +382,13 @@ describe("api client", () => {
     }) as typeof fetch;
     try {
       assert.deepEqual(
-        await api.diagnosticFilterOptions("KSTLD"),
+        await api.diagnosticFilterOptions("KSTLD", "serial"),
         payload.data,
       );
       const url = new URL(requestedPath, "http://localhost");
       assert.equal(url.pathname, "/api/diagnostics/filter-options");
       assert.equal(url.searchParams.get("q"), "KSTLD");
+      assert.equal(url.searchParams.get("kind"), "serial");
       assert.equal(url.searchParams.get("pageSize"), "20");
     } finally {
       globalThis.fetch = originalFetch;

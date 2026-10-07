@@ -118,9 +118,23 @@ export class CustomersService {
         "customer_id ASC, status='active' DESC, installed_at DESC",
       customer_id_desc:
         "customer_id DESC, status='active' DESC, installed_at DESC",
+      serial_asc: "serial ASC, installed_at DESC",
+      serial_desc: "serial DESC, installed_at DESC",
+      equipment_asc: "vendor ASC, model ASC, hw_revision ASC, customer_id ASC",
+      equipment_desc:
+        "vendor DESC, model DESC, hw_revision DESC, customer_id ASC",
+      firmware_plan_asc: "software_version ASC, plan_mbps ASC, customer_id ASC",
+      firmware_plan_desc:
+        "software_version DESC, plan_mbps DESC, customer_id ASC",
       installed_at_desc: "installed_at DESC, customer_id ASC",
       plan_mbps_desc: "plan_mbps DESC, customer_id ASC",
       plan_mbps_asc: "plan_mbps ASC, customer_id ASC",
+      topology_asc:
+        "olt ASC, pon_port ASC, cto ASC, customer_id ASC, serial ASC",
+      topology_desc:
+        "olt DESC, pon_port DESC, cto DESC, customer_id ASC, serial ASC",
+      status_asc: "status ASC, customer_id ASC, serial ASC",
+      status_desc: "status DESC, customer_id ASC, serial ASC",
     };
     const conditions = [
       `

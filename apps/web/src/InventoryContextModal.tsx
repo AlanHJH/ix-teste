@@ -20,11 +20,13 @@ function formattedDate(value: string | null) {
 export function InventoryContextModal({
   context,
   canOpenSupport,
+  showSupportAction = true,
   onOpenSupport,
   onClose,
 }: {
   context: InventoryContext;
   canOpenSupport: boolean;
+  showSupportAction?: boolean;
   onOpenSupport: (customerId: string) => void;
   onClose: () => void;
 }) {
@@ -117,7 +119,7 @@ export function InventoryContextModal({
       note={note}
       onClose={onClose}
     >
-      {context.kind === "customer" && (
+      {context.kind === "customer" && showSupportAction && (
         <div className="entity-modal-children inventory-customer-action">
           <div>
             <span>Próximo passo</span>

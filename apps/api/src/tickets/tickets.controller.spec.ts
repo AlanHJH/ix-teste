@@ -9,11 +9,15 @@ describe("parseTicketFilters", () => {
         "category:Lentidão",
         "category:Sem conexão",
         "channel:WhatsApp",
+        "nocStatus:pending",
+        "olt:OLT-2",
       ]),
       [
         { kind: "category", value: "Lentidão" },
         { kind: "category", value: "Sem conexão" },
         { kind: "channel", value: "WhatsApp" },
+        { kind: "nocStatus", value: "pending" },
+        { kind: "olt", value: "OLT-2" },
       ],
     );
   });

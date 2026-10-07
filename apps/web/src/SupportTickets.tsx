@@ -11,6 +11,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { api } from "./api";
+import { DateRangeFilter, type DateRange } from "./DateRangeFilter";
 import { HelpTooltip } from "./HelpTooltip";
 import {
   InventoryContextModal,
@@ -19,7 +20,13 @@ import {
 import { providerGlossary } from "./ProviderGlossary";
 import { TicketDetailModal } from "./TicketDetailModal";
 import { TicketFilterSelect } from "./TicketFilterSelect";
-import type { SupportTicket, TicketFilter, TicketPage } from "./types";
+import { SortableHeader } from "./SortableHeader";
+import type {
+  SupportTicket,
+  TicketFilter,
+  TicketPage,
+  TicketSort,
+} from "./types";
 
 const number = new Intl.NumberFormat("pt-BR");
 
@@ -67,13 +74,20 @@ function Metric({
 
 export function SupportTickets({
   onOpenSupport,
+  canManageNoc = false,
+  preset,
+  onNocQueueChanged,
 }: {
   onOpenSupport: (customerId: string) => void;
+  canManageNoc?: boolean;
+  preset?: { key: number; filters: TicketFilter[] } | null;
+  onNocQueueChanged?: () => void | Promise<void>;
 }) {
-  const [query, setQuery] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
   const [filters, setFilters] = useState<TicketFilter[]>([]);
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<TicketSort>("opened_at_desc");
+  const [range, setRange] = useState<DateRange>({ from: "", to: "" });
+  const [reloadVersion, setReloadVersion] = useState(0);
   const [result, setResult] = useState<TicketPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -85,13 +99,14 @@ export function SupportTickets({
   );
   const [customerLoadingId, setCustomerLoadingId] = useState("");
   const customerRequest = useRef(0);
+  const presetApplied = useRef(false);
 
   useEffect(() => {
     let canceled = false;
     setLoading(true);
     setError("");
     api
-      .tickets(submittedQuery, page, filters)
+      .tickets("", page, filters, sort, range)
       .then((response) => {
         if (!canceled) setResult(response);
       })
@@ -110,7 +125,24 @@ export function SupportTickets({
     return () => {
       canceled = true;
     };
-  }, [submittedQuery, page, filters]);
+  }, [page, filters, sort, range, reloadVersion]);
+
+  useEffect(() => {
+    if (!preset) {
+      if (!presetApplied.current) return;
+      presetApplied.current = false;
+      setFilters([]);
+      setSort("opened_at_desc");
+      setRange({ from: "", to: "" });
+      setPage(1);
+      return;
+    }
+    presetApplied.current = true;
+    setFilters(preset.filters);
+    setSort("noc_priority_desc");
+    setRange({ from: "", to: "" });
+    setPage(1);
+  }, [preset]);
 
   async function openCustomer(customerId: string) {
     const request = ++customerRequest.current;
@@ -214,13 +246,16 @@ export function SupportTickets({
             filters={filters}
             onChange={(nextFilters) => {
               setFilters(nextFilters);
-              setSubmittedQuery("");
               setPage(1);
             }}
-            query={query}
-            onQueryChange={setQuery}
-            onFreeSearch={(nextQuery) => {
-              setSubmittedQuery(nextQuery);
+          />
+        </div>
+
+        <div className="directory-advanced-controls">
+          <DateRangeFilter
+            value={range}
+            onChange={(nextRange) => {
+              setRange(nextRange);
               setPage(1);
             }}
           />
@@ -232,22 +267,73 @@ export function SupportTickets({
           <table className="tickets-table">
             <thead>
               <tr>
-                <th>Ticket</th>
-                <th>Cliente e origem</th>
-                <th>
-                  Motivo relatado
+                <SortableHeader
+                  label="Ticket"
+                  ascending="opened_at_asc"
+                  descending="opened_at_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                />
+                <SortableHeader
+                  label="Cliente e origem"
+                  ascending="customer_id_asc"
+                  descending="customer_id_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                />
+                <SortableHeader
+                  label="Motivo relatado"
+                  ascending="category_asc"
+                  descending="category_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                >
                   <HelpTooltip
                     term="Termos técnicos"
                     description="Wi-Fi é a rede sem fio; OLT concentra a rede óptica; PON é a porta compartilhada; CTO distribui a fibra; CPE é o equipamento do cliente."
                   />
-                </th>
-                <th>Resolução</th>
-                <th>Tempo</th>
+                </SortableHeader>
+                <SortableHeader
+                  label="Resolução"
+                  ascending="resolution_asc"
+                  descending="resolution_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                />
+                <SortableHeader
+                  label="Tempo"
+                  ascending="handling_minutes_asc"
+                  descending="handling_minutes_desc"
+                  current={sort}
+                  onChange={(nextSort) => {
+                    setSort(nextSort);
+                    setPage(1);
+                  }}
+                />
               </tr>
             </thead>
             <tbody>
               {result?.data.map((ticket) => (
-                <tr key={ticket.ticket_id}>
+                <tr
+                  key={ticket.ticket_id}
+                  className={
+                    ["pending", "in_progress"].includes(ticket.noc_status)
+                      ? "ticket-row-noc"
+                      : undefined
+                  }
+                >
                   <td>
                     <button
                       type="button"
@@ -292,6 +378,14 @@ export function SupportTickets({
                   </td>
                   <td>
                     <strong>{ticket.resolution}</strong>
+                    {["pending", "in_progress"].includes(ticket.noc_status) && (
+                      <span className="ticket-noc-badge">
+                        <i aria-hidden="true" />
+                        {ticket.noc_status === "pending"
+                          ? "Aguardando NOC"
+                          : "Em análise pelo NOC"}
+                      </span>
+                    )}
                     {ticket.olt && ticket.pon && ticket.cto && (
                       <small>
                         {ticket.olt} · PON {ticket.pon} · {ticket.cto}
@@ -353,6 +447,11 @@ export function SupportTickets({
       {selectedTicket && (
         <TicketDetailModal
           ticket={selectedTicket}
+          canManageNoc={canManageNoc}
+          onNocStatusChanged={async () => {
+            setReloadVersion((current) => current + 1);
+            await onNocQueueChanged?.();
+          }}
           onClose={() => setSelectedTicket(null)}
         />
       )}

@@ -6,11 +6,13 @@ import {
   Network,
   Users,
 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { EntityDetailModal } from "./EntityDetailModal";
 import type { EntityDetailItem } from "./EntityDetailModal";
 import { NetworkEntityModal } from "./NetworkEntityModal";
 import type { NetworkEntity } from "./NetworkEntityModal";
 import type { DashboardBinding, TopologySnapshot } from "./types";
+import { SortableHeader } from "./SortableHeader";
 
 type DetailRecord = Record<string, unknown>;
 
@@ -134,6 +136,36 @@ function recordPresentation(
 
 function ChartRows({ rows }: { rows: DetailRecord[] }) {
   const weekly = rows.some((row) => "week" in row);
+  type ChartSort = `${number}:asc` | `${number}:desc`;
+  const [sort, setSort] = useState<ChartSort | "">("");
+  const labels = weekly
+    ? ["Período", "Total", "Lentidão", "Sem conexão", "Wi-Fi"]
+    : ["Categoria", "Quantidade"];
+  const values = (row: DetailRecord) =>
+    weekly
+      ? [row.week, row.total, row.slowness, row.disconnected, row.wifi]
+      : [row.name, row.value];
+  const sortedRows = useMemo(() => {
+    const [columnText, direction] = sort.split(":");
+    const column = Number(columnText);
+    if (!direction || Number.isNaN(column)) return rows;
+    return [...rows].sort((left, right) => {
+      const leftValue = values(left)[column];
+      const rightValue = values(right)[column];
+      const comparison =
+        typeof leftValue === "number" && typeof rightValue === "number"
+          ? leftValue - rightValue
+          : String(leftValue ?? "").localeCompare(
+              String(rightValue ?? ""),
+              "pt-BR",
+              {
+                numeric: true,
+                sensitivity: "base",
+              },
+            );
+      return direction === "desc" ? -comparison : comparison;
+    });
+  }, [rows, sort, weekly]);
   return (
     <div className="entity-modal-series">
       <span>{weekly ? "Série completa" : "Composição"}</span>
@@ -141,27 +173,22 @@ function ChartRows({ rows }: { rows: DetailRecord[] }) {
         <table>
           <thead>
             <tr>
-              {(weekly
-                ? ["Período", "Total", "Lentidão", "Sem conexão", "Wi-Fi"]
-                : ["Categoria", "Quantidade"]
-              ).map((label) => (
-                <th key={label}>{label}</th>
+              {labels.map((label, column) => (
+                <SortableHeader
+                  key={label}
+                  label={label}
+                  ascending={`${column}:asc` as ChartSort}
+                  descending={`${column}:desc` as ChartSort}
+                  current={sort as ChartSort}
+                  onChange={setSort}
+                />
               ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, index) => (
+            {sortedRows.map((row, index) => (
               <tr key={String(row.week ?? row.name ?? index)}>
-                {(weekly
-                  ? [
-                      row.week,
-                      row.total,
-                      row.slowness,
-                      row.disconnected,
-                      row.wifi,
-                    ]
-                  : [row.name, row.value]
-                ).map((value, column) => (
+                {values(row).map((value, column) => (
                   <td key={column}>{text(value)}</td>
                 ))}
               </tr>

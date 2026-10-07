@@ -1,4 +1,5 @@
 import { BarChart3, List, Map, Network } from "lucide-react";
+import { useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -21,6 +22,8 @@ import type {
   InventoryFilter,
 } from "./types";
 import type { DashboardDrilldown } from "./DashboardDetailModal";
+import { DateRangeFilter, type DateRange } from "./DateRangeFilter";
+import { SortableHeader } from "./SortableHeader";
 
 const number = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
 const colors = ["#087f78", "#e0a33b", "#d85d2d", "#547d93", "#7f6bb2"];
@@ -366,6 +369,10 @@ export function TableWidget({
   onDrilldown: Drilldown;
 }) {
   const keys = columns(widget);
+  type TableSort = `${string}:asc` | `${string}:desc`;
+  const [sort, setSort] = useState<TableSort | "">("");
+  const [range, setRange] = useState<DateRange>({ from: "", to: "" });
+  const dateKey = keys.find((key) => ["day", "ts", "opened_at"].includes(key));
   const filterKeys: Record<InventoryFilter["kind"], string> = {
     customer: "customer_id",
     serial: "serial",
@@ -378,27 +385,54 @@ export function TableWidget({
     city: "city",
     neighborhood: "neighborhood",
   };
-  const rows = tableSource(widget, data)
-    .filter((row) =>
-      filters.every(
-        (filter) =>
-          String(
-            (row as unknown as Record<string, unknown>)[
-              filterKeys[filter.kind]
-            ] ?? "",
-          ) === filter.value,
-      ),
-    )
-    .slice(0, widget.config?.limit ?? 5) as Array<Record<string, unknown>>;
+  const rows = useMemo(() => {
+    const [sortKey, direction] = sort.split(":");
+    return (tableSource(widget, data) as Array<Record<string, unknown>>)
+      .filter(
+        (row) =>
+          filters.every(
+            (filter) =>
+              String(row[filterKeys[filter.kind]] ?? "") === filter.value,
+          ) &&
+          (!dateKey ||
+            ((!range.from || String(row[dateKey] ?? "") >= range.from) &&
+              (!range.to ||
+                String(row[dateKey] ?? "").slice(0, 10) <= range.to))),
+      )
+      .sort((left, right) => {
+        if (!sortKey || !direction) return 0;
+        const leftValue = left[sortKey];
+        const rightValue = right[sortKey];
+        if (leftValue == null) return 1;
+        if (rightValue == null) return -1;
+        const comparison =
+          typeof leftValue === "number" && typeof rightValue === "number"
+            ? leftValue - rightValue
+            : String(leftValue).localeCompare(String(rightValue), "pt-BR", {
+                numeric: true,
+                sensitivity: "base",
+              });
+        return direction === "desc" ? -comparison : comparison;
+      })
+      .slice(0, widget.config?.limit ?? 5);
+  }, [data, dateKey, filters, range, sort, widget]);
   return (
     <article className={`ai-dashboard-widget generic-table ${widget.tone}`}>
       <Heading widget={widget} icon={<List size={21} />} />
+      {dateKey && <DateRangeFilter value={range} onChange={setRange} />}
       <div className="ai-table-scroll">
         <table>
           <thead>
             <tr>
               {keys.map((key) => (
-                <th key={key}>{labels[key] ?? key}</th>
+                <SortableHeader
+                  key={key}
+                  label={labels[key] ?? key}
+                  ascending={`${key}:asc` as TableSort}
+                  descending={`${key}:desc` as TableSort}
+                  current={sort as TableSort}
+                  onChange={setSort}
+                />
               ))}
             </tr>
           </thead>
