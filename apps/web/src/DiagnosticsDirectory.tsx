@@ -96,7 +96,7 @@ export function DiagnosticsDirectory() {
           setError(
             reason instanceof Error
               ? reason.message
-              : "Não foi possível carregar os diagnósticos",
+              : "Não foi possível carregar as medições",
           );
         }
       })
@@ -142,11 +142,11 @@ export function DiagnosticsDirectory() {
       {result && (
         <section
           className="metrics-grid diagnostics-metrics"
-          aria-label="Resumo dos diagnósticos filtrados"
+          aria-label="Resumo das medições filtradas"
         >
           <Metric
             icon={Activity}
-            label="Diagnósticos"
+            label="Medições"
             value={number.format(result.meta.summary.total)}
             note="na seleção atual"
             tone="neutral"
@@ -184,10 +184,7 @@ export function DiagnosticsDirectory() {
         </section>
       )}
 
-      <section
-        className="diagnostics-directory"
-        aria-label="Lista de diagnósticos"
-      >
+      <section className="diagnostics-directory" aria-label="Lista de medições">
         <header className="diagnostics-directory-heading">
           <div>
             <span className="section-label">Fila de medições</span>
@@ -360,7 +357,7 @@ export function DiagnosticsDirectory() {
           {!loading && result?.data.length === 0 && (
             <div className="diagnostics-empty">
               <Wifi size={30} />
-              <p>Nenhum diagnóstico corresponde aos filtros atuais.</p>
+              <p>Nenhuma medição corresponde aos filtros atuais.</p>
             </div>
           )}
         </div>

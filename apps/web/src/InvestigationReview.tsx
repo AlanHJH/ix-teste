@@ -46,7 +46,7 @@ const toolLabel: Record<string, string> = {
   operations_list_grouping_candidates: "Detector de agrupamentos",
   inventory_topology: "Inventário e topologia",
   telemetry_list_daily_metrics: "Métricas diárias dos equipamentos",
-  diagnostics_list: "Diagnósticos técnicos",
+  diagnostics_list: "Medições técnicas",
   tickets_list: "Chamados de clientes",
   customers_list: "Clientes",
 };

@@ -945,7 +945,7 @@ function OperationsApp({
               onClick={() => navigate("diagnostics")}
             >
               <Gauge size={17} />
-              Diagnósticos
+              Medições
             </button>
           )}
           {canAccessView(user.role, "topology") && (

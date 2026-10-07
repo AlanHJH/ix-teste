@@ -95,7 +95,7 @@ const defaultResources: ConfigurationOption[] = [
   },
   {
     id: "diagnostics",
-    label: "Diagnósticos",
+    label: "Medições",
     description:
       "Consultar testes, erros ópticos, reinícios e outras evidências técnicas.",
     checked: true,
