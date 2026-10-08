@@ -12,7 +12,7 @@ O objetivo desta etapa é testar se os limites de domínio melhoram a manutenç�
 - comportamento do frontend;
 - contratos OpenAPI/Swagger e MCP.
 
-O contexto de **Atendimento/Tickets** é a fatia-piloto. Ele já possui linguagem e regras próprias — chamado, encaminhamento, fila NOC, status e desfecho — e agora também possui separação tática entre domínio, aplicação e persistência. Os demais contextos foram encapsulados em módulos NestJS com a mesma direção de dependência, preparando a expansão posterior.
+Os contextos de **Atendimento/Tickets**, **Diagnósticos**, **Incidentes** e **Dashboard** possuem separação tática entre domínio/aplicação e persistência. Customers, Network e Investigations também não dependem mais diretamente de `DatabaseService`: usam a porta `SQL_EXECUTOR`, fornecida pela infraestrutura. Os demais contextos foram encapsulados em módulos NestJS com a mesma direção de dependência, preparando a expansão posterior.
 
 ## Bounded contexts atuais
 
@@ -42,7 +42,7 @@ Esses nomes são limites de negócio, não apenas pastas técnicas. Uma regra de
 - as dependências de infraestrutura que importa;
 - somente os services que outros contextos precisam consumir em `exports`.
 
-`InfrastructureModule` fornece `DatabaseService` e `OpenApiCatalogService`. Ele é compartilhado explicitamente pelos contextos; não é global. Isso mantém a dependência visível no `imports` de cada módulo.
+`InfrastructureModule` fornece `DatabaseService`, `TypeOrmDataSourceService`, `OpenApiCatalogService` e a porta `SQL_EXECUTOR`. Ele é compartilhado explicitamente pelos contextos; não é global. Isso mantém a dependência visível no `imports` de cada módulo, sem fazer a camada de aplicação conhecer o pool PostgreSQL. O Dashboard usa TypeORM com `synchronize: false`; consultas analíticas, carga `COPY` e SQL com CTEs continuam em adapters SQL explícitos.
 
 O `McpModule` é um adaptador de integração. Ele importa os casos de uso exportados pelos contextos e monta o gateway. O gateway não deve ser tratado como domínio: ele traduz transporte MCP para casos de uso REST/aplicação, preservando a mesma validação.
 
@@ -73,7 +73,7 @@ presentation/controller → application/use case → domain
 REST/MCP → módulos de contexto → InfrastructureModule
 ```
 
-No `TicketsModule`, `domain/ticket.ts` concentra tipos, estados e regras puras; `application/ticket-repository.ts` define a porta de persistência; `TicketsService` coordena os casos de uso; e `infrastructure/postgres-tickets.repository.ts` contém o SQL. Os demais services ainda concentram aplicação e persistência e serão migrados somente depois de validar este experimento.
+Nos contextos com separação tática, os arquivos `domain/` concentram tipos e regras; `application/*-repository.ts` define portas; o service coordena o caso de uso; e `infrastructure/postgres-*.repository.ts` contém o SQL. Nos contextos Customers, Network e Investigations, a mesma direção começa pela porta compartilhada `SQL_EXECUTOR`; o próximo passo é quebrá-la em repositórios de caso de uso mais específicos.
 
 ## O que avaliar antes de expandir
 
@@ -81,7 +81,8 @@ No `TicketsModule`, `domain/ticket.ts` concentra tipos, estados e regras puras; 
 2. As rotas REST, Swagger, MCP e o frontend devem carregar sem alterações visíveis.
 3. Um contexto deve poder ser testado com seus providers sem importar o `AppModule` inteiro.
 4. Um contexto não deve precisar conhecer SQL, controller ou detalhes internos de outro contexto.
-5. Os exports de cada módulo devem permanecer pequenos e intencionais.
+5. Os controllers devem receber casos de uso/queries por injeção, sem instanciar repositórios.
+6. Os exports de cada módulo devem permanecer pequenos e intencionais.
 
 Com os critérios atendidos para Tickets, a migração tática recomendada é:
 

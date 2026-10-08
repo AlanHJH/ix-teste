@@ -1,15 +1,26 @@
 import "reflect-metadata";
+import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { AppModule } from "./app.module";
 import { McpGatewayService } from "./mcp-gateway.service";
 import { configureOpenApi } from "./openapi";
+import { OpenApiResponseValidationInterceptor } from "./contracts/openapi-response-validation.interceptor";
 
 type Next = (error?: unknown) => void;
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
   app.enableShutdownHooks();
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      forbidUnknownValues: true,
+      validationError: { target: false, value: false },
+    }),
+  );
   app.getHttpAdapter().getInstance().disable("x-powered-by");
   const mcp = app.get(McpGatewayService);
   app.use((request: IncomingMessage, response: ServerResponse, next: Next) => {
@@ -21,7 +32,10 @@ async function bootstrap(): Promise<void> {
       .catch(next);
   });
   app.setGlobalPrefix("api", { exclude: ["health"] });
-  configureOpenApi(app);
+  const openApiDocument = configureOpenApi(app);
+  app.useGlobalInterceptors(
+    new OpenApiResponseValidationInterceptor(openApiDocument),
+  );
   await app.listen(Number(process.env.PORT ?? 3000), "0.0.0.0");
 }
 

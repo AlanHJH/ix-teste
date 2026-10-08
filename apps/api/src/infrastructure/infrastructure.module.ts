@@ -1,6 +1,8 @@
 import { Module } from "@nestjs/common";
 import { DatabaseService } from "../database";
 import { OpenApiCatalogService } from "../openapi-catalog.service";
+import { SQL_EXECUTOR } from "./sql-executor";
+import { TypeOrmDataSourceService } from "./typeorm-data-source.service";
 
 /**
  * Adaptadores compartilhados da aplicação.
@@ -10,7 +12,17 @@ import { OpenApiCatalogService } from "../openapi-catalog.service";
  * importar uns aos outros para acessar infraestrutura diretamente.
  */
 @Module({
-  providers: [DatabaseService, OpenApiCatalogService],
-  exports: [DatabaseService, OpenApiCatalogService],
+  providers: [
+    DatabaseService,
+    TypeOrmDataSourceService,
+    OpenApiCatalogService,
+    { provide: SQL_EXECUTOR, useExisting: DatabaseService },
+  ],
+  exports: [
+    DatabaseService,
+    TypeOrmDataSourceService,
+    OpenApiCatalogService,
+    SQL_EXECUTOR,
+  ],
 })
 export class InfrastructureModule {}

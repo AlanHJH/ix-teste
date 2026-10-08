@@ -4,6 +4,10 @@ Este documento é o guia legível dos contratos da Ondaluz Ops. Ele complementa,
 
 O objetivo desta camada é tornar explícitos nome, tipo, obrigatoriedade, nulabilidade, limites, enumerações, formato de data, exemplos e erros conhecidos sem mudar a lógica dos endpoints, os envelopes existentes ou as regras de negócio.
 
+As entradas REST passam por DTOs NestJS com `class-validator` e `class-transformer`. O pipeline global transforma query strings em instâncias dos DTOs, rejeita propriedades desconhecidas (`whitelist` + `forbidNonWhitelisted`) e devolve a lista de falhas no campo `message` do envelope de erro. Corpos, parâmetros de rota, paginação e filtros repetíveis têm classes próprias em `apps/api/src/contracts/`.
+
+As respostas JSON também são verificadas em runtime contra o schema de sucesso publicado no OpenAPI. O validador usa o mesmo documento servido em `/api/openapi.json`, preserva o objeto retornado e interrompe a resposta com erro interno se um service produzir campos, tipos, enums ou obrigatoriedades incompatíveis. Assim, a documentação deixa de ser apenas descritiva: ela funciona como contrato executável entre backend, frontend e bridge MCP.
+
 ## Fontes canônicas
 
 Em execução local, as fontes de contrato são:
@@ -31,6 +35,18 @@ O Swagger e o bridge MCP são derivados dos mesmos decorators dos controllers. P
 | Enumeração         | `enum` lista os valores aceitos ou retornados.                                                                                          |
 | Coleção            | `array`, com schema explícito dos itens.                                                                                                |
 | Objeto dinâmico    | Permitido somente quando o próprio contrato explica a extensão, como argumentos MCP, configuração não secreta ou catálogo de operações. |
+
+## DTOs e validação em runtime
+
+Os DTOs de entrada documentam e validam:
+
+- corpos de dashboard, tickets, incidentes, investigações e atendimento N1;
+- parâmetros de rota como `customerId`, `ticketId`, `serial` e identificadores de investigação;
+- consultas paginadas, filtros facetados, escopos topológicos, estados e ordenações.
+
+Os serviços continuam responsáveis pelas regras de negócio e pelas allowlists específicas de cada operação. O DTO garante forma, tipo, presença, tamanho e enum; o service continua decidindo, por exemplo, se uma ordenação pertence àquela consulta e se o escopo possui CPEs ativas.
+
+Para as saídas, o controller publica o schema completo em `ApiRead`/`ApiWrite`; o interceptor `OpenApiResponseValidationInterceptor` executa esse schema depois do service. Os nomes existentes, inclusive snake_case dos read models e o envelope de paginação, foram preservados.
 
 Campos marcados em `required` sempre fazem parte da resposta ou da requisição documentada. Um campo nullable continua obrigatório quando aparece em `required`: seu valor pode ser `null`, mas o nome do campo não deve desaparecer.
 

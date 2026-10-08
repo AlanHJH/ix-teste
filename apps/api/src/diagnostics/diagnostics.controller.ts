@@ -16,6 +16,10 @@ import {
   apiPageSchema,
   apiString,
 } from "../openapi";
+import {
+  DiagnosticsFilterOptionsQueryDto,
+  DiagnosticsListQueryDto,
+} from "../contracts/query.dto";
 
 const diagnosticFilterKinds = new Set<DiagnosticFilterKind>([
   "serial",
@@ -204,47 +208,39 @@ export class DiagnosticsController {
   })
   @ApiInvalidRequest("Filtro ou paginação inválida.")
   @Get()
-  list(
-    @Query("q") query = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "25",
-    @Query("sort") sort = "ts_desc",
-    @Query("state") state = "all",
-    @Query("requestedBy") requestedBy = "all",
-    @Query("serial") serial = "",
-    @Query("customerId") customerId = "",
-    @Query("diagnostic") diagnostic = "",
-    @Query("from") from = "",
-    @Query("to") to = "",
-    @Query("filter") filter?: string | string[],
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultSort: "ts_desc",
-      allowedSorts: [
-        "ts_desc",
-        "ts_asc",
-        "serial_asc",
-        "serial_desc",
-        "state_asc",
-        "state_desc",
-        "download_mbps_desc",
-        "download_mbps_asc",
-        "olt_asc",
-        "olt_desc",
-        "failures_first",
-      ],
-    });
+  list(@Query() params: DiagnosticsListQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultSort: "ts_desc",
+        allowedSorts: [
+          "ts_desc",
+          "ts_asc",
+          "serial_asc",
+          "serial_desc",
+          "state_asc",
+          "state_desc",
+          "download_mbps_desc",
+          "download_mbps_asc",
+          "olt_asc",
+          "olt_desc",
+          "failures_first",
+        ],
+      },
+    );
     return this.diagnostics.list({
-      query,
+      query: params.q,
       ...pagination,
-      state,
-      requestedBy,
-      serial,
-      customerId,
-      diagnostic,
-      from,
-      to,
-      filters: parseDiagnosticFilters(filter),
+      state: params.state,
+      requestedBy: params.requestedBy,
+      serial: params.serial,
+      customerId: params.customerId,
+      diagnostic: params.diagnostic,
+      from: params.from,
+      to: params.to,
+      filters: parseDiagnosticFilters(params.filter),
     });
   }
 
@@ -283,28 +279,30 @@ export class DiagnosticsController {
     enum: [...diagnosticFilterKinds],
   })
   @Get("filter-options")
-  filterOptions(
-    @Query("q") query = "",
-    @Query("kind") kind = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "20",
-    @Query("sort") sort = "relevance",
-  ) {
-    if (kind && !diagnosticFilterKinds.has(kind as DiagnosticFilterKind)) {
+  filterOptions(@Query() params: DiagnosticsFilterOptionsQueryDto) {
+    if (
+      params.kind &&
+      !diagnosticFilterKinds.has(params.kind as DiagnosticFilterKind)
+    ) {
       throw new BadRequestException("Tipo de filtro de diagnóstico inválido");
     }
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultPageSize: 20,
-      maximumPageSize: 50,
-      defaultSort: "relevance",
-      allowedSorts: ["relevance", "label_asc", "label_desc"],
-    });
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultPageSize: 20,
+        maximumPageSize: 50,
+        defaultSort: "relevance",
+        allowedSorts: ["relevance", "label_asc", "label_desc"],
+      },
+    );
     return this.diagnostics.filterOptions(
-      query,
+      params.q,
       pagination.page,
       pagination.pageSize,
       pagination.sort,
-      kind as DiagnosticFilterKind | "",
+      params.kind as DiagnosticFilterKind | "",
     );
   }
 }

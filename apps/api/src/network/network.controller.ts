@@ -29,6 +29,14 @@ import {
   apiString,
 } from "../openapi";
 import { paginate, parsePageQuery } from "../pagination";
+import { ResolvedStatusDto } from "../contracts/input.dto";
+import { GroupingIdParamDto } from "../contracts/params.dto";
+import {
+  NetworkDevicesQueryDto,
+  NetworkIncidentsQueryDto,
+  NetworkTopologyPathQueryDto,
+  NetworkTopologyQueryDto,
+} from "../contracts/query.dto";
 import { NetworkService } from "./network.service";
 
 const topologyDeviceSchema = {
@@ -237,24 +245,24 @@ export class NetworkController {
   })
   @ApiInvalidRequest("Busca, paginação ou ordenação inválida.")
   @Get("topology/path")
-  async topologyPath(
-    @Query("q") query = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "8",
-    @Query("sort") sort = "relevance",
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultPageSize: 8,
-      defaultSort: "relevance",
-      allowedSorts: [
-        "relevance",
-        "customer_id_asc",
-        "customer_id_desc",
-        "serial_asc",
-      ],
-    });
+  async topologyPath(@Query() params: NetworkTopologyPathQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultPageSize: 8,
+        defaultSort: "relevance",
+        allowedSorts: [
+          "relevance",
+          "customer_id_asc",
+          "customer_id_desc",
+          "serial_asc",
+        ],
+      },
+    );
     const result = await this.network.findTopologyPath(
-      query,
+      params.q,
       pagination.page,
       pagination.pageSize,
       pagination.sort,
@@ -300,24 +308,22 @@ export class NetworkController {
   })
   @ApiInvalidRequest("Escopo topológico, paginação ou ordenação inválida.")
   @Get("topology/devices")
-  topologyDevices(
-    @Query("olt") olt = "",
-    @Query("pon") pon = "",
-    @Query("cto") cto = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "100",
-    @Query("sort") sort = "customer_id_asc",
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultPageSize: 100,
-      defaultSort: "customer_id_asc",
-      allowedSorts: ["customer_id_asc", "customer_id_desc", "serial_asc"],
-    });
+  topologyDevices(@Query() params: NetworkDevicesQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultPageSize: 100,
+        defaultSort: "customer_id_asc",
+        allowedSorts: ["customer_id_asc", "customer_id_desc", "serial_asc"],
+      },
+    );
     return this.network
       .getTopologyDevices(
-        olt,
-        pon,
-        cto,
+        params.olt,
+        params.pon,
+        params.cto,
         pagination.page,
         pagination.pageSize,
         pagination.sort,
@@ -456,8 +462,8 @@ export class NetworkController {
     example: "1/7",
   })
   @Get("topology")
-  topology(@Query("olt") olt?: string, @Query("pon") pon?: string) {
-    return this.network.getTopology(olt, pon);
+  topology(@Query() params: NetworkTopologyQueryDto) {
+    return this.network.getTopology(params.olt, params.pon);
   }
 
   @ApiRead({
@@ -477,15 +483,16 @@ export class NetworkController {
   })
   @ApiInvalidRequest("Paginação ou ordenação inválida.")
   @Get("incidents")
-  async incidents(
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "25",
-    @Query("sort") sort = "score_desc",
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultSort: "score_desc",
-      allowedSorts: ["score_desc", "affected_desc", "title_asc"],
-    });
+  async incidents(@Query() params: NetworkIncidentsQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultSort: "score_desc",
+        allowedSorts: ["score_desc", "affected_desc", "title_asc"],
+      },
+    );
     const incidents = await this.network.getIncidents();
     const sorted = [...incidents].sort((left, right) => {
       if (pagination.sort === "affected_desc") {
@@ -523,9 +530,9 @@ export class NetworkController {
     schema: apiErrorSchema,
   })
   @Get("incidents/:id")
-  async incident(@Param("id") id: string) {
+  async incident(@Param() params: GroupingIdParamDto) {
     const incident = (await this.network.getIncidents()).find(
-      (item) => item.id === id,
+      (item) => item.id === params.id,
     );
     if (!incident) throw new NotFoundException("Incidente não encontrado");
     return incident;
@@ -573,9 +580,9 @@ export class NetworkController {
   })
   @Patch("incidents/:id/status")
   closeIncident(
-    @Param("id") id: string,
-    @Body() body: { status?: "resolved" },
+    @Param() params: GroupingIdParamDto,
+    @Body() body: ResolvedStatusDto,
   ) {
-    return this.network.closeDetectedGrouping(id, body.status ?? "resolved");
+    return this.network.closeDetectedGrouping(params.id, body.status);
   }
 }

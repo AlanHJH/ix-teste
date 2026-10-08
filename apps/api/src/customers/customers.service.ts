@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { DatabaseService } from "../database";
+import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { SQL_EXECUTOR, SqlExecutor } from "../infrastructure/sql-executor";
 import { paginate } from "../pagination";
 import { CustomerSignals, decideSupport } from "./decision-engine";
 import type { InventoryFilter } from "./customers.controller";
@@ -98,7 +98,7 @@ export function incidentMatchesEquipment(
 
 @Injectable()
 export class CustomersService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(@Inject(SQL_EXECUTOR) private readonly database: SqlExecutor) {}
 
   async list(
     query: string,

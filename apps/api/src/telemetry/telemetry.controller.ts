@@ -1,6 +1,5 @@
 import { Controller, Get, Query } from "@nestjs/common";
 import { ApiQuery, ApiTags } from "@nestjs/swagger";
-import { DatabaseService } from "../database";
 import { parsePageQuery } from "../pagination";
 import {
   ApiInvalidRequest,
@@ -14,7 +13,10 @@ import {
   apiString,
 } from "../openapi";
 import { TelemetryQueries } from "../mcp/contexts/telemetry/application/telemetry-queries";
-import { PostgresTelemetryRepository } from "../mcp/contexts/telemetry/infrastructure/postgres-telemetry-repository";
+import {
+  TelemetryDailyMetricsQueryDto,
+  TelemetryInformsQueryDto,
+} from "../contracts/query.dto";
 
 const informSchema = {
   type: "object" as const,
@@ -108,13 +110,7 @@ const dailyMetricSchema = {
 @ApiTags("Telemetria")
 @Controller("telemetry")
 export class TelemetryController {
-  private readonly telemetry: TelemetryQueries;
-
-  constructor(database: DatabaseService) {
-    this.telemetry = new TelemetryQueries(
-      new PostgresTelemetryRepository(database),
-    );
-  }
+  constructor(private readonly telemetry: TelemetryQueries) {}
 
   @ApiRead({
     summary: "Listar eventos brutos de uma CPE",
@@ -156,26 +152,22 @@ export class TelemetryController {
   })
   @ApiInvalidRequest("Serial ausente ou paginação inválida.")
   @Get("informs")
-  informs(
-    @Query("serial") serial = "",
-    @Query("from") from = "",
-    @Query("to") to = "",
-    @Query("eventCode") eventCode = "",
-    @Query("softwareVersion") softwareVersion = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "25",
-    @Query("sort") sort = "ts_desc",
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultSort: "ts_desc",
-      allowedSorts: ["ts_desc", "ts_asc", "serial_asc"],
-    });
+  informs(@Query() params: TelemetryInformsQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultSort: "ts_desc",
+        allowedSorts: ["ts_desc", "ts_asc", "serial_asc"],
+      },
+    );
     return this.telemetry.listInforms({
-      serial,
-      from: from || undefined,
-      to: to || undefined,
-      eventCode: eventCode || undefined,
-      softwareVersion: softwareVersion || undefined,
+      serial: params.serial,
+      from: params.from || undefined,
+      to: params.to || undefined,
+      eventCode: params.eventCode || undefined,
+      softwareVersion: params.softwareVersion || undefined,
       ...pagination,
     });
   }
@@ -220,35 +212,29 @@ export class TelemetryController {
   })
   @ApiInvalidRequest("Filtro ou paginação inválida.")
   @Get("daily-metrics")
-  dailyMetrics(
-    @Query("serial") serial = "",
-    @Query("customerId") customerId = "",
-    @Query("olt") olt = "",
-    @Query("pon") pon = "",
-    @Query("softwareVersion") softwareVersion = "",
-    @Query("fromDay") fromDay = "",
-    @Query("toDay") toDay = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "25",
-    @Query("sort") sort = "day_desc",
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultSort: "day_desc",
-      allowedSorts: [
-        "day_desc",
-        "day_asc",
-        "reboot_count_desc",
-        "mem_min_pct_asc",
-      ],
-    });
+  dailyMetrics(@Query() params: TelemetryDailyMetricsQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultSort: "day_desc",
+        allowedSorts: [
+          "day_desc",
+          "day_asc",
+          "reboot_count_desc",
+          "mem_min_pct_asc",
+        ],
+      },
+    );
     return this.telemetry.listDailyMetrics({
-      serial: serial || undefined,
-      customerId: customerId || undefined,
-      olt: olt || undefined,
-      pon: pon || undefined,
-      softwareVersion: softwareVersion || undefined,
-      fromDay: fromDay || undefined,
-      toDay: toDay || undefined,
+      serial: params.serial || undefined,
+      customerId: params.customerId || undefined,
+      olt: params.olt || undefined,
+      pon: params.pon || undefined,
+      softwareVersion: params.softwareVersion || undefined,
+      fromDay: params.fromDay || undefined,
+      toDay: params.toDay || undefined,
       ...pagination,
     });
   }

@@ -18,11 +18,16 @@
     "@nestjs/core": "^11.0.11",
     "@nestjs/platform-express": "^11.0.11",
     "@nestjs/swagger": "^11.4.7",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.4",
     "openai": "^6.49.0",
     "pg": "^8.13.3",
     "pg-copy-streams": "^7.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "typeorm": "^0.3.31",
     "zod": "^4.6.5"
   },
   "devDependencies": {

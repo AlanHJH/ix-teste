@@ -1,10 +1,8 @@
 import { Controller, Get, Query } from "@nestjs/common";
 import { ApiQuery, ApiTags } from "@nestjs/swagger";
-import { DatabaseService } from "../database";
 import { groupingScopeTypes, GroupingScopeType } from "../grouping-candidates";
 import { paginate, parsePageQuery } from "../pagination";
 import { OperationsQueries } from "../mcp/contexts/operations/application/operations-queries";
-import { PostgresOperationsRepository } from "../mcp/contexts/operations/infrastructure/postgres-operations-repository";
 import {
   ApiInvalidRequest,
   ApiPagination,
@@ -15,29 +13,31 @@ import {
   apiPageSchema,
   apiString,
 } from "../openapi";
+import {
+  OperationsActiveGroupingsQueryDto,
+  OperationsDatasetLoadsQueryDto,
+  OperationsGroupingCandidatesQueryDto,
+} from "../contracts/query.dto";
 
 const datasetLoadSchema = {
   type: "object" as const,
   description: "Execução de ingestão do dataset operacional.",
   properties: {
-    load_id: apiString("Identificador da carga."),
+    dataset_key: apiString("Chave idempotente da carga."),
     status: apiString("Estado da execução.", "completed"),
     started_at: apiDateTime("Início da carga em ISO 8601."),
     finished_at: {
       ...apiDateTime("Fim da carga em ISO 8601."),
       nullable: true,
     },
-    source: apiString("Origem do arquivo ou processo."),
-    records: apiInteger("Quantidade de registros processados.", 1500),
+    details: {
+      type: "object",
+      description:
+        "Metadados da carga e contagens produzidas pelo processo de ingestão.",
+      additionalProperties: true,
+    },
   },
-  required: [
-    "load_id",
-    "status",
-    "started_at",
-    "finished_at",
-    "source",
-    "records",
-  ],
+  required: ["dataset_key", "status", "started_at", "finished_at", "details"],
 };
 
 const groupingCandidateSchema = {
@@ -113,13 +113,7 @@ const activeGroupingSchema = {
 @ApiTags("Operação da plataforma")
 @Controller("operations")
 export class OperationsController {
-  private readonly operations: OperationsQueries;
-
-  constructor(database: DatabaseService) {
-    this.operations = new OperationsQueries(
-      new PostgresOperationsRepository(database),
-    );
-  }
+  constructor(private readonly operations: OperationsQueries) {}
 
   @ApiRead({
     summary: "Listar cargas do dataset",
@@ -135,15 +129,16 @@ export class OperationsController {
   })
   @ApiInvalidRequest("Paginação ou ordenação inválida.")
   @Get("dataset-loads")
-  async datasetLoads(
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "25",
-    @Query("sort") sort = "started_at_desc",
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultSort: "started_at_desc",
-      allowedSorts: ["started_at_desc", "started_at_asc", "status_asc"],
-    });
+  async datasetLoads(@Query() params: OperationsDatasetLoadsQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultSort: "started_at_desc",
+        allowedSorts: ["started_at_desc", "started_at_asc", "status_asc"],
+      },
+    );
     const data = await this.operations.datasetLoads();
     const sorted = [...data].sort((left, right) => {
       if (pagination.sort === "status_asc") {
@@ -186,24 +181,26 @@ export class OperationsController {
   @ApiInvalidRequest("Filtro, paginação ou ordenação inválida.")
   @Get("grouping-candidates")
   async groupingCandidates(
-    @Query("scopeType") scopeType = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "25",
-    @Query("sort") sort = "priority_desc",
+    @Query() params: OperationsGroupingCandidatesQueryDto,
   ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultSort: "priority_desc",
-      maximumPageSize: 30,
-      allowedSorts: [
-        "priority_desc",
-        "affected_cpes_desc",
-        "affected_percent_desc",
-      ],
-    });
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultSort: "priority_desc",
+        maximumPageSize: 30,
+        allowedSorts: [
+          "priority_desc",
+          "affected_cpes_desc",
+          "affected_percent_desc",
+        ],
+      },
+    );
     const selectedScope = groupingScopeTypes.includes(
-      scopeType as GroupingScopeType,
+      params.scopeType as GroupingScopeType,
     )
-      ? (scopeType as GroupingScopeType)
+      ? (params.scopeType as GroupingScopeType)
       : undefined;
     const all = await this.operations.groupingCandidates({
       scopeType: selectedScope,
@@ -248,21 +245,21 @@ export class OperationsController {
   })
   @ApiInvalidRequest("Filtro, paginação ou ordenação inválida.")
   @Get("active-groupings")
-  async activeGroupings(
-    @Query("scopeType") scopeType = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "25",
-    @Query("sort") sort = "severity_desc",
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultSort: "severity_desc",
-      maximumPageSize: 30,
-      allowedSorts: ["severity_desc", "opened_at_desc", "opened_at_asc"],
-    });
+  async activeGroupings(@Query() params: OperationsActiveGroupingsQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultSort: "severity_desc",
+        maximumPageSize: 30,
+        allowedSorts: ["severity_desc", "opened_at_desc", "opened_at_asc"],
+      },
+    );
     const selectedScope = groupingScopeTypes.includes(
-      scopeType as GroupingScopeType,
+      params.scopeType as GroupingScopeType,
     )
-      ? (scopeType as GroupingScopeType)
+      ? (params.scopeType as GroupingScopeType)
       : undefined;
     const all = await this.operations.activeGroupings({
       scopeType: selectedScope,

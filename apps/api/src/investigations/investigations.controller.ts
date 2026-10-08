@@ -29,6 +29,12 @@ import {
   apiPageSchema,
   apiString,
 } from "../openapi";
+import {
+  ManualInvestigationDto,
+  ReviewInvestigationDto,
+} from "../contracts/input.dto";
+import { InvestigationIdParamDto } from "../contracts/params.dto";
+import { InvestigationsListQueryDto } from "../contracts/query.dto";
 
 const investigationSchema = {
   type: "object" as const,
@@ -246,22 +252,22 @@ export class InvestigationsController {
   })
   @ApiInvalidRequest("Filtro, paginação ou ordenação inválida.")
   @Get()
-  list(
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "100",
-    @Query("sort") sort = "created_at_desc",
-    @Query("status") status = "",
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultPageSize: 100,
-      defaultSort: "created_at_desc",
-      allowedSorts: ["created_at_desc", "created_at_asc"],
-    });
+  list(@Query() params: InvestigationsListQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultPageSize: 100,
+        defaultSort: "created_at_desc",
+        allowedSorts: ["created_at_desc", "created_at_asc"],
+      },
+    );
     return this.investigations.list(
       pagination.page,
       pagination.pageSize,
       pagination.sort,
-      status,
+      params.status,
     );
   }
 
@@ -415,8 +421,8 @@ export class InvestigationsController {
   })
   @ApiInvalidRequest("Objetivo inválido ou agente não configurado.")
   @Post("trigger/manual")
-  triggerManual(@Body() body: { objective?: string }) {
-    return this.investigations.triggerManual(body.objective ?? "");
+  triggerManual(@Body() body: ManualInvestigationDto) {
+    return this.investigations.triggerManual(body.objective);
   }
 
   @ApiWrite({
@@ -437,8 +443,8 @@ export class InvestigationsController {
     schema: apiErrorSchema,
   })
   @Post(":investigationId/retry")
-  retry(@Param("investigationId") investigationId: string) {
-    return this.investigations.retry(investigationId);
+  retry(@Param() params: InvestigationIdParamDto) {
+    return this.investigations.retry(params.investigationId);
   }
 
   @ApiWrite({
@@ -479,21 +485,13 @@ export class InvestigationsController {
   })
   @Patch(":investigationId/review")
   review(
-    @Param("investigationId") investigationId: string,
-    @Body()
-    body: {
-      decision?: "approve" | "reject";
-      reviewer?: string;
-      note?: string;
-    },
+    @Param() params: InvestigationIdParamDto,
+    @Body() body: ReviewInvestigationDto,
   ) {
-    if (body.decision !== "approve" && body.decision !== "reject") {
-      throw new BadRequestException("Decisão deve ser approve ou reject.");
-    }
     return this.investigations.review(
-      investigationId,
+      params.investigationId,
       body.decision,
-      body.reviewer ?? "",
+      body.reviewer,
       body.note ?? "",
     );
   }

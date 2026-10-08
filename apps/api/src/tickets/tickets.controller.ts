@@ -34,6 +34,13 @@ import {
   apiPageSchema,
   apiString,
 } from "../openapi";
+import {
+  TicketsFilterOptionsQueryDto,
+  TicketsListQueryDto,
+  TicketsQueueQueryDto,
+} from "../contracts/query.dto";
+import { CreateTicketDto, NocStatusDto } from "../contracts/input.dto";
+import { TicketIdParamDto } from "../contracts/params.dto";
 
 const ticketFilterKinds = new Set<TicketFilterKind>([
   "ticket",
@@ -177,16 +184,17 @@ export class TicketsController {
   })
   @ApiInvalidRequest("Paginação inválida.")
   @Get("noc-queue")
-  nocQueue(
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "100",
-    @Query("sort") sort = "opened_at_asc",
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultPageSize: 100,
-      defaultSort: "opened_at_asc",
-      allowedSorts: ["opened_at_asc", "opened_at_desc", "status_asc"],
-    });
+  nocQueue(@Query() params: TicketsQueueQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultPageSize: 100,
+        defaultSort: "opened_at_asc",
+        allowedSorts: ["opened_at_asc", "opened_at_desc", "status_asc"],
+      },
+    );
     return this.tickets.nocQueue(
       pagination.page,
       pagination.pageSize,
@@ -271,45 +279,38 @@ export class TicketsController {
   })
   @ApiInvalidRequest("Filtro ou paginação inválida.")
   @Get()
-  list(
-    @Query("q") query = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "25",
-    @Query("sort") sort = "opened_at_desc",
-    @Query("category") category = "all",
-    @Query("resolution") resolution = "all",
-    @Query("channel") channel = "all",
-    @Query("customerId") customerId = "",
-    @Query("from") from = "",
-    @Query("to") to = "",
-    @Query("filter") filter?: string | string[],
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultSort: "opened_at_desc",
-      allowedSorts: [
-        "opened_at_desc",
-        "opened_at_asc",
-        "customer_id_asc",
-        "customer_id_desc",
-        "category_asc",
-        "category_desc",
-        "resolution_asc",
-        "resolution_desc",
-        "handling_minutes_desc",
-        "handling_minutes_asc",
-        "noc_priority_desc",
-      ],
-    });
+  list(@Query() params: TicketsListQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultSort: "opened_at_desc",
+        allowedSorts: [
+          "opened_at_desc",
+          "opened_at_asc",
+          "customer_id_asc",
+          "customer_id_desc",
+          "category_asc",
+          "category_desc",
+          "resolution_asc",
+          "resolution_desc",
+          "handling_minutes_desc",
+          "handling_minutes_asc",
+          "noc_priority_desc",
+        ],
+      },
+    );
     return this.tickets.list({
-      query,
+      query: params.q,
       ...pagination,
-      category,
-      resolution,
-      channel,
-      customerId,
-      from,
-      to,
-      filters: parseTicketFilters(filter),
+      category: params.category,
+      resolution: params.resolution,
+      channel: params.channel,
+      customerId: params.customerId,
+      from: params.from,
+      to: params.to,
+      filters: parseTicketFilters(params.filter),
     });
   }
 
@@ -348,28 +349,30 @@ export class TicketsController {
     enum: [...ticketFilterKinds],
   })
   @Get("filter-options")
-  filterOptions(
-    @Query("q") query = "",
-    @Query("kind") kind = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "20",
-    @Query("sort") sort = "relevance",
-  ) {
-    if (kind && !ticketFilterKinds.has(kind as TicketFilterKind)) {
+  filterOptions(@Query() params: TicketsFilterOptionsQueryDto) {
+    if (
+      params.kind &&
+      !ticketFilterKinds.has(params.kind as TicketFilterKind)
+    ) {
       throw new BadRequestException("Tipo de filtro de ticket inválido");
     }
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultPageSize: 20,
-      maximumPageSize: 50,
-      defaultSort: "relevance",
-      allowedSorts: ["relevance", "label_asc", "label_desc"],
-    });
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultPageSize: 20,
+        maximumPageSize: 50,
+        defaultSort: "relevance",
+        allowedSorts: ["relevance", "label_asc", "label_desc"],
+      },
+    );
     return this.tickets.filterOptions(
-      query,
+      params.q,
       pagination.page,
       pagination.pageSize,
       pagination.sort,
-      kind as TicketFilterKind | "",
+      params.kind as TicketFilterKind | "",
     );
   }
 
@@ -391,8 +394,8 @@ export class TicketsController {
     schema: apiErrorSchema,
   })
   @Get(":ticketId")
-  get(@Param("ticketId") ticketId: string) {
-    return this.tickets.get(ticketId);
+  get(@Param() params: TicketIdParamDto) {
+    return this.tickets.get(params.ticketId);
   }
 
   @ApiWrite({
@@ -429,23 +432,13 @@ export class TicketsController {
   })
   @ApiInvalidRequest("Dados ou vínculo inválidos.")
   @Post()
-  create(
-    @Body()
-    body: {
-      customerId?: string;
-      openedBy?: string;
-      category?: string;
-      description?: string;
-      outcome?: "resolver_telefone" | "escalar_noc" | "agendar_visita";
-      relatedProblemId?: string | null;
-    },
-  ) {
+  create(@Body() body: CreateTicketDto) {
     return this.tickets.create({
-      customerId: body.customerId ?? "",
-      openedBy: body.openedBy ?? "",
-      category: body.category ?? "",
-      description: body.description ?? "",
-      outcome: body.outcome ?? "escalar_noc",
+      customerId: body.customerId,
+      openedBy: body.openedBy,
+      category: body.category,
+      description: body.description,
+      outcome: body.outcome,
       relatedProblemId: body.relatedProblemId ?? null,
     });
   }
@@ -470,9 +463,9 @@ export class TicketsController {
   @ApiInvalidRequest("Transição inválida.")
   @Patch(":ticketId/noc-status")
   updateNocStatus(
-    @Param("ticketId") ticketId: string,
-    @Body() body: { status?: "in_progress" | "closed" },
+    @Param() params: TicketIdParamDto,
+    @Body() body: NocStatusDto,
   ) {
-    return this.tickets.updateNocStatus(ticketId, body.status ?? "in_progress");
+    return this.tickets.updateNocStatus(params.ticketId, body.status);
   }
 }

@@ -7,8 +7,15 @@ import {
   ApiTags,
 } from "@nestjs/swagger";
 import { CustomersService } from "./customers.service";
-import { N1AdvisorService, N1ChatMessage } from "./n1-advisor.service";
+import { N1AdvisorService } from "./n1-advisor.service";
 import { parsePageQuery } from "../pagination";
+import { N1ChatDto } from "../contracts/input.dto";
+import { CustomerIdParamDto } from "../contracts/params.dto";
+import {
+  CustomersFilterOptionsQueryDto,
+  CustomersListQueryDto,
+  CustomersSearchQueryDto,
+} from "../contracts/query.dto";
 import {
   ApiInvalidRequest,
   ApiPagination,
@@ -453,45 +460,45 @@ export class CustomersController {
   })
   @ApiInvalidRequest("Filtro, paginação ou ordenação inválida.")
   @Get()
-  list(
-    @Query("q") query = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "25",
-    @Query("sort") sort = "relevance",
-    @Query("status") status = "active",
-    @Query("filter") filter?: string | string[],
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultSort: "relevance",
-      maximumPageSize: 100,
-      allowedSorts: [
-        "relevance",
-        "customer_id_asc",
-        "customer_id_desc",
-        "serial_asc",
-        "serial_desc",
-        "equipment_asc",
-        "equipment_desc",
-        "firmware_plan_asc",
-        "firmware_plan_desc",
-        "installed_at_desc",
-        "plan_mbps_desc",
-        "plan_mbps_asc",
-        "topology_asc",
-        "topology_desc",
-        "status_asc",
-        "status_desc",
-      ],
-    });
+  list(@Query() params: CustomersListQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultSort: "relevance",
+        maximumPageSize: 100,
+        allowedSorts: [
+          "relevance",
+          "customer_id_asc",
+          "customer_id_desc",
+          "serial_asc",
+          "serial_desc",
+          "equipment_asc",
+          "equipment_desc",
+          "firmware_plan_asc",
+          "firmware_plan_desc",
+          "installed_at_desc",
+          "plan_mbps_desc",
+          "plan_mbps_asc",
+          "topology_asc",
+          "topology_desc",
+          "status_asc",
+          "status_desc",
+        ],
+      },
+    );
     const selectedStatus =
-      status === "all" || status === "removed" ? status : "active";
+      params.status === "all" || params.status === "removed"
+        ? params.status
+        : "active";
     return this.customers.list(
-      query,
+      params.q,
       pagination.page,
       pagination.pageSize,
       selectedStatus,
       pagination.sort,
-      parseInventoryFilters(filter),
+      parseInventoryFilters(params.filter),
     );
   }
 
@@ -533,23 +540,24 @@ export class CustomersController {
     },
   })
   @Get("filter-options")
-  filterOptions(
-    @Query("q") query = "",
-    @Query("status") status = "active",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "12",
-    @Query("sort") sort = "relevance",
-  ) {
+  filterOptions(@Query() params: CustomersFilterOptionsQueryDto) {
     const selectedStatus =
-      status === "all" || status === "removed" ? status : "active";
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultPageSize: 12,
-      maximumPageSize: 50,
-      defaultSort: "relevance",
-      allowedSorts: ["relevance", "label_asc", "label_desc"],
-    });
+      params.status === "all" || params.status === "removed"
+        ? params.status
+        : "active";
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultPageSize: 12,
+        maximumPageSize: 50,
+        defaultSort: "relevance",
+        allowedSorts: ["relevance", "label_asc", "label_desc"],
+      },
+    );
     return this.customers.filterOptions(
-      query,
+      params.q,
       selectedStatus,
       pagination.page,
       pagination.pageSize,
@@ -597,29 +605,30 @@ export class CustomersController {
   })
   @ApiInvalidRequest("Filtro, paginação ou ordenação inválida.")
   @Get("search")
-  search(
-    @Query("q") query = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "8",
-    @Query("sort") sort = "customer_id_asc",
-    @Query("status") status = "all",
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultPageSize: 8,
-      maximumPageSize: 50,
-      defaultSort: "customer_id_asc",
-      allowedSorts: [
-        "customer_id_asc",
-        "customer_id_desc",
-        "customer_since_desc",
-        "plan_mbps_desc",
-        "plan_mbps_asc",
-      ],
-    });
+  search(@Query() params: CustomersSearchQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultPageSize: 8,
+        maximumPageSize: 50,
+        defaultSort: "customer_id_asc",
+        allowedSorts: [
+          "customer_id_asc",
+          "customer_id_desc",
+          "customer_since_desc",
+          "plan_mbps_desc",
+          "plan_mbps_asc",
+        ],
+      },
+    );
     const selectedStatus =
-      status === "active" || status === "cancelled" ? status : "all";
+      params.status === "active" || params.status === "cancelled"
+        ? params.status
+        : "all";
     return this.customers.search(
-      query,
+      params.q,
       pagination.page,
       pagination.pageSize,
       pagination.sort,
@@ -672,8 +681,8 @@ export class CustomersController {
     schema: apiErrorSchema,
   })
   @Get(":customerId")
-  get(@Param("customerId") customerId: string) {
-    return this.customers.get(customerId);
+  get(@Param() params: CustomerIdParamDto) {
+    return this.customers.get(params.customerId);
   }
 
   @ApiRead({
@@ -694,8 +703,8 @@ export class CustomersController {
     schema: apiErrorSchema,
   })
   @Get(":customerId/support")
-  support(@Param("customerId") customerId: string) {
-    return this.customers.getSupportProfile(customerId);
+  support(@Param() params: CustomerIdParamDto) {
+    return this.customers.getSupportProfile(params.customerId);
   }
 
   @ApiRead({
@@ -741,27 +750,11 @@ export class CustomersController {
   })
   @ApiInvalidRequest("Mensagem inválida.")
   @Post(":customerId/n1-chat")
-  n1Chat(
-    @Param("customerId") customerId: string,
-    @Body()
-    body: {
-      message?: string;
-      history?: N1ChatMessage[];
-    },
-  ) {
-    const safeBody = body ?? {};
-    const message =
-      typeof safeBody.message === "string" ? safeBody.message : "";
-    const history = Array.isArray(safeBody.history)
-      ? safeBody.history
-          .filter(
-            (item) =>
-              item &&
-              (item.role === "user" || item.role === "assistant") &&
-              typeof item.content === "string",
-          )
-          .slice(-8)
-      : [];
-    return this.n1Advisor.chat(customerId, message, history);
+  n1Chat(@Param() params: CustomerIdParamDto, @Body() body: N1ChatDto) {
+    return this.n1Advisor.chat(
+      params.customerId,
+      body.message,
+      body.history ?? [],
+    );
   }
 }

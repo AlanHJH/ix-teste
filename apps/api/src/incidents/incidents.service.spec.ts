@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { DatabaseService } from "../database";
 import { IncidentsService } from "./incidents.service";
+import { PostgresIncidentsRepository } from "./infrastructure/postgres-incidents.repository";
+
+function incidentsService(database: DatabaseService) {
+  return new IncidentsService(new PostgresIncidentsRepository(database));
+}
 
 describe("IncidentsService.create", () => {
   it("cria incidente de PON e vincula o chamado N1 de origem", async () => {
@@ -27,7 +32,7 @@ describe("IncidentsService.create", () => {
       },
     } as unknown as DatabaseService;
 
-    const result = await new IncidentsService(database).create({
+    const result = await incidentsService(database).create({
       openedBy: "NOC-07",
       title: "Perda compartilhada na PON 1/7",
       severity: "high",
@@ -59,7 +64,7 @@ describe("IncidentsService.create", () => {
 
     await assert.rejects(
       () =>
-        new IncidentsService(database).create({
+        incidentsService(database).create({
           openedBy: "NOC-07",
           title: "Incidente em OLT inexistente",
           severity: "medium",
@@ -90,7 +95,7 @@ describe("IncidentsService.options", () => {
       },
     } as unknown as DatabaseService;
 
-    const result = await new IncidentsService(database).options({
+    const result = await incidentsService(database).options({
       type: "pon",
       query: "1/",
       olt: "olt-2",
@@ -113,7 +118,7 @@ describe("IncidentsService.options", () => {
       },
     } as unknown as DatabaseService;
 
-    const result = await new IncidentsService(database).options({
+    const result = await incidentsService(database).options({
       type: "customer",
       query: "C",
       olt: "",
@@ -139,7 +144,7 @@ describe("IncidentsService.close", () => {
       },
     } as unknown as DatabaseService;
 
-    const result = await new IncidentsService(database).close(
+    const result = await incidentsService(database).close(
       "inc-teste123",
       "resolved",
     );
@@ -164,7 +169,7 @@ describe("IncidentsService.close", () => {
     } as unknown as DatabaseService;
 
     await assert.rejects(
-      () => new IncidentsService(database).close("INC-INEXISTENTE", "resolved"),
+      () => incidentsService(database).close("INC-INEXISTENTE", "resolved"),
       /não encontrado ou já encerrado/,
     );
   });
@@ -180,7 +185,7 @@ describe("IncidentsService.resolveProposedScope", () => {
       },
     } as unknown as DatabaseService;
 
-    const result = await new IncidentsService(database).resolveProposedScope({
+    const result = await incidentsService(database).resolveProposedScope({
       type: "pon",
       identifier: "texto livre do modelo",
       olt: "olt-2",

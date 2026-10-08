@@ -9,6 +9,11 @@ import {
   apiInteger,
   apiString,
 } from "../openapi";
+import {
+  DashboardComposeDto,
+  DashboardPreferenceDto,
+} from "../contracts/input.dto";
+import { UserIdParamDto } from "../contracts/params.dto";
 import { DashboardService } from "./dashboard.service";
 
 const dashboardWidgetSchema = {
@@ -236,14 +241,7 @@ export class DashboardController {
   })
   @ApiInvalidRequest("Objetivo, plano atual ou bloco selecionado inválido.")
   @Post("compose")
-  compose(
-    @Body()
-    body: {
-      objective?: unknown;
-      currentPlan?: unknown;
-      targetWidgetId?: unknown;
-    },
-  ) {
+  compose(@Body() body: DashboardComposeDto) {
     return this.dashboards.compose(body);
   }
 
@@ -262,8 +260,8 @@ export class DashboardController {
   })
   @ApiInvalidRequest("Identificador de usuário inválido.")
   @Get("preferences/:userId")
-  preference(@Param("userId") userId: string) {
-    return this.dashboards.getPreference(userId);
+  preference(@Param() params: UserIdParamDto) {
+    return this.dashboards.getPreference(params.userId);
   }
 
   @ApiWrite({
@@ -290,9 +288,9 @@ export class DashboardController {
   @ApiInvalidRequest("Identificador ou composição inválida.")
   @Put("preferences/:userId")
   savePreference(
-    @Param("userId") userId: string,
-    @Body() body: { composition?: unknown },
+    @Param() params: UserIdParamDto,
+    @Body() body: DashboardPreferenceDto,
   ) {
-    return this.dashboards.savePreference(userId, body.composition);
+    return this.dashboards.savePreference(params.userId, body.composition);
   }
 }

@@ -1,7 +1,11 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import OpenAI from "openai";
-import { DatabaseService } from "../database";
 import { OpenApiCatalogService } from "../openapi-catalog.service";
+import {
+  DASHBOARD_REPOSITORY,
+  DashboardRepository,
+} from "./application/dashboard-repository";
+import { PostgresDashboardRepository } from "./infrastructure/postgres-dashboard.repository";
 import {
   alignInfrastructureMetricBindings,
   dashboardPlanJsonSchema,
@@ -68,22 +72,21 @@ export class DashboardService {
   private readonly model = process.env.OPENAI_MODEL?.trim() || "gpt-6-luna";
 
   constructor(
-    private readonly database: DatabaseService,
+    @Inject(DASHBOARD_REPOSITORY)
+    repository: DashboardRepository | { query: Function },
     private readonly openApiCatalog: OpenApiCatalogService = new OpenApiCatalogService(),
-  ) {}
+  ) {
+    this.repository =
+      "getPreference" in repository
+        ? repository
+        : new PostgresDashboardRepository(repository as never);
+  }
+
+  private readonly repository: DashboardRepository;
 
   async getPreference(userId: string) {
     const normalizedUserId = this.validateUserId(userId);
-    const result = await this.database.query<{
-      composition: unknown;
-      updated_at: Date | string;
-    }>(
-      `SELECT composition, updated_at
-       FROM dashboard_preferences
-       WHERE user_id = $1`,
-      [normalizedUserId],
-    );
-    const row = result.rows[0];
+    const row = await this.repository.getPreference(normalizedUserId);
     if (!row) return { composition: null, updatedAt: null };
     const composition = this.withCurrentDiscovery(
       validateDashboardComposition(row.composition),
@@ -106,17 +109,13 @@ export class DashboardService {
         "A configuração enviada para o dashboard é inválida.",
       );
     }
-    const result = await this.database.query<{ updated_at: Date | string }>(
-      `INSERT INTO dashboard_preferences(user_id, composition, updated_at)
-       VALUES ($1, $2::jsonb, now())
-       ON CONFLICT (user_id) DO UPDATE
-       SET composition = EXCLUDED.composition, updated_at = now()
-       RETURNING updated_at`,
-      [normalizedUserId, JSON.stringify(composition)],
+    const result = await this.repository.savePreference(
+      normalizedUserId,
+      composition,
     );
     return {
       composition,
-      updatedAt: new Date(result.rows[0].updated_at).toISOString(),
+      updatedAt: new Date(result.updated_at).toISOString(),
     };
   }
 

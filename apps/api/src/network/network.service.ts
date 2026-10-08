@@ -1,9 +1,10 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { DatabaseService } from "../database";
+import { SQL_EXECUTOR, SqlExecutor } from "../infrastructure/sql-executor";
 
 type WeeklyTicket = {
   week: string;
@@ -39,7 +40,7 @@ const detectedGroupingIds = new Set([
 
 @Injectable()
 export class NetworkService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(@Inject(SQL_EXECUTOR) private readonly database: SqlExecutor) {}
 
   async getTopology(olt?: string, pon?: string) {
     const selectedOlt = olt?.trim().toUpperCase() || null;

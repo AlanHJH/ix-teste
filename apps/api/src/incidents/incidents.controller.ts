@@ -28,6 +28,12 @@ import {
   apiString,
 } from "../openapi";
 import { parsePageQuery } from "../pagination";
+import { CreateIncidentDto, ResolvedStatusDto } from "../contracts/input.dto";
+import { IncidentIdParamDto } from "../contracts/params.dto";
+import {
+  IncidentsListQueryDto,
+  IncidentsOptionsQueryDto,
+} from "../contracts/query.dto";
 import {
   CreateIncidentInput,
   IncidentOptionType,
@@ -153,21 +159,21 @@ export class IncidentsController {
   })
   @ApiInvalidRequest("Filtro, paginação ou ordenação inválida.")
   @Get()
-  list(
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "25",
-    @Query("sort") sort = "severity_desc",
-    @Query("scopeType") scopeType = "",
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultSort: "severity_desc",
-      allowedSorts: ["severity_desc", "opened_at_desc", "opened_at_asc"],
-    });
+  list(@Query() params: IncidentsListQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultSort: "severity_desc",
+        allowedSorts: ["severity_desc", "opened_at_desc", "opened_at_asc"],
+      },
+    );
     return this.incidents.list(
       pagination.page,
       pagination.pageSize,
       pagination.sort,
-      scopeType,
+      params.scopeType,
     );
   }
 
@@ -236,26 +242,23 @@ export class IncidentsController {
   })
   @ApiInvalidRequest("Tipo, dependência, paginação ou ordenação inválida.")
   @Get("options")
-  options(
-    @Query("type") type = "olt",
-    @Query("q") query = "",
-    @Query("olt") olt = "",
-    @Query("pon") pon = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "40",
-    @Query("sort") sort = "value_asc",
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultPageSize: 40,
-      maximumPageSize: 50,
-      defaultSort: "value_asc",
-      allowedSorts: ["value_asc", "value_desc"],
-    });
+  options(@Query() params: IncidentsOptionsQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultPageSize: 40,
+        maximumPageSize: 50,
+        defaultSort: "value_asc",
+        allowedSorts: ["value_asc", "value_desc"],
+      },
+    );
     return this.incidents.options({
-      type: type as IncidentOptionType,
-      query,
-      olt,
-      pon,
+      type: params.type as IncidentOptionType,
+      query: params.q,
+      olt: params.olt,
+      pon: params.pon,
       ...pagination,
     });
   }
@@ -339,18 +342,18 @@ export class IncidentsController {
     schema: apiErrorSchema,
   })
   @Post()
-  create(@Body() body: Partial<CreateIncidentInput>) {
+  create(@Body() body: CreateIncidentDto) {
     return this.incidents.create({
-      openedBy: body.openedBy ?? "",
-      title: body.title ?? "",
-      severity: body.severity ?? "medium",
-      scopeType: body.scopeType ?? "pon",
+      openedBy: body.openedBy,
+      title: body.title,
+      severity: body.severity,
+      scopeType: body.scopeType,
       identifier: body.identifier ?? "",
       olt: body.olt ?? "",
       pon: body.pon ?? "",
       cto: body.cto ?? "",
-      probableCause: body.probableCause ?? "",
-      recommendedAction: body.recommendedAction ?? "",
+      probableCause: body.probableCause,
+      recommendedAction: body.recommendedAction,
       originTicketId: body.originTicketId ?? null,
     });
   }
@@ -387,10 +390,7 @@ export class IncidentsController {
     schema: apiErrorSchema,
   })
   @Patch(":incidentId/status")
-  close(
-    @Param("incidentId") incidentId: string,
-    @Body() body: { status?: "resolved" },
-  ) {
-    return this.incidents.close(incidentId, body.status ?? "resolved");
+  close(@Param() params: IncidentIdParamDto, @Body() body: ResolvedStatusDto) {
+    return this.incidents.close(params.incidentId, body.status);
   }
 }

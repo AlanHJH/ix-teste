@@ -11,7 +11,6 @@ import {
   ApiQuery,
   ApiTags,
 } from "@nestjs/swagger";
-import { DatabaseService } from "../database";
 import { parsePageQuery } from "../pagination";
 import {
   ApiInvalidRequest,
@@ -25,7 +24,11 @@ import {
   apiErrorSchema,
 } from "../openapi";
 import { InventoryQueries } from "../mcp/contexts/inventory/application/inventory-queries";
-import { PostgresInventoryRepository } from "../mcp/contexts/inventory/infrastructure/postgres-inventory-repository";
+import {
+  InventoryListQueryDto,
+  InventoryTopologyQueryDto,
+} from "../contracts/query.dto";
+import { SerialParamDto } from "../contracts/params.dto";
 
 const inventorySorts = [
   "customer_id_asc",
@@ -104,13 +107,7 @@ const inventoryItemSchema = {
 @ApiTags("Inventário")
 @Controller("inventory")
 export class InventoryController {
-  private readonly inventory: InventoryQueries;
-
-  constructor(database: DatabaseService) {
-    this.inventory = new InventoryQueries(
-      new PostgresInventoryRepository(database),
-    );
-  }
+  constructor(private readonly inventory: InventoryQueries) {}
 
   @ApiRead({
     summary: "Consultar inventário de CPEs",
@@ -159,28 +156,26 @@ export class InventoryController {
   })
   @ApiInvalidRequest("Filtro, paginação ou ordenação inválida.")
   @Get()
-  list(
-    @Query("q") query = "",
-    @Query("status") status = "all",
-    @Query("vendor") vendor = "",
-    @Query("olt") olt = "",
-    @Query("pon") pon = "",
-    @Query("cto") cto = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "25",
-    @Query("sort") sort = "customer_id_asc",
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultSort: "customer_id_asc",
-      allowedSorts: inventorySorts,
-    });
+  list(@Query() params: InventoryListQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultSort: "customer_id_asc",
+        allowedSorts: inventorySorts,
+      },
+    );
     return this.inventory.search({
-      query,
-      status: status === "active" || status === "removed" ? status : "all",
-      vendor: vendor || undefined,
-      olt: olt || undefined,
-      pon: pon || undefined,
-      cto: cto || undefined,
+      query: params.q,
+      status:
+        params.status === "active" || params.status === "removed"
+          ? params.status
+          : "all",
+      vendor: params.vendor || undefined,
+      olt: params.olt || undefined,
+      pon: params.pon || undefined,
+      cto: params.cto || undefined,
       ...pagination,
     });
   }
@@ -217,22 +212,20 @@ export class InventoryController {
   })
   @ApiInvalidRequest("Escopo topológico ou paginação inválida.")
   @Get("topology")
-  topology(
-    @Query("olt") olt = "",
-    @Query("pon") pon = "",
-    @Query("cto") cto = "",
-    @Query("page") page = "1",
-    @Query("pageSize") pageSize = "25",
-    @Query("sort") sort = "customer_id_asc",
-  ) {
-    const pagination = parsePageQuery(page, pageSize, sort, {
-      defaultSort: "customer_id_asc",
-      allowedSorts: inventorySorts,
-    });
+  topology(@Query() params: InventoryTopologyQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultSort: "customer_id_asc",
+        allowedSorts: inventorySorts,
+      },
+    );
     return this.inventory.topology({
-      olt: olt || undefined,
-      pon: pon || undefined,
-      cto: cto || undefined,
+      olt: params.olt || undefined,
+      pon: params.pon || undefined,
+      cto: params.cto || undefined,
       ...pagination,
     });
   }
@@ -255,9 +248,9 @@ export class InventoryController {
     schema: apiErrorSchema,
   })
   @Get(":serial")
-  async get(@Param("serial") serial: string) {
+  async get(@Param() params: SerialParamDto) {
     try {
-      return await this.inventory.get(serial);
+      return await this.inventory.get(params.serial);
     } catch {
       throw new NotFoundException("Equipamento não encontrado.");
     }

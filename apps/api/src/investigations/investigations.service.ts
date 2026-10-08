@@ -1,12 +1,13 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
-import { DatabaseService } from "../database";
 import { listGroupingCandidates } from "../grouping-candidates";
 import { IncidentsService } from "../incidents/incidents.service";
+import { SQL_EXECUTOR, SqlExecutor } from "../infrastructure/sql-executor";
 import { paginate } from "../pagination";
 import { validateAgentFinding } from "./finding-schema";
 import {
@@ -65,7 +66,7 @@ export class InvestigationsService {
   );
 
   constructor(
-    private readonly database: DatabaseService,
+    @Inject(SQL_EXECUTOR) private readonly database: SqlExecutor,
     private readonly incidents: IncidentsService,
     private readonly agent: OpenAIInvestigationAgent,
   ) {}
