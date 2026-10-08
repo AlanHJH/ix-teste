@@ -196,6 +196,31 @@ function operationalGrouping(incident: OperationalIncident): GroupingCardData {
   };
 }
 
+function GroupingScopePath({ location }: { location: string }) {
+  const segments = location
+    .split(" · ")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  return (
+    <span className="grouping-scope-path" aria-label={location}>
+      {segments.map((segment, index) => (
+        <span
+          className="grouping-scope-segment-wrap"
+          key={`${segment}-${index}`}
+        >
+          {index > 0 && (
+            <span className="grouping-scope-separator" aria-hidden="true">
+              ·
+            </span>
+          )}
+          <span className="grouping-scope-segment">{segment}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function GroupingCard({
   grouping,
   onOpen,
@@ -225,25 +250,21 @@ function GroupingCard({
           </div>
         </header>
         <div className="investigation-card-copy">
-          <h3>
-            <TechnicalText text={grouping.title} />
-          </h3>
+          <h3>{grouping.title}</h3>
           <small>{grouping.id}</small>
         </div>
         <div className="investigation-card-preview">
           <div>
             <span>Alcance</span>
             <strong>
-              <TechnicalText text={grouping.location} />
+              <GroupingScopePath location={grouping.location} />
             </strong>
           </div>
           <div>
             <span>Impacto estimado</span>
             <strong>{grouping.affected.toLocaleString("pt-BR")} CPEs</strong>
           </div>
-          <p>
-            <TechnicalText text={grouping.signal} />
-          </p>
+          <p>{grouping.signal}</p>
         </div>
         <footer>
           <span>Ver detalhes do agrupamento</span>

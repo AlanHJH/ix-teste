@@ -24,6 +24,16 @@ const GRAPH_HEIGHT = 1_100;
 const GRAPH_CENTER = { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 };
 const NODE_WIDTH = 142;
 const NODE_HEIGHT = 46;
+const NODE_TEXT_WIDTH = NODE_WIDTH - 22;
+
+function textLengthForNode(
+  value: string,
+  fontSize: number,
+  availableWidth = NODE_TEXT_WIDTH,
+) {
+  const estimatedWidth = value.length * fontSize * 0.68;
+  return estimatedWidth > availableWidth ? availableWidth : undefined;
+}
 
 function centerOf(point: Point) {
   return { x: point.x + NODE_WIDTH / 2, y: point.y + NODE_HEIGHT / 2 };
@@ -167,6 +177,8 @@ function GraphNode({
   collapsedChildren?: { count: number; label: string };
   onSelect: () => void;
 }) {
+  const textWidth = collapsedChildren ? NODE_TEXT_WIDTH - 34 : NODE_TEXT_WIDTH;
+
   function handleKeyDown(event: KeyboardEvent<SVGGElement>) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -195,10 +207,22 @@ function GraphNode({
           : "Clique para ver os dados deste item."
       }`}</title>
       <rect width={NODE_WIDTH} height={NODE_HEIGHT} rx="9" />
-      <text x="11" y="19" className="network-graph-node-title">
+      <text
+        x="11"
+        y="19"
+        className="network-graph-node-title"
+        textLength={textLengthForNode(title, 17, textWidth)}
+        lengthAdjust="spacingAndGlyphs"
+      >
         {title}
       </text>
-      <text x="11" y="35" className="network-graph-node-detail">
+      <text
+        x="11"
+        y="35"
+        className="network-graph-node-detail"
+        textLength={textLengthForNode(detail, 13, textWidth)}
+        lengthAdjust="spacingAndGlyphs"
+      >
         {detail}
       </text>
       {collapsedChildren && (
