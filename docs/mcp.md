@@ -1,5 +1,7 @@
 # Servidor MCP
 
+O contrato detalhado de tipos, nulabilidade, paginação e erros está em [`contratos-api.md`](contratos-api.md). Este documento explica especificamente a superfície MCP e sua relação com o OpenAPI.
+
 O MCP está integrado ao mesmo projeto NestJS da API REST e usa o mesmo pool PostgreSQL. Clientes, inventário, telemetria, diagnósticos, chamados e operação permanecem como domínios de consulta. O domínio `application` completa a paridade com as jornadas REST e encaminha mutações para os mesmos serviços e validações do backend. O agente de investigação não recebe essas ferramentas de escrita: sua allowlist continua exclusivamente de leitura.
 
 ## Endpoints locais
@@ -16,6 +18,8 @@ O MCP está integrado ao mesmo projeto NestJS da API REST e usa o mesmo pool Pos
 
 Todos usam Streamable HTTP. O proxy web também encaminha `/mcp/*` em `http://localhost:8080`.
 
+O catálogo `GET /mcp` informa os endpoints, o transporte e a limitação atual de autenticação. Cada servidor publica ferramentas com schema de entrada e saída explícito: strings, inteiros, números, booleanos, enums, arrays e objetos possuem descrição; campos nulos são marcados como nullable. Ferramentas de coleção preservam `data`, `page`, `pageSize`, `totalItems` e `totalPages`.
+
 ## Bridge OpenAPI para o dashboard
 
 O endpoint `/mcp/openapi` é gerado do mesmo documento usado pelo Swagger. Cada `operationId` REST vira uma ferramenta MCP com título, descrição, schema de entrada, anotações de leitura/escrita e metadados do método e caminho HTTP. Parâmetros de path e query e propriedades do corpo JSON são convertidos automaticamente; a chamada da ferramenta é encaminhada para a rota REST correspondente.
@@ -23,6 +27,8 @@ O endpoint `/mcp/openapi` é gerado do mesmo documento usado pelo Swagger. Cada 
 O recurso `ondaluz://openapi/dashboard-routes` contém somente operações simultaneamente marcadas com `x-dashboard-resource: true` e `x-read-only: true`. Esse é o catálogo compacto usado para informar à IA quais fontes existem. Ele não carrega dados operacionais: depois de gerar o plano, o navegador continua buscando valores diretamente pelas rotas REST. Assim, adicionar ou alterar uma rota no controller atualiza Swagger, bridge MCP e descoberta do dashboard no mesmo reinício, sem manter uma lista manual paralela.
 
 As ferramentas de coleção usam `page`, `pageSize` e `sort`, com resposta padronizada em `data`, `page`, `pageSize`, `totalItems` e `totalPages`. O domínio `application` completa a paridade com as jornadas REST de dashboard, preferências do dashboard, filtros facetados, topologia, suporte N1, fila NOC, agrupamentos e investigações. As mutações continuam fora da allowlist do agente de investigação: elas podem ser chamadas por um cliente MCP autorizado, mas nunca são descobertas pelo agente que propõe agrupamentos.
+
+O bridge mantém a mesma semântica de erros do endpoint REST chamado. O cliente MCP deve tratar um resultado de ferramenta com erro como falha, sem convertê-lo em um registro de negócio; para a execução HTTP subjacente, o envelope documentado é `statusCode`, `message` e `error`.
 
 ## Agrupamentos
 

@@ -9,6 +9,7 @@ import {
   ApiInvalidRequest,
   ApiPagination,
   ApiRead,
+  apiDateTime,
   apiInteger,
   apiNumber,
   apiPageSchema,
@@ -21,11 +22,22 @@ const datasetLoadSchema = {
   properties: {
     load_id: apiString("Identificador da carga."),
     status: apiString("Estado da execução.", "completed"),
-    started_at: apiString("Início da carga em ISO 8601."),
-    finished_at: { ...apiString("Fim da carga em ISO 8601."), nullable: true },
+    started_at: apiDateTime("Início da carga em ISO 8601."),
+    finished_at: {
+      ...apiDateTime("Fim da carga em ISO 8601."),
+      nullable: true,
+    },
     source: apiString("Origem do arquivo ou processo."),
     records: apiInteger("Quantidade de registros processados.", 1500),
   },
+  required: [
+    "load_id",
+    "status",
+    "started_at",
+    "finished_at",
+    "source",
+    "records",
+  ],
 };
 
 const groupingCandidateSchema = {
@@ -37,6 +49,14 @@ const groupingCandidateSchema = {
     scope: {
       type: "object" as const,
       description: "Tipo, identificador e caminho do escopo.",
+      required: ["type", "identifier"],
+      properties: {
+        type: { type: "string", enum: [...groupingScopeTypes] },
+        identifier: apiString("Identificador do escopo."),
+        olt: { ...apiString("OLT do escopo."), nullable: true },
+        pon: { ...apiString("PON do escopo."), nullable: true },
+        cto: { ...apiString("CTO do escopo."), nullable: true },
+      },
     },
     signal: apiString("Sinal dominante que originou o candidato."),
     summary: apiString("Resumo da concentração observada."),
@@ -44,6 +64,15 @@ const groupingCandidateSchema = {
     totalCpes: apiInteger("CPEs ativas existentes no escopo.", 50),
     affectedPercent: apiNumber("Percentual afetado no escopo.", 84),
   },
+  required: [
+    "candidateKey",
+    "scope",
+    "signal",
+    "summary",
+    "affectedCpes",
+    "totalCpes",
+    "affectedPercent",
+  ],
 };
 
 const activeGroupingSchema = {
@@ -55,10 +84,30 @@ const activeGroupingSchema = {
     status: apiString("Estado operacional.", "open"),
     severity: apiString("Severidade.", "high"),
     title: apiString("Título do agrupamento."),
-    scope: { type: "object" as const, description: "Escopo persistido." },
+    scope: {
+      type: "object" as const,
+      description: "Escopo persistido.",
+      required: ["type", "identifier"],
+      properties: {
+        type: { type: "string", enum: [...groupingScopeTypes] },
+        identifier: apiString("Identificador do escopo."),
+        olt: { ...apiString("OLT do escopo."), nullable: true },
+        pon: { ...apiString("PON do escopo."), nullable: true },
+        cto: { ...apiString("CTO do escopo."), nullable: true },
+      },
+    },
     affected_cpes: apiInteger("CPEs ativas no escopo.", 42),
-    opened_at: apiString("Abertura em ISO 8601."),
+    opened_at: apiDateTime("Abertura em ISO 8601."),
   },
+  required: [
+    "incident_id",
+    "status",
+    "severity",
+    "title",
+    "scope",
+    "affected_cpes",
+    "opened_at",
+  ],
 };
 
 @ApiTags("Operação da plataforma")

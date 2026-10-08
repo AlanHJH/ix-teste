@@ -11,6 +11,7 @@ import {
   ApiPagination,
   ApiRead,
   apiInteger,
+  apiDateTime,
   apiNumber,
   apiPageSchema,
   apiString,
@@ -51,7 +52,7 @@ const diagnosticSchema = {
   description:
     "Execução de diagnóstico TR-143 enriquecida com cliente e topologia.",
   properties: {
-    ts: apiString("Data e hora da execução."),
+    ts: apiDateTime("Data e hora da execução."),
     serial: apiString("Serial da CPE.", "KSTLD199FB78"),
     requested_by: apiString("Origem da solicitação.", "NOC"),
     diagnostic: apiString("Tipo do diagnóstico.", "DownloadDiagnostics"),
@@ -66,6 +67,64 @@ const diagnosticSchema = {
     pon: apiString("PON.", "1/7"),
     cto: apiString("CTO.", "CTO-2-17-03"),
   },
+  required: [
+    "ts",
+    "serial",
+    "requested_by",
+    "diagnostic",
+    "state",
+    "download_mbps",
+    "upload_mbps",
+    "test_server",
+    "customer_id",
+    "model",
+    "plan_mbps",
+    "olt",
+    "pon",
+    "cto",
+  ],
+};
+
+const diagnosticMetaSchema = {
+  type: "object" as const,
+  description: "Resumo da seleção completa e filtros existentes.",
+  required: ["summary", "filters"],
+  properties: {
+    summary: {
+      type: "object",
+      required: [
+        "total",
+        "completed",
+        "errors",
+        "avg_download_mbps",
+        "avg_upload_mbps",
+      ],
+      properties: {
+        total: apiInteger("Total de diagnósticos filtrados."),
+        completed: apiInteger("Diagnósticos concluídos."),
+        errors: apiInteger("Diagnósticos em estado diferente de Completed."),
+        avg_download_mbps: {
+          ...apiNumber("Download médio dos testes concluídos."),
+          nullable: true,
+        },
+        avg_upload_mbps: {
+          ...apiNumber("Upload médio dos testes concluídos."),
+          nullable: true,
+        },
+      },
+    },
+    filters: {
+      type: "object",
+      required: ["states", "requested_by"],
+      properties: {
+        states: { type: "array", items: apiString("Estado disponível.") },
+        requested_by: {
+          type: "array",
+          items: apiString("Solicitante disponível."),
+        },
+      },
+    },
+  },
 };
 
 @ApiTags("Diagnósticos")
@@ -79,9 +138,7 @@ export class DiagnosticsController {
       "Lista testes remotos de download/upload. Timeout e ausência de resposta não equivalem a velocidade zero. meta resume toda a seleção filtrada.",
     responseDescription: "Diagnósticos e resumo da seleção.",
     schema: apiPageSchema(diagnosticSchema, "Página de diagnósticos TR-143.", {
-      type: "object",
-      description: "Resumo e filtros disponíveis sobre a seleção completa.",
-      additionalProperties: true,
+      ...diagnosticMetaSchema,
     }),
     dashboardResource: true,
   })

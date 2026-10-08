@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { DatabaseService } from "../database";
+import { PostgresTicketsRepository } from "./infrastructure/postgres-tickets.repository";
 import { TicketsService } from "./tickets.service";
 
 describe("TicketsService.create", () => {
@@ -27,7 +28,9 @@ describe("TicketsService.create", () => {
       },
     } as unknown as DatabaseService;
 
-    const result = await new TicketsService(database).create({
+    const result = await new TicketsService(
+      new PostgresTicketsRepository(database),
+    ).create({
       customerId: "c545968",
       openedBy: "N1-42",
       category: "Sem conexão",
@@ -52,7 +55,7 @@ describe("TicketsService.create", () => {
 
     await assert.rejects(
       () =>
-        new TicketsService(database).create({
+        new TicketsService(new PostgresTicketsRepository(database)).create({
           customerId: "C545968",
           openedBy: "N1-42",
           category: "Sem conexão",
@@ -76,7 +79,7 @@ describe("TicketsService.create", () => {
 
     await assert.rejects(
       () =>
-        new TicketsService(database).create({
+        new TicketsService(new PostgresTicketsRepository(database)).create({
           customerId: "C545968",
           openedBy: "N1-42",
           category: "Sem conexão",
@@ -111,7 +114,9 @@ describe("TicketsService.create", () => {
       },
     } as unknown as DatabaseService;
 
-    const result = await new TicketsService(database).create({
+    const result = await new TicketsService(
+      new PostgresTicketsRepository(database),
+    ).create({
       customerId: "C545968",
       openedBy: "N1-42",
       category: "Sem conexão",
@@ -142,10 +147,9 @@ describe("TicketsService.updateNocStatus", () => {
       },
     } as unknown as DatabaseService;
 
-    const result = await new TicketsService(database).updateNocStatus(
-      "tn1-kanban1",
-      "in_progress",
-    );
+    const result = await new TicketsService(
+      new PostgresTicketsRepository(database),
+    ).updateNocStatus("tn1-kanban1", "in_progress");
 
     assert.equal(result.noc_status, "in_progress");
     assert.match(queries[0].text, /noc_status='pending'/);
@@ -169,10 +173,9 @@ describe("TicketsService.updateNocStatus", () => {
       },
     } as unknown as DatabaseService;
 
-    const result = await new TicketsService(database).updateNocStatus(
-      "tn1-kanban2",
-      "closed",
-    );
+    const result = await new TicketsService(
+      new PostgresTicketsRepository(database),
+    ).updateNocStatus("tn1-kanban2", "closed");
 
     assert.equal(result.noc_status, "closed");
     assert.match(queries[0].text, /closed_at=CASE/);

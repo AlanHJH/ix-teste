@@ -21,6 +21,7 @@ import {
   ApiRead,
   ApiWrite,
   apiArray,
+  apiDate,
   apiErrorSchema,
   apiInteger,
   apiNumber,
@@ -54,6 +55,21 @@ const topologyDeviceSchema = {
       nullable: true,
     },
   },
+  required: [
+    "serial",
+    "customer_id",
+    "vendor",
+    "model",
+    "hw_revision",
+    "software_version",
+    "plan_mbps",
+    "olt",
+    "pon",
+    "cto",
+    "city",
+    "neighborhood",
+    "logical_drop_id",
+  ],
 };
 
 const detectedIncidentSchema = {
@@ -89,6 +105,22 @@ const detectedIncidentSchema = {
     cost: apiNumber("Impacto financeiro estimado em reais.", 1320),
     costLabel: apiString("Explicação do cálculo de impacto."),
   },
+  required: [
+    "id",
+    "severity",
+    "scope",
+    "title",
+    "location",
+    "affected",
+    "score",
+    "confidence",
+    "signal",
+    "evidence",
+    "recommendation",
+    "owner",
+    "cost",
+    "costLabel",
+  ],
 };
 
 @ApiTags("Rede")
@@ -105,7 +137,7 @@ export class NetworkController {
     schema: {
       type: "object",
       properties: {
-        asOf: apiString(
+        asOf: apiDate(
           "Data mais recente disponível na telemetria.",
           "2026-08-09",
         ),
@@ -133,6 +165,15 @@ export class NetworkController {
               18450,
             ),
           },
+          required: [
+            "activeCpes",
+            "oltCount",
+            "ponCount",
+            "ticketGrowthPct",
+            "affectedCpes",
+            "repeatCustomers",
+            "estimatedImpact",
+          ],
         },
         weeklyTickets: apiArray(
           {
@@ -144,6 +185,7 @@ export class NetworkController {
               disconnected: apiInteger("Chamados sem conexão.", 38),
               wifi: apiInteger("Chamados de Wi-Fi.", 43),
             },
+            required: ["week", "total", "slowness", "disconnected", "wifi"],
           },
           "Série temporal semanal por categoria.",
         ),
@@ -159,8 +201,10 @@ export class NetworkController {
             headline: apiString("Conclusão principal."),
             summary: apiString("Resumo das prioridades recomendadas."),
           },
+          required: ["headline", "summary"],
         },
       },
+      required: ["asOf", "kpis", "weeklyTickets", "incidents", "readout"],
     },
   })
   @Get("overview")
@@ -300,31 +344,103 @@ export class NetworkController {
         totals: {
           type: "object",
           description: "Totais de CPEs, OLTs, PONs e CTOs.",
+          required: ["cpes", "olts", "pons", "ctos"],
+          properties: {
+            cpes: apiInteger("Total de CPEs ativas.", 1500),
+            olts: apiInteger("Total de OLTs.", 3),
+            pons: apiInteger("Total de PONs.", 24),
+            ctos: apiInteger("Total de CTOs.", 120),
+          },
         },
         olts: {
           type: "array",
           description: "OLTs e seus totais.",
-          items: { type: "object" },
+          items: {
+            type: "object",
+            required: [
+              "olt",
+              "cpes",
+              "pons",
+              "ctos",
+              "cities",
+              "neighborhoods",
+            ],
+            properties: {
+              olt: apiString("Identificador da OLT."),
+              cpes: apiInteger("CPEs ativas na OLT."),
+              pons: apiInteger("PONs usadas na OLT."),
+              ctos: apiInteger("CTOs usadas na OLT."),
+              cities: apiArray(apiString("Cidade."), "Cidades atendidas."),
+              neighborhoods: apiArray(
+                apiString("Bairro."),
+                "Bairros atendidos.",
+              ),
+            },
+          },
         },
         pons: {
           type: "array",
           description: "PONs da OLT selecionada.",
-          items: { type: "object" },
+          items: {
+            type: "object",
+            required: ["pon", "cpes", "ctos"],
+            properties: {
+              pon: apiString("Identificador da PON."),
+              cpes: apiInteger("CPEs ativas na PON."),
+              ctos: apiInteger("CTOs usadas na PON."),
+            },
+          },
         },
         ctos: {
           type: "array",
           description: "CTOs da PON selecionada.",
-          items: { type: "object" },
+          items: {
+            type: "object",
+            required: ["cto", "cpes", "city", "neighborhood"],
+            properties: {
+              cto: apiString("Identificador da CTO."),
+              cpes: apiInteger("CPEs ativas na CTO."),
+              city: apiString("Cidade."),
+              neighborhood: apiString("Bairro."),
+            },
+          },
         },
         selected: {
           type: "object",
           description: "OLT e PON atualmente selecionadas.",
+          required: ["olt", "pon"],
+          properties: {
+            olt: { ...apiString("OLT selecionada."), nullable: true },
+            pon: { ...apiString("PON selecionada."), nullable: true },
+          },
         },
         limitations: {
           type: "object",
           description: "Limitações conhecidas dos identificadores físicos.",
+          required: [
+            "hasCableIds",
+            "hasDropIds",
+            "hasLogicalDropIds",
+            "message",
+          ],
+          properties: {
+            hasCableIds: {
+              type: "boolean",
+              description: "Há IDs físicos de cabo.",
+            },
+            hasDropIds: {
+              type: "boolean",
+              description: "Há IDs físicos de drop.",
+            },
+            hasLogicalDropIds: {
+              type: "boolean",
+              description: "Há IDs lógicos estimados.",
+            },
+            message: apiString("Explicação das limitações."),
+          },
         },
       },
+      required: ["totals", "olts", "pons", "ctos", "selected", "limitations"],
     },
   })
   @ApiQuery({

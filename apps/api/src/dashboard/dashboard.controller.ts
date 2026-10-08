@@ -5,6 +5,7 @@ import {
   ApiRead,
   ApiWrite,
   apiArray,
+  apiDateTime,
   apiInteger,
   apiString,
 } from "../openapi";
@@ -57,8 +58,58 @@ const dashboardWidgetSchema = {
     config: {
       type: "object" as const,
       description: "Limite de linhas e fórmula declarativa opcional.",
+      required: ["limit", "formula"],
+      properties: {
+        limit: { type: "integer", enum: [5, 10, 15] },
+        formula: {
+          nullable: true,
+          oneOf: [
+            {
+              type: "object",
+              required: ["operation", "operands", "decimals", "suffix"],
+              properties: {
+                operation: {
+                  type: "string",
+                  enum: ["sum", "average", "difference", "ratio", "percentage"],
+                },
+                operands: {
+                  type: "array",
+                  minItems: 2,
+                  maxItems: 5,
+                  items: {
+                    type: "string",
+                    enum: [
+                      "overview.activeCpes",
+                      "overview.oltCount",
+                      "overview.ponCount",
+                      "overview.affectedCpes",
+                      "overview.repeatCustomers",
+                      "overview.ticketGrowthPct",
+                      "overview.estimatedImpact",
+                    ],
+                  },
+                },
+                decimals: { type: "integer", enum: [0, 1, 2] },
+                suffix: { type: "string", maxLength: 12 },
+              },
+            },
+            { type: "null" },
+          ],
+        },
+      },
     },
   },
+  required: [
+    "id",
+    "kind",
+    "size",
+    "columns",
+    "title",
+    "description",
+    "binding",
+    "tone",
+    "config",
+  ],
 };
 
 const dashboardCompositionSchema = {
@@ -76,7 +127,7 @@ const dashboardCompositionSchema = {
     refreshSeconds: apiInteger("Intervalo sugerido de atualização dos dados."),
     widgets: apiArray(dashboardWidgetSchema, "Blocos na ordem de exibição."),
     objective: apiString("Pedido original normalizado."),
-    generatedAt: apiString("Data e hora da composição em ISO 8601."),
+    generatedAt: apiDateTime("Data e hora da composição em ISO 8601."),
     generatedBy: {
       type: "string" as const,
       enum: ["openai", "fallback"],
@@ -90,12 +141,51 @@ const dashboardCompositionSchema = {
       type: "object" as const,
       description:
         "Bridge MCP, documento OpenAPI e quantidade de rotas REST usadas no planejamento.",
+      required: ["protocol", "mode", "resourceCount", "endpoint", "document"],
+      properties: {
+        protocol: { type: "string", enum: ["MCP", "OpenAPI"] },
+        mode: {
+          type: "string",
+          enum: ["openapi-bridge", "contract-only", "catalog-only"],
+        },
+        resourceCount: apiInteger("Quantidade de recursos/rotas descobertos."),
+        toolCount: { type: "integer", nullable: true },
+        endpoint: {
+          ...apiString("Endpoint MCP de descoberta."),
+          nullable: true,
+        },
+        document: apiString(
+          "Documento de contrato usado na descoberta.",
+          "/api/openapi.json",
+        ),
+      },
     },
     runtimeData: {
       type: "object" as const,
       description: "Endpoints REST que alimentam os bindings no navegador.",
+      required: ["protocol", "endpoints"],
+      properties: {
+        protocol: { type: "string", enum: ["REST"] },
+        endpoints: {
+          type: "array",
+          items: apiString("Rota REST consumida pelo navegador."),
+        },
+      },
     },
   },
+  required: [
+    "version",
+    "title",
+    "subtitle",
+    "refreshSeconds",
+    "widgets",
+    "objective",
+    "generatedAt",
+    "generatedBy",
+    "model",
+    "discovery",
+    "runtimeData",
+  ],
 };
 
 const dashboardPreferenceSchema = {
@@ -104,10 +194,11 @@ const dashboardPreferenceSchema = {
   properties: {
     composition: { ...dashboardCompositionSchema, nullable: true },
     updatedAt: {
-      ...apiString("Última alteração em ISO 8601."),
+      ...apiDateTime("Última alteração em ISO 8601."),
       nullable: true,
     },
   },
+  required: ["composition", "updatedAt"],
 };
 
 @ApiTags("Dashboard dinâmico")

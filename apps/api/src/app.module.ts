@@ -1,59 +1,33 @@
 import { Module } from "@nestjs/common";
-import { HealthController } from "./health.controller";
-import { DatabaseService } from "./database";
-import { NetworkController } from "./network/network.controller";
-import { NetworkService } from "./network/network.service";
-import { CustomersController } from "./customers/customers.controller";
-import { CustomersService } from "./customers/customers.service";
-import { N1AdvisorService } from "./customers/n1-advisor.service";
-import { TicketsController } from "./tickets/tickets.controller";
-import { TicketsService } from "./tickets/tickets.service";
-import { DiagnosticsController } from "./diagnostics/diagnostics.controller";
-import { DiagnosticsService } from "./diagnostics/diagnostics.service";
-import { CatalogController } from "./catalog.controller";
-import { McpGatewayService } from "./mcp-gateway.service";
-import { InvestigationsController } from "./investigations/investigations.controller";
-import { InvestigationsService } from "./investigations/investigations.service";
-import { OpenAIInvestigationAgent } from "./investigations/openai-investigation-agent";
-import { InvestigationSchedulerService } from "./investigations/investigation-scheduler.service";
-import { IncidentsController } from "./incidents/incidents.controller";
-import { IncidentsService } from "./incidents/incidents.service";
-import { DashboardController } from "./dashboard/dashboard.controller";
-import { DashboardService } from "./dashboard/dashboard.service";
-import { InventoryController } from "./inventory/inventory.controller";
-import { TelemetryController } from "./telemetry/telemetry.controller";
-import { OperationsController } from "./operations/operations.controller";
-import { OpenApiCatalogService } from "./openapi-catalog.service";
+import { CustomersModule } from "./customers/customers.module";
+import { DashboardModule } from "./dashboard/dashboard.module";
+import { DiagnosticsModule } from "./diagnostics/diagnostics.module";
+import { IncidentsModule } from "./incidents/incidents.module";
+import { InfrastructureModule } from "./infrastructure/infrastructure.module";
+import { InvestigationsModule } from "./investigations/investigations.module";
+import { InventoryModule } from "./inventory/inventory.module";
+import { McpModule } from "./mcp/mcp.module";
+import { NetworkModule } from "./network/network.module";
+import { OperationsModule } from "./operations/operations.module";
+import { SystemModule } from "./system/system.module";
+import { TelemetryModule } from "./telemetry/telemetry.module";
+import { TicketsModule } from "./tickets/tickets.module";
 
 @Module({
-  controllers: [
-    HealthController,
-    NetworkController,
-    CustomersController,
-    TicketsController,
-    DiagnosticsController,
-    InvestigationsController,
-    IncidentsController,
-    DashboardController,
-    InventoryController,
-    TelemetryController,
-    OperationsController,
-    CatalogController,
-  ],
-  providers: [
-    DatabaseService,
-    NetworkService,
-    CustomersService,
-    N1AdvisorService,
-    TicketsService,
-    DiagnosticsService,
-    InvestigationsService,
-    IncidentsService,
-    DashboardService,
-    OpenAIInvestigationAgent,
-    InvestigationSchedulerService,
-    McpGatewayService,
-    OpenApiCatalogService,
+  imports: [
+    InfrastructureModule,
+    SystemModule,
+    CustomersModule,
+    TicketsModule,
+    DiagnosticsModule,
+    NetworkModule,
+    InventoryModule,
+    TelemetryModule,
+    OperationsModule,
+    IncidentsModule,
+    InvestigationsModule,
+    DashboardModule,
+    McpModule,
   ],
 })
 export class AppModule {}

@@ -14,8 +14,11 @@ import {
   ApiPagination,
   ApiRead,
   apiArray,
+  apiDate,
+  apiDateTime,
   apiErrorSchema,
   apiInteger,
+  apiNumber,
   apiNullableString,
   apiPageSchema,
   apiString,
@@ -24,6 +27,23 @@ import {
 const equipmentSchema = {
   type: "object" as const,
   description: "CPE associada ao cliente em um período do histórico.",
+  required: [
+    "serial",
+    "customer_id",
+    "vendor",
+    "model",
+    "hw_revision",
+    "software_version",
+    "plan_mbps",
+    "olt",
+    "pon_port",
+    "cto",
+    "city",
+    "neighborhood",
+    "status",
+    "installed_at",
+    "removed_at",
+  ],
   properties: {
     serial: apiString("Serial único.", "KSTLD199FB78"),
     customer_id: apiString("Código do cliente.", "C169781"),
@@ -38,7 +58,7 @@ const equipmentSchema = {
     city: apiString("Cidade.", "Serra Alta"),
     neighborhood: apiString("Bairro.", "Jardim Aurora"),
     status: apiString("Estado do equipamento.", "active"),
-    installed_at: apiString("Data de instalação."),
+    installed_at: apiDate("Data de instalação."),
     removed_at: apiNullableString("Data de retirada."),
   },
 };
@@ -46,15 +66,285 @@ const equipmentSchema = {
 const customerSummarySchema = {
   type: "object" as const,
   description: "Resumo consolidado de um cliente para busca e seleção.",
+  required: [
+    "customer_id",
+    "customer_status",
+    "customer_since",
+    "cancelled_at",
+    "active_serial",
+    "city",
+    "neighborhood",
+    "plan_mbps",
+  ],
   properties: {
     customer_id: apiString("Código único do cliente.", "C169781"),
     customer_status: apiString("Situação cadastral.", "active"),
-    customer_since: apiString("Data de início do cliente."),
-    cancelled_at: apiNullableString("Data de cancelamento."),
+    customer_since: apiDate("Data de início do cliente."),
+    cancelled_at: { ...apiDate("Data de cancelamento."), nullable: true },
     active_serial: apiNullableString("Serial da CPE ativa.", "KSTLD199FB78"),
     city: apiString("Cidade da instalação mais recente."),
     neighborhood: apiString("Bairro da instalação mais recente."),
     plan_mbps: apiInteger("Plano atual ou mais recente em Mbps.", 300),
+  },
+};
+
+const supportProfileSchema = {
+  type: "object" as const,
+  description: "Contexto consolidado consumido pelo atendimento N1.",
+  required: [
+    "customer",
+    "equipment",
+    "metrics",
+    "decision",
+    "activeIncidents",
+    "recentTickets",
+  ],
+  properties: {
+    customer: {
+      type: "object",
+      required: ["id", "city", "neighborhood"],
+      properties: {
+        id: apiString("Código do cliente.", "C545968"),
+        city: apiString("Cidade da instalação.", "Serra Alta"),
+        neighborhood: apiString("Bairro da instalação.", "Jardim Aurora"),
+      },
+    },
+    equipment: {
+      type: "object",
+      required: [
+        "serial",
+        "vendor",
+        "model",
+        "hardware",
+        "firmware",
+        "planMbps",
+        "previousPlanMbps",
+        "planSince",
+        "network",
+      ],
+      properties: {
+        serial: apiString("Serial da CPE.", "KSTLD199FB78"),
+        vendor: apiString("Fabricante.", "Kestrel"),
+        model: apiString("Modelo.", "KX-3000"),
+        hardware: apiString("Revisão de hardware.", "1.2"),
+        firmware: apiString("Firmware.", "2.4.1"),
+        planMbps: apiInteger("Plano contratado em Mbps.", 300),
+        previousPlanMbps: {
+          ...apiInteger("Plano anterior em Mbps.", 100),
+          nullable: true,
+        },
+        planSince: apiDate("Data de início do plano."),
+        network: apiString(
+          "Caminho lógico resumido.",
+          "OLT-2 · PON 1/7 · CTO-2-17-03",
+        ),
+      },
+    },
+    metrics: {
+      type: "object",
+      required: [
+        "mem_min_pct",
+        "reboot_count",
+        "lan_min_mbps",
+        "optical_rx_min_dbm",
+        "optical_low_days",
+        "wifi_signal_raw",
+        "last_day",
+        "diagnostic",
+      ],
+      properties: {
+        mem_min_pct: {
+          ...apiNumber("Menor memória livre em percentual.", 8.2),
+          nullable: true,
+        },
+        reboot_count: apiInteger("Reinícios observados na janela."),
+        lan_min_mbps: {
+          ...apiNumber("Menor negociação LAN em Mbps.", 100),
+          nullable: true,
+        },
+        optical_rx_min_dbm: {
+          ...apiNumber("Menor RX óptico em dBm.", -27.2),
+          nullable: true,
+        },
+        optical_low_days: apiInteger("Dias com RX abaixo do limite."),
+        wifi_signal_raw: {
+          ...apiNumber("Sinal Wi-Fi médio na unidade bruta.", -70),
+          nullable: true,
+        },
+        last_day: apiDate("Último dia disponível."),
+        diagnostic: {
+          type: "object",
+          nullable: true,
+          required: ["ts", "state", "download_mbps", "upload_mbps", "ratio"],
+          properties: {
+            ts: apiDateTime("Data e hora do último diagnóstico."),
+            state: apiString("Estado do diagnóstico.", "Completed"),
+            download_mbps: {
+              ...apiNumber("Download em Mbps.", 204.6),
+              nullable: true,
+            },
+            upload_mbps: {
+              ...apiNumber("Upload em Mbps.", 143.9),
+              nullable: true,
+            },
+            ratio: {
+              ...apiNumber("Razão entre download e plano.", 0.68),
+              nullable: true,
+            },
+          },
+        },
+      },
+    },
+    decision: {
+      type: "object",
+      required: [
+        "issue",
+        "confidence",
+        "action",
+        "actionLabel",
+        "sayToCustomer",
+        "operatorSteps",
+        "reasons",
+        "relatedProblemId",
+        "relatedProblemTitle",
+        "relatedProblemKind",
+      ],
+      properties: {
+        issue: apiString("Hipótese ou problema predominante."),
+        confidence: { type: "string", enum: ["Alta", "Média", "Baixa"] },
+        action: {
+          type: "string",
+          enum: ["escalar_noc", "agendar_visita", "resolver_telefone"],
+        },
+        actionLabel: apiString("Rótulo operacional da ação."),
+        sayToCustomer: apiString(
+          "Orientação em linguagem adequada ao cliente.",
+        ),
+        operatorSteps: apiArray(
+          apiString("Passo operacional."),
+          "Passos para o atendente.",
+        ),
+        reasons: apiArray(
+          apiString("Motivo baseado nos sinais."),
+          "Razões da decisão.",
+        ),
+        relatedProblemId: {
+          ...apiString("Identificador do problema relacionado."),
+          nullable: true,
+        },
+        relatedProblemTitle: {
+          ...apiString("Título do problema relacionado."),
+          nullable: true,
+        },
+        relatedProblemKind: {
+          type: "string",
+          enum: ["incident", "signal"],
+          nullable: true,
+        },
+      },
+    },
+    activeIncidents: {
+      type: "array",
+      description: "Incidentes ativos cujo escopo alcança o cliente.",
+      items: {
+        type: "object",
+        required: [
+          "incidentId",
+          "title",
+          "severity",
+          "category",
+          "scope",
+          "affectedCpes",
+          "confidence",
+          "probableCause",
+          "recommendedAction",
+          "openedAt",
+          "openedBy",
+          "source",
+          "originTicketId",
+        ],
+        properties: {
+          incidentId: apiString("Identificador do incidente."),
+          title: apiString("Título operacional."),
+          severity: {
+            type: "string",
+            enum: ["critical", "high", "medium", "low"],
+          },
+          category: apiString("Categoria técnica."),
+          scope: { type: "object", description: "Escopo persistido." },
+          affectedCpes: apiInteger("CPEs afetadas."),
+          confidence: apiNumber("Confiança entre 0 e 1."),
+          probableCause: apiString("Causa provável."),
+          recommendedAction: apiString("Ação recomendada."),
+          openedAt: apiDateTime("Data e hora de abertura."),
+          openedBy: apiString("Autor do registro."),
+          source: { type: "string", enum: ["agent", "manual"] },
+          originTicketId: {
+            ...apiString("Chamado de origem."),
+            nullable: true,
+          },
+        },
+      },
+    },
+    recentTickets: {
+      type: "array",
+      description: "Até cinco chamados recentes do cliente.",
+      items: {
+        type: "object",
+        required: [
+          "ticket_id",
+          "opened_at",
+          "category",
+          "description",
+          "resolution",
+        ],
+        properties: {
+          ticket_id: apiString("Identificador do chamado."),
+          opened_at: apiDateTime("Data e hora de abertura."),
+          category: apiString("Categoria do chamado."),
+          description: apiString("Relato registrado."),
+          resolution: apiString("Desfecho registrado."),
+        },
+      },
+    },
+  },
+};
+
+const n1AdvisorReplySchema = {
+  type: "object" as const,
+  description: "Orientação estruturada para o atendente N1.",
+  required: [
+    "assistantMessage",
+    "nextSteps",
+    "options",
+    "documentation",
+    "disposition",
+    "model",
+  ],
+  properties: {
+    assistantMessage: apiString("Mensagem sugerida ao atendente."),
+    nextSteps: apiArray(
+      apiString("Próximo passo seguro."),
+      "Até quatro próximos passos.",
+    ),
+    options: apiArray(
+      {
+        type: "object",
+        required: ["id", "label", "description"],
+        properties: {
+          id: apiString("Identificador da opção."),
+          label: apiString("Rótulo da opção."),
+          description: apiString("Descrição da opção."),
+        },
+      },
+      "Até três opções de encaminhamento.",
+    ),
+    documentation: apiString("Texto pronto para registrar no chamado."),
+    disposition: {
+      type: "string",
+      enum: ["continue", "resolve_phone", "escalate_noc", "schedule_visit"],
+    },
+    model: { type: "string", enum: ["openai", "fallback"] },
   },
 };
 
@@ -344,10 +634,26 @@ export class CustomersController {
     responseDescription: "Cliente encontrado.",
     schema: {
       type: "object",
+      required: ["customer", "equipment_history"],
       properties: {
-        customer_id: apiString("Código do cliente."),
-        customer_status: apiString("Situação cadastral."),
-        active_equipment: { ...equipmentSchema, nullable: true },
+        customer: {
+          type: "object",
+          required: [
+            "customer_id",
+            "customer_status",
+            "customer_since",
+            "cancelled_at",
+          ],
+          properties: {
+            customer_id: apiString("Código do cliente."),
+            customer_status: apiString("Situação cadastral."),
+            customer_since: apiDate("Data de início do cliente."),
+            cancelled_at: {
+              ...apiDate("Data de cancelamento."),
+              nullable: true,
+            },
+          },
+        },
         equipment_history: apiArray(
           equipmentSchema,
           "Equipamentos do mais recente para o mais antigo.",
@@ -375,23 +681,7 @@ export class CustomersController {
     description:
       "Consolida cadastro, CPE ativa, telemetria recente, diagnóstico, chamados e agrupamentos. A hipótese apoia a triagem, não confirma causa.",
     responseDescription: "Perfil completo para atendimento N1.",
-    schema: {
-      type: "object",
-      properties: {
-        customer: { type: "object", additionalProperties: true },
-        equipment: { type: "object", additionalProperties: true },
-        metrics: { type: "object", additionalProperties: true },
-        decision: { type: "object", additionalProperties: true },
-        activeIncidents: apiArray(
-          { type: "object", additionalProperties: true },
-          "Agrupamentos ativos relacionados.",
-        ),
-        recentTickets: apiArray(
-          { type: "object", additionalProperties: true },
-          "Chamados recentes.",
-        ),
-      },
-    },
+    schema: supportProfileSchema,
     dashboardResource: true,
   })
   @ApiParam({
@@ -413,7 +703,7 @@ export class CustomersController {
     description:
       "Recebe o relato atual e até oito mensagens recentes. Sugere perguntas ou encaminhamento seguro sem alterar rede, cadastro ou chamado.",
     responseDescription: "Orientação estruturada do copiloto.",
-    schema: { type: "object", additionalProperties: true },
+    schema: n1AdvisorReplySchema,
     created: true,
   })
   @ApiParam({
@@ -435,8 +725,13 @@ export class CustomersController {
             type: "object",
             properties: {
               role: { type: "string", enum: ["user", "assistant"] },
-              content: apiString("Conteúdo da mensagem."),
+              content: {
+                ...apiString("Conteúdo da mensagem."),
+                minLength: 1,
+                maxLength: 1200,
+              },
             },
+            required: ["role", "content"],
           },
           "Até oito mensagens recentes.",
         ),

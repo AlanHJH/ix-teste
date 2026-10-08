@@ -3,6 +3,7 @@ import {
   ApiBadRequestResponse,
   ApiCreatedResponse,
   ApiExtension,
+  ApiInternalServerErrorResponse,
   ApiOkResponse,
   ApiOperation,
   ApiQuery,
@@ -15,8 +16,9 @@ import { OpenApiCatalogService } from "./openapi-catalog.service";
 
 export const apiErrorSchema: SchemaObject = {
   type: "object",
-  description: "Erro HTTP padronizado pelo NestJS.",
-  required: ["statusCode", "message"],
+  description:
+    "Envelope de erro HTTP produzido pelo NestJS. O campo message pode ser texto, lista de mensagens de validação ou objeto contextual de uma dependência.",
+  required: ["statusCode", "message", "error"],
   properties: {
     statusCode: {
       type: "integer",
@@ -27,6 +29,13 @@ export const apiErrorSchema: SchemaObject = {
       oneOf: [
         { type: "string", example: "Parâmetro sort inválido." },
         { type: "array", items: { type: "string" } },
+        {
+          type: "object",
+          description:
+            "Contexto adicional, usado por exemplo enquanto o dataset está carregando.",
+          additionalProperties: true,
+          example: { status: "loading", dataset: null },
+        },
       ],
       description: "Mensagem ou lista de erros de validação.",
     },
@@ -43,6 +52,26 @@ export function apiString(description: string, example?: string): SchemaObject {
     type: "string",
     description,
     ...(example === undefined ? {} : { example }),
+  };
+}
+
+export function apiDateTime(
+  description: string,
+  example = "2026-08-31T01:27:50.000Z",
+): SchemaObject {
+  return {
+    ...apiString(description, example),
+    format: "date-time",
+  };
+}
+
+export function apiDate(
+  description: string,
+  example = "2026-08-31",
+): SchemaObject {
+  return {
+    ...apiString(description, example),
+    format: "date",
   };
 }
 
@@ -151,6 +180,27 @@ export function ApiPagination(options: {
     ApiExtension("x-pagination", {
       style: "page-pageSize-sort",
       maximumPageSize,
+      contract: {
+        page: {
+          type: "integer",
+          required: false,
+          minimum: 1,
+          default: 1,
+        },
+        pageSize: {
+          type: "integer",
+          required: false,
+          minimum: 1,
+          maximum: maximumPageSize,
+          default: defaultPageSize,
+        },
+        sort: {
+          type: "string",
+          required: false,
+          enum: options.sorts,
+          default: options.defaultSort,
+        },
+      },
     }),
   );
 }
@@ -178,6 +228,16 @@ export function ApiRead(options: {
       description: options.description,
     }),
     success,
+    ApiInternalServerErrorResponse({
+      description:
+        "Erro inesperado ao processar a consulta. A resposta usa apiErrorSchema.",
+      schema: apiErrorSchema,
+      example: {
+        statusCode: 500,
+        message: "Erro interno inesperado.",
+        error: "Internal Server Error",
+      },
+    }),
     ApiExtension("x-read-only", true),
     ApiExtension("x-dashboard-resource", options.dashboardResource ?? false),
   );
@@ -205,6 +265,16 @@ export function ApiWrite(options: {
       description: options.description,
     }),
     success,
+    ApiInternalServerErrorResponse({
+      description:
+        "Erro inesperado ao processar a operação. A resposta usa apiErrorSchema.",
+      schema: apiErrorSchema,
+      example: {
+        statusCode: 500,
+        message: "Erro interno inesperado.",
+        error: "Internal Server Error",
+      },
+    }),
     ApiExtension("x-read-only", false),
     ApiExtension("x-dashboard-resource", false),
   );
@@ -213,14 +283,36 @@ export function ApiWrite(options: {
 export function ApiInvalidRequest(
   description = "Parâmetro ou corpo inválido.",
 ) {
-  return ApiBadRequestResponse({ description, schema: apiErrorSchema });
+  return applyDecorators(
+    ApiBadRequestResponse({
+      description,
+      schema: apiErrorSchema,
+      examples: {
+        invalidRequest: {
+          summary: "Requisição inválida",
+          value: {
+            statusCode: 400,
+            message: description,
+            error: "Bad Request",
+          },
+        },
+      },
+    }),
+    ApiExtension("x-error-contract", {
+      status: 400,
+      contentType: "application/json",
+      envelope: "statusCode, message, error",
+      message:
+        "Pode ser texto ou lista de mensagens; o endpoint deve preservar a descrição específica acima.",
+    }),
+  );
 }
 
 export function configureOpenApi(app: INestApplication): OpenAPIObject {
   const config = new DocumentBuilder()
     .setTitle("Ondaluz Ops REST API")
     .setDescription(
-      "Contrato REST da plataforma operacional Ondaluz. As coleções usam o envelope data/page/pageSize/totalItems/totalPages. Os metadados ficam junto de cada rota no controller correspondente.",
+      "Contrato REST da plataforma operacional Ondaluz. Cada operação documenta entradas, saídas, tipos, obrigatoriedade, nulabilidade, limites, enums, exemplos e erros conhecidos. As coleções usam o envelope data/page/pageSize/totalItems/totalPages; os metadados ficam em meta sem alterar o envelope principal. Erros usam statusCode, message e error.",
     )
     .setVersion("1.1.0")
     .setOpenAPIVersion("3.0.3")
@@ -259,6 +351,12 @@ export function configureOpenApi(app: INestApplication): OpenAPIObject {
       pagination: "page-pageSize-sort",
       dataIsolation:
         "O compositor escolhe bindings; dados operacionais não são enviados ao modelo.",
+    })
+    .addExtension("x-error-contract", {
+      mediaType: "application/json",
+      requiredFields: ["statusCode", "message", "error"],
+      messageTypes: ["string", "string[]", "object"],
+      documentation: "/docs/contratos-api.md#erros-http",
     })
     .build();
 

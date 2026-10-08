@@ -29,6 +29,7 @@ import {
   apiErrorSchema,
   apiInteger,
   apiNumber,
+  apiDateTime,
   apiNullableString,
   apiPageSchema,
   apiString,
@@ -70,13 +71,13 @@ const ticketSchema = {
     "Chamado de atendimento enriquecido com localização e topologia.",
   properties: {
     ticket_id: apiString("Identificador do chamado.", "T000123"),
-    opened_at: apiString("Data e hora de abertura."),
+    opened_at: apiDateTime("Data e hora de abertura."),
     customer_id: apiString("Código do cliente.", "C169781"),
     channel: apiString("Canal de entrada.", "Telefone"),
     category: apiString("Categoria.", "Sem conexão"),
     description: apiString("Relato registrado."),
     resolution: apiString("Desfecho registrado.", "Escalado para NOC"),
-    closed_at: apiNullableString("Data de encerramento."),
+    closed_at: { ...apiDateTime("Data de encerramento."), nullable: true },
     handling_minutes: {
       ...apiNumber("Tempo de tratamento em minutos.", 21.5),
       nullable: true,
@@ -88,6 +89,57 @@ const ticketSchema = {
     olt: apiString("OLT atual do cliente.", "OLT-2"),
     pon: apiString("PON atual.", "1/7"),
     cto: apiString("CTO atual.", "CTO-2-17-03"),
+  },
+  required: [
+    "ticket_id",
+    "opened_at",
+    "customer_id",
+    "channel",
+    "category",
+    "description",
+    "resolution",
+    "closed_at",
+    "handling_minutes",
+    "source",
+    "opened_by",
+    "related_problem_id",
+    "noc_status",
+    "olt",
+    "pon",
+    "cto",
+  ],
+};
+
+const ticketSummaryMetaSchema = {
+  type: "object" as const,
+  description: "Indicadores calculados sobre todos os chamados filtrados.",
+  required: [
+    "total",
+    "technical",
+    "escalated",
+    "visits",
+    "avg_handling_minutes",
+  ],
+  properties: {
+    total: apiInteger("Total de chamados filtrados."),
+    technical: apiInteger("Chamados de categorias técnicas."),
+    escalated: apiInteger("Chamados escalados ao NOC."),
+    visits: apiInteger("Chamados com visita técnica agendada."),
+    avg_handling_minutes: {
+      ...apiNumber("Tempo médio de tratamento em minutos."),
+      nullable: true,
+    },
+  },
+};
+
+const ticketFilterMetaSchema = {
+  type: "object" as const,
+  description: "Valores disponíveis para filtros globais.",
+  required: ["categories", "resolutions", "channels"],
+  properties: {
+    categories: { type: "array", items: apiString("Categoria disponível.") },
+    resolutions: { type: "array", items: apiString("Resolução disponível.") },
+    channels: { type: "array", items: apiString("Canal disponível.") },
   },
 };
 
@@ -104,7 +156,17 @@ export class TicketsController {
     schema: apiPageSchema(ticketSchema, "Página da fila NOC.", {
       type: "object",
       description: "Contagens de recebidos e em andamento.",
-      additionalProperties: true,
+      required: ["summary"],
+      properties: {
+        summary: {
+          type: "object",
+          required: ["received", "inProgress"],
+          properties: {
+            received: apiInteger("Chamados recebidos aguardando atendimento."),
+            inProgress: apiInteger("Chamados em andamento."),
+          },
+        },
+      },
     }),
     dashboardResource: true,
   })
@@ -140,7 +202,11 @@ export class TicketsController {
     schema: apiPageSchema(ticketSchema, "Página de chamados.", {
       type: "object",
       description: "Resumo e filtros da seleção completa.",
-      additionalProperties: true,
+      required: ["summary", "filters"],
+      properties: {
+        summary: ticketSummaryMetaSchema,
+        filters: ticketFilterMetaSchema,
+      },
     }),
     dashboardResource: true,
   })

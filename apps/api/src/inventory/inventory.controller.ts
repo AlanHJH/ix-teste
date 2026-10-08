@@ -18,6 +18,7 @@ import {
   ApiPagination,
   ApiRead,
   apiInteger,
+  apiDate,
   apiNullableString,
   apiPageSchema,
   apiString,
@@ -66,7 +67,7 @@ const inventoryItemSchema = {
     cto: apiString("Caixa terminal óptica.", "CTO-2-17-03"),
     city: apiString("Cidade.", "Serra Alta"),
     neighborhood: apiString("Bairro.", "Jardim Aurora"),
-    installed_at: apiString("Data de instalação.", "2022-03-10"),
+    installed_at: apiDate("Data de instalação.", "2022-03-10"),
     status: {
       type: "string" as const,
       enum: ["active", "removed"],
@@ -78,6 +79,26 @@ const inventoryItemSchema = {
       "L-DROP-KSTLD199FB78",
     ),
   },
+  required: [
+    "serial",
+    "customer_id",
+    "vendor",
+    "model",
+    "hw_revision",
+    "software_version",
+    "plan_mbps",
+    "previous_plan_mbps",
+    "customer_status",
+    "olt",
+    "pon_port",
+    "cto",
+    "city",
+    "neighborhood",
+    "installed_at",
+    "status",
+    "removed_at",
+    "logical_drop_id",
+  ],
 };
 
 @ApiTags("Inventário")

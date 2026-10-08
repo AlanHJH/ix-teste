@@ -1,7 +1,7 @@
 import { Controller, Get, ServiceUnavailableException } from "@nestjs/common";
 import { ApiServiceUnavailableResponse, ApiTags } from "@nestjs/swagger";
 import { DatabaseService } from "./database";
-import { ApiRead, apiErrorSchema, apiString } from "./openapi";
+import { ApiRead, apiErrorSchema, apiString, apiDateTime } from "./openapi";
 
 @ApiTags("Sistema")
 @Controller()
@@ -21,19 +21,39 @@ export class HealthController {
         interfaces: {
           type: "object",
           description: "Pontos de entrada publicados pela aplicação.",
-          additionalProperties: { type: "string" },
+          required: ["rest", "mcp", "openapi", "swagger"],
+          properties: {
+            rest: apiString("Prefixo das rotas REST.", "/api"),
+            mcp: apiString("Prefixo do catálogo MCP.", "/mcp"),
+            openapi: apiString("Documento OpenAPI JSON.", "/api/openapi.json"),
+            swagger: apiString("Interface Swagger UI.", "/api/docs"),
+          },
         },
         dataset: {
           type: "object",
           description: "Estado da carga principal.",
-          additionalProperties: true,
+          nullable: true,
+          required: ["status", "finished_at"],
+          properties: {
+            status: apiString("Estado da carga.", "complete"),
+            finished_at: {
+              ...apiDateTime("Conclusão da carga em ISO 8601."),
+              nullable: true,
+            },
+          },
         },
       },
+      required: ["status", "service", "interfaces", "dataset"],
     },
   })
   @ApiServiceUnavailableResponse({
     description: "API disponível, mas o dataset ainda não está pronto.",
     schema: apiErrorSchema,
+    example: {
+      statusCode: 503,
+      message: { status: "loading", dataset: null },
+      error: "Service Unavailable",
+    },
   })
   @Get("health")
   async health() {

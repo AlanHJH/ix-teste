@@ -20,6 +20,7 @@ import {
   ApiRead,
   ApiWrite,
   apiArray,
+  apiDateTime,
   apiErrorSchema,
   apiInteger,
   apiNumber,
@@ -62,20 +63,66 @@ const operationalIncidentSchema = {
       type: "object" as const,
       description:
         "Escopo confirmado, incluindo tipo, identificador e caminho topológico quando aplicável.",
+      required: ["type", "identifier", "olt", "pon", "cto"],
+      properties: {
+        type: {
+          type: "string",
+          enum: [
+            "park",
+            "olt",
+            "pon",
+            "cto",
+            "customer",
+            "firmware",
+            "equipment",
+            "region",
+          ],
+        },
+        identifier: apiString("Identificador ou rótulo do escopo."),
+        olt: { ...apiString("OLT do escopo."), nullable: true },
+        pon: { ...apiString("PON do escopo."), nullable: true },
+        cto: { ...apiString("CTO do escopo."), nullable: true },
+      },
     },
     affected_cpes: apiInteger("Quantidade de CPEs ativas no escopo.", 42),
     confidence: apiNumber("Confiança entre 0 e 1.", 0.94),
     probable_cause: apiString("Causa provável ou hipótese operacional."),
     recommended_action: apiString("Próxima ação recomendada."),
     evidence: apiArray(
-      { type: "object" },
+      {
+        type: "object",
+        required: ["source", "reference", "summary"],
+        properties: {
+          source: apiString("Origem da evidência."),
+          reference: apiString("Identificador ou filtro rastreável."),
+          summary: apiString("Resumo da evidência."),
+        },
+      },
       "Evidências usadas para sustentar o incidente.",
     ),
-    opened_at: apiString("Data e hora de abertura em ISO 8601."),
+    opened_at: apiDateTime("Data e hora de abertura em ISO 8601."),
     opened_by: apiString("Operador ou agente que propôs o incidente."),
     source: apiString("Origem do registro.", "manual"),
     origin_ticket_id: { ...apiString("Chamado N1 vinculado."), nullable: true },
   },
+  required: [
+    "incident_id",
+    "investigation_id",
+    "status",
+    "category",
+    "severity",
+    "title",
+    "scope",
+    "affected_cpes",
+    "confidence",
+    "probable_cause",
+    "recommended_action",
+    "evidence",
+    "opened_at",
+    "opened_by",
+    "source",
+    "origin_ticket_id",
+  ],
 };
 
 @ApiTags("Incidentes operacionais")
@@ -133,6 +180,7 @@ export class IncidentsController {
     schema: apiPageSchema(
       {
         type: "object",
+        required: ["value", "label"],
         properties: {
           value: apiString("Valor persistido."),
           label: apiString("Rótulo exibido ao operador."),
@@ -142,6 +190,7 @@ export class IncidentsController {
       {
         type: "object",
         properties: { type: apiString("Tipo de opção solicitado.", "olt") },
+        required: ["type"],
       },
     ),
     dashboardResource: true,
@@ -232,8 +281,16 @@ export class IncidentsController {
         "recommendedAction",
       ],
       properties: {
-        openedBy: apiString("Nome ou identificador do operador.", "noc-alan"),
-        title: apiString("Título de 5 a 160 caracteres."),
+        openedBy: {
+          ...apiString("Nome ou identificador do operador.", "noc-alan"),
+          minLength: 2,
+          maxLength: 100,
+        },
+        title: {
+          ...apiString("Título de 5 a 160 caracteres."),
+          minLength: 5,
+          maxLength: 160,
+        },
         severity: {
           type: "string",
           enum: ["critical", "high", "medium", "low"],
@@ -259,10 +316,16 @@ export class IncidentsController {
         olt: apiString("OLT do escopo quando aplicável."),
         pon: apiString("PON do escopo quando aplicável."),
         cto: apiString("CTO do escopo quando aplicável."),
-        probableCause: apiString(
-          "Hipótese do operador, entre 5 e 600 caracteres.",
-        ),
-        recommendedAction: apiString("Próxima ação, entre 5 e 600 caracteres."),
+        probableCause: {
+          ...apiString("Hipótese do operador, entre 5 e 600 caracteres."),
+          minLength: 5,
+          maxLength: 600,
+        },
+        recommendedAction: {
+          ...apiString("Próxima ação, entre 5 e 600 caracteres."),
+          minLength: 5,
+          maxLength: 600,
+        },
         originTicketId: {
           ...apiString("Chamado N1 escalado a vincular."),
           nullable: true,

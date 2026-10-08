@@ -6,6 +6,8 @@ import {
   ApiInvalidRequest,
   ApiPagination,
   ApiRead,
+  apiDate,
+  apiDateTime,
   apiInteger,
   apiNumber,
   apiPageSchema,
@@ -19,7 +21,7 @@ const informSchema = {
   description:
     "Evento bruto informado pela CPE ao ACS. Potências ópticas usam a unidade bruta do equipamento.",
   properties: {
-    ts: apiString("Data e hora UTC do Inform.", "2026-08-31T01:27:50.000Z"),
+    ts: apiDateTime("Data e hora UTC do Inform.", "2026-08-31T01:27:50.000Z"),
     serial: apiString("Serial da CPE.", "KSTLD199FB78"),
     event_codes: apiString("Códigos CWMP/TR-069.", "2 PERIODIC"),
     software_version: apiString("Firmware reportado.", "2.4.1"),
@@ -37,6 +39,22 @@ const informSchema = {
     wifi_clients_5g: apiInteger("Clientes Wi-Fi em 5 GHz.", 4),
     wifi_rssi_avg: apiNumber("RSSI médio quando disponível.", -70),
   },
+  required: [
+    "ts",
+    "serial",
+    "event_codes",
+    "software_version",
+    "uptime_s",
+    "mem_total_kb",
+    "mem_free_kb",
+    "optical_rx_power",
+    "optical_tx_power",
+    "pon_fec_uncorrectable",
+    "lan1_bit_rate",
+    "wifi_clients_24g",
+    "wifi_clients_5g",
+    "wifi_rssi_avg",
+  ],
 };
 
 const dailyMetricSchema = {
@@ -44,7 +62,7 @@ const dailyMetricSchema = {
   description:
     "Agregado diário por CPE e firmware, preservando transições de versão no mesmo dia.",
   properties: {
-    day: apiString("Dia no formato YYYY-MM-DD.", "2026-08-30"),
+    day: apiDate("Dia no formato YYYY-MM-DD.", "2026-08-30"),
     serial: apiString("Serial da CPE.", "KSTLD199FB78"),
     customer_id: apiString("Código do cliente.", "C169781"),
     vendor: apiString("Fabricante.", "Kestrel"),
@@ -64,6 +82,27 @@ const dailyMetricSchema = {
     optical_rx_min_dbm: apiNumber("Menor potência RX em dBm.", -27.23),
     optical_rx_avg_dbm: apiNumber("Potência RX média em dBm.", -24.7),
   },
+  required: [
+    "day",
+    "serial",
+    "customer_id",
+    "vendor",
+    "model",
+    "software_version",
+    "plan_mbps",
+    "olt",
+    "pon_port",
+    "cto",
+    "inform_count",
+    "mem_min_pct",
+    "mem_avg_pct",
+    "lan_min_mbps",
+    "lan_max_mbps",
+    "reboot_count",
+    "fec_errors",
+    "optical_rx_min_dbm",
+    "optical_rx_avg_dbm",
+  ],
 };
 
 @ApiTags("Telemetria")

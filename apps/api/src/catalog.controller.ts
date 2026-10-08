@@ -1,7 +1,7 @@
 import { Controller, Get } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { MCP_ENDPOINTS } from "./mcp/catalog";
-import { ApiRead } from "./openapi";
+import { ApiRead, apiArray, apiInteger, apiString } from "./openapi";
 import { OpenApiCatalogService } from "./openapi-catalog.service";
 
 @ApiTags("Sistema")
@@ -17,7 +17,64 @@ export class CatalogController {
     schema: {
       type: "object",
       description: "Links canônicos e endpoints de alto nível da plataforma.",
-      additionalProperties: true,
+      required: ["name", "rest", "documentation", "mcp", "health"],
+      properties: {
+        name: apiString("Nome da plataforma.", "Ondaluz API"),
+        rest: {
+          type: "object",
+          required: ["basePath", "operationCount", "endpoints", "operations"],
+          properties: {
+            basePath: apiString("Prefixo REST.", "/api"),
+            operationCount: apiInteger("Quantidade de operações REST."),
+            endpoints: apiArray(
+              apiString("Caminho REST."),
+              "Caminhos REST publicados.",
+            ),
+            operations: {
+              type: "array",
+              description: "Operações REST descobertas no documento OpenAPI.",
+              items: {
+                type: "object",
+                required: [
+                  "method",
+                  "path",
+                  "operationId",
+                  "summary",
+                  "readOnly",
+                  "dashboardResource",
+                ],
+                properties: {
+                  method: apiString("Método HTTP."),
+                  path: apiString("Caminho da operação."),
+                  operationId: apiString("Identificador estável da operação."),
+                  summary: apiString("Resumo da operação."),
+                  readOnly: { type: "boolean" },
+                  dashboardResource: { type: "boolean" },
+                },
+              },
+            },
+          },
+        },
+        documentation: {
+          type: "object",
+          required: ["swagger", "openapiJson", "openapiYaml"],
+          properties: {
+            swagger: apiString("Swagger UI."),
+            openapiJson: apiString("OpenAPI JSON."),
+            openapiYaml: apiString("OpenAPI YAML."),
+          },
+        },
+        mcp: {
+          type: "object",
+          required: ["basePath", "transport", "endpoints"],
+          properties: {
+            basePath: apiString("Prefixo MCP.", "/mcp"),
+            transport: apiString("Transporte MCP.", "Streamable HTTP"),
+            endpoints: { type: "array", items: { type: "object" } },
+          },
+        },
+        health: apiString("Healthcheck da aplicação.", "/health"),
+      },
     },
   })
   @Get()

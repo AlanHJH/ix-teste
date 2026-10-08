@@ -15,6 +15,8 @@ Protótipo de decisão operacional para a Ondaluz Telecom. A aplicação cruza i
 | Hipóteses, ambiguidades e uso de IA    | [`docs/log-decisoes.md`](docs/log-decisoes.md)                     |     |
 | Evidências reproduzíveis               | [`docs/consultas-evidencias.sql`](docs/consultas-evidencias.sql)   |
 | Integração com ferramentas de IA       | [`docs/mcp.md`](docs/mcp.md)                                       |
+| Contratos REST, MCP e erros            | [`docs/contratos-api.md`](docs/contratos-api.md)                   |
+| Experimento de organização DDD         | [`docs/arquitetura-ddd.md`](docs/arquitetura-ddd.md)               |
 | Agente OpenAI e revisão humana         | [`docs/agente-investigacao.md`](docs/agente-investigacao.md)       |
 | Cobertura integral do enunciado        | [`docs/conformidade-enunciado.md`](docs/conformidade-enunciado.md) |
 | Execução integral com um único comando | `docker compose up --build`                                        |
