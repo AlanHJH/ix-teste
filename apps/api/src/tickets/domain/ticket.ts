@@ -29,6 +29,15 @@ export const ticketNocStatuses = [
 ] as const;
 export type TicketNocStatus = (typeof ticketNocStatuses)[number];
 
+export type CustomerContactStatus =
+  "contacted" | "not_required" | "not_recorded";
+
+export type NocClosureInput = {
+  closureNote?: string;
+  customerContactStatus?: CustomerContactStatus;
+  customerContactNote?: string;
+};
+
 export type TicketSource = "dataset" | "n1";
 
 export type TicketRow = {

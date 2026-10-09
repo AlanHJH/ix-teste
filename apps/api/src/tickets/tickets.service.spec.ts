@@ -248,7 +248,13 @@ describe("TicketsService.updateNocStatus", () => {
 
     assert.equal(result.noc_status, "in_progress");
     assert.match(queries[0].text, /noc_status='pending'/);
-    assert.deepEqual(queries[0].params, ["TN1-KANBAN1", "in_progress"]);
+    assert.deepEqual(queries[0].params, [
+      "TN1-KANBAN1",
+      "in_progress",
+      null,
+      null,
+      null,
+    ]);
   });
 
   it("encerra um chamado em andamento e preserva o registro", async () => {
@@ -270,11 +276,21 @@ describe("TicketsService.updateNocStatus", () => {
 
     const result = await new TicketsService(
       new PostgresTicketsRepository(database),
-    ).updateNocStatus("tn1-kanban2", "closed");
+    ).updateNocStatus("tn1-kanban2", "closed", {
+      closureNote: "Falha confirmada e serviço normalizado.",
+      customerContactStatus: "contacted",
+      customerContactNote: "Cliente confirmou o retorno do acesso.",
+    });
 
     assert.equal(result.noc_status, "closed");
     assert.match(queries[0].text, /closed_at=CASE/);
     assert.match(queries[0].text, /noc_status='in_progress'/);
-    assert.deepEqual(queries[0].params, ["TN1-KANBAN2", "closed"]);
+    assert.deepEqual(queries[0].params, [
+      "TN1-KANBAN2",
+      "closed",
+      "Falha confirmada e serviço normalizado.",
+      "contacted",
+      "Cliente confirmou o retorno do acesso.",
+    ]);
   });
 });

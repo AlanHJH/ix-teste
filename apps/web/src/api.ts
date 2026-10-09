@@ -404,11 +404,19 @@ export const api = {
     request<NocQueue>(
       "/api/tickets/noc-queue?page=1&pageSize=100&sort=opened_at_asc",
     ),
-  updateNocTicketStatus: (ticketId: string, status: "in_progress" | "closed") =>
-    mutate<{ ticket_id: string; noc_status: "in_progress" | "closed" }>(
+  updateNocTicketStatus: (
+    ticketId: string,
+    status: "in_progress" | "closed",
+    closure?: {
+      closureNote?: string;
+      customerContactStatus?: "contacted" | "not_required" | "not_recorded";
+      customerContactNote?: string;
+    },
+  ) =>
+    mutate<SupportTicket>(
       `/api/tickets/${encodeURIComponent(ticketId)}/noc-status`,
       "PATCH",
-      { status },
+      { status, ...closure },
     ),
   operationalIncidents: () =>
     request<OperationalIncidentPage>(

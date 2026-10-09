@@ -15,6 +15,7 @@ import {
   TicketFilter,
   TicketFilterKind,
   TicketOutcome,
+  NocClosureInput,
 } from "./domain/ticket";
 import {
   TICKETS_REPOSITORY,
@@ -129,13 +130,28 @@ export class TicketsService {
   async updateNocStatus(
     ticketId: string,
     status: Extract<"in_progress" | "closed", string>,
+    closure: NocClosureInput = {},
   ) {
     if (status !== "in_progress" && status !== "closed") {
       throw new BadRequestException("Transição de estado do NOC inválida.");
     }
+    const closureNote = closure.closureNote?.trim() ?? "";
+    const customerContactNote = closure.customerContactNote?.trim() ?? "";
+    if (closureNote.length > 600 || customerContactNote.length > 600) {
+      throw new BadRequestException(
+        "As observações do encerramento devem ter até 600 caracteres.",
+      );
+    }
     const ticket = await this.repository.updateNocStatus(
       ticketId.trim().toUpperCase(),
       status,
+      status === "closed"
+        ? {
+            closureNote: closureNote || undefined,
+            customerContactStatus: closure.customerContactStatus,
+            customerContactNote: customerContactNote || undefined,
+          }
+        : undefined,
     );
     if (!ticket) {
       throw new NotFoundException(

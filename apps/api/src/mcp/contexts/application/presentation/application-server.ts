@@ -6,6 +6,7 @@ import {
   readOnlyAnnotations,
   registerAboutResource,
 } from "../../../shared/presentation/mcp.js";
+import type { NocClosureInput } from "../../../../tickets/domain/ticket.js";
 
 const writeAnnotations = {
   readOnlyHint: false,
@@ -70,6 +71,7 @@ export type ApplicationApi = {
   updateTicketStatus(
     ticketId: string,
     status: "in_progress" | "closed",
+    closure?: NocClosureInput,
   ): Promise<unknown>;
   activeIncidents(input: {
     page: number;
@@ -404,11 +406,28 @@ export function createApplicationServer(api: ApplicationApi): McpServer {
       inputSchema: z.object({
         ticketId: z.string().min(1).max(120),
         status: z.enum(["in_progress", "closed"]),
+        closureNote: z.string().max(600).optional(),
+        customerContactStatus: z
+          .enum(["contacted", "not_required", "not_recorded"])
+          .optional(),
+        customerContactNote: z.string().max(600).optional(),
       }),
       annotations: writeAnnotations,
     },
-    async ({ ticketId, status }) =>
-      mcpJson(await api.updateTicketStatus(ticketId, status)),
+    async ({
+      ticketId,
+      status,
+      closureNote,
+      customerContactStatus,
+      customerContactNote,
+    }) =>
+      mcpJson(
+        await api.updateTicketStatus(ticketId, status, {
+          closureNote,
+          customerContactStatus,
+          customerContactNote,
+        }),
+      ),
   );
   server.registerTool(
     "incidents_list_active",

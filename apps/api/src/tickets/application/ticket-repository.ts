@@ -7,6 +7,7 @@ import {
   TicketNocQueueResult,
   TicketNocStatus,
   TicketRow,
+  NocClosureInput,
 } from "../domain/ticket";
 
 export const TICKETS_REPOSITORY = Symbol("TICKETS_REPOSITORY");
@@ -21,6 +22,7 @@ export interface TicketsRepository {
   updateNocStatus(
     ticketId: string,
     status: Extract<TicketNocStatus, "in_progress" | "closed">,
+    closure?: NocClosureInput,
   ): Promise<TicketRow | null>;
   listNocQueue(
     page: number,

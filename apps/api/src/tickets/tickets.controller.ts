@@ -605,6 +605,21 @@ export class TicketsController {
       required: ["status"],
       properties: {
         status: { type: "string", enum: ["in_progress", "closed"] },
+        closureNote: {
+          type: "string",
+          maxLength: 600,
+          description: "Resumo do encerramento ou da mitigação confirmada.",
+        },
+        customerContactStatus: {
+          type: "string",
+          enum: ["contacted", "not_required", "not_recorded"],
+          description: "Resultado do contato com o cliente.",
+        },
+        customerContactNote: {
+          type: "string",
+          maxLength: 600,
+          description: "Retorno registrado no contato.",
+        },
       },
     },
   })
@@ -614,6 +629,6 @@ export class TicketsController {
     @Param() params: TicketIdParamDto,
     @Body() body: NocStatusDto,
   ) {
-    return this.tickets.updateNocStatus(params.ticketId, body.status);
+    return this.tickets.updateNocStatus(params.ticketId, body.status, body);
   }
 }

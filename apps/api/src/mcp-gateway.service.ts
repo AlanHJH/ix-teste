@@ -135,8 +135,8 @@ export class McpGatewayService implements OnModuleDestroy {
         ticketTriageConfig: () => ticketTriage.config(),
         retryTicketTriage: (ticketId) => ticketTriage.retry(ticketId),
         createTicket: (input) => tickets.create(input as never),
-        updateTicketStatus: (ticketId, status) =>
-          tickets.updateNocStatus(ticketId, status),
+        updateTicketStatus: (ticketId, status, closure) =>
+          tickets.updateNocStatus(ticketId, status, closure),
         activeIncidents: (input) =>
           incidents.list(
             input.page,

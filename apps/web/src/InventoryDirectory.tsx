@@ -343,7 +343,10 @@ export function InventoryDirectory({
         </div>
 
         {error && <p className="inventory-error">{error}</p>}
-        <div className="inventory-equipment-cards" aria-label="Equipamentos do inventário">
+        <div
+          className="inventory-equipment-cards"
+          aria-label="Equipamentos do inventário"
+        >
           {data?.data.map((item) => (
             <article className="inventory-equipment-card" key={item.serial}>
               <header className="inventory-equipment-card-header">

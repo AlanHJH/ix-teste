@@ -9,6 +9,7 @@ import {
   TicketRow,
   TicketSummary,
   PersistTicketCommand,
+  NocClosureInput,
 } from "../domain/ticket";
 import { TicketsRepository } from "../application/ticket-repository";
 
@@ -170,13 +171,29 @@ export class PostgresTicketsRepository implements TicketsRepository {
   async updateNocStatus(
     ticketId: string,
     status: Extract<TicketNocStatus, "in_progress" | "closed">,
+    closure: NocClosureInput = {},
   ): Promise<TicketRow | null> {
     const closing = status === "closed";
     const result = await this.database.query<TicketRow>(
       `UPDATE tickets
        SET noc_status=$2,
          closed_at=CASE WHEN $2='closed' THEN coalesce(closed_at, now())
-           ELSE closed_at END
+           ELSE closed_at END,
+         source_payload=CASE
+           WHEN $2='closed' AND ($3::text IS NOT NULL OR $4::text IS NOT NULL OR $5::text IS NOT NULL)
+           THEN jsonb_set(
+             coalesce(source_payload, '{}'::jsonb),
+             '{noc_closure}',
+             jsonb_build_object(
+               'note', coalesce($3::text, ''),
+               'customer_contact_status', coalesce($4::text, 'not_recorded'),
+               'customer_contact_note', coalesce($5::text, ''),
+               'recorded_at', now()::text
+             ),
+             true
+           )
+           ELSE source_payload
+         END
        WHERE ticket_id=$1 AND source='n1'
          AND resolution='Escalado para NOC'
          AND noc_status=${closing ? "'in_progress'" : "'pending'"}
@@ -189,7 +206,13 @@ export class PostgresTicketsRepository implements TicketsRepository {
          ai_triage_review_required, ai_triage_at::text,
          NULL::text AS city, NULL::text AS neighborhood,
          NULL::text AS olt, NULL::text AS pon, NULL::text AS cto`,
-      [ticketId, status],
+      [
+        ticketId,
+        status,
+        closure.closureNote ?? null,
+        closure.customerContactStatus ?? null,
+        closure.customerContactNote ?? null,
+      ],
     );
     return result.rows[0] ?? null;
   }

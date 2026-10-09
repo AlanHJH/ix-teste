@@ -245,6 +245,33 @@ export class NocStatusDto {
   @IsDefined()
   @IsIn(["in_progress", "closed"])
   status!: "in_progress" | "closed";
+
+  @ApiPropertyOptional({
+    description:
+      "Resumo do que foi confirmado, mitigado ou combinado antes do encerramento.",
+    maxLength: 600,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(600)
+  closureNote?: string;
+
+  @ApiPropertyOptional({
+    enum: ["contacted", "not_required", "not_recorded"],
+    description: "Resultado do contato com o cliente impactado.",
+  })
+  @IsOptional()
+  @IsIn(["contacted", "not_required", "not_recorded"])
+  customerContactStatus?: "contacted" | "not_required" | "not_recorded";
+
+  @ApiPropertyOptional({
+    description: "Retorno ou observação do contato com o cliente.",
+    maxLength: 600,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(600)
+  customerContactNote?: string;
 }
 
 export class TicketTriageRetryDto {

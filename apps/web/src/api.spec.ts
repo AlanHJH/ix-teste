@@ -676,14 +676,18 @@ describe("api client", () => {
     }) as typeof fetch;
     try {
       assert.deepEqual(
-        await api.updateNocTicketStatus("TN1-TESTE123", "closed"),
+        await api.updateNocTicketStatus("TN1-TESTE123", "closed", {
+          closureNote: "Falha confirmada e serviço normalizado.",
+          customerContactStatus: "contacted",
+          customerContactNote: "Cliente confirmou o retorno do acesso.",
+        }),
         payload,
       );
       assert.deepEqual(calls, [
         {
           path: "/api/tickets/TN1-TESTE123/noc-status",
           method: "PATCH",
-          body: '{"status":"closed"}',
+          body: '{"status":"closed","closureNote":"Falha confirmada e serviço normalizado.","customerContactStatus":"contacted","customerContactNote":"Cliente confirmou o retorno do acesso."}',
         },
       ]);
     } finally {

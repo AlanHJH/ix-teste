@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -147,6 +147,45 @@ function RawSourcePayload({
   );
 }
 
+type CustomerContactStatus = "contacted" | "not_required" | "not_recorded";
+
+type NocClosureRecord = {
+  note: string;
+  customerContactStatus: CustomerContactStatus;
+  customerContactNote: string;
+  recordedAt: string;
+};
+
+function readNocClosure(
+  payload: Record<string, unknown> | undefined,
+): NocClosureRecord | null {
+  const value = payload?.noc_closure;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const status = record.customer_contact_status;
+  const customerContactStatus: CustomerContactStatus =
+    status === "contacted" ||
+    status === "not_required" ||
+    status === "not_recorded"
+      ? status
+      : "not_recorded";
+  const note = typeof record.note === "string" ? record.note : "";
+  const customerContactNote =
+    typeof record.customer_contact_note === "string"
+      ? record.customer_contact_note
+      : "";
+  const recordedAt =
+    typeof record.recorded_at === "string" ? record.recorded_at : "";
+  if (!note && !customerContactNote && !recordedAt) return null;
+  return { note, customerContactStatus, customerContactNote, recordedAt };
+}
+
+const customerContactStatusLabel: Record<CustomerContactStatus, string> = {
+  contacted: "Cliente contatado",
+  not_required: "Contato não necessário",
+  not_recorded: "Contato ainda não registrado",
+};
+
 export function TicketWorkspacePage({
   ticket,
   canManageNoc = false,
@@ -181,6 +220,11 @@ export function TicketWorkspacePage({
     message: string;
   } | null>(null);
   const [error, setError] = useState("");
+  const [closeFormOpen, setCloseFormOpen] = useState(false);
+  const [closureNote, setClosureNote] = useState("");
+  const [customerContactStatus, setCustomerContactStatus] =
+    useState<CustomerContactStatus>("not_recorded");
+  const [customerContactNote, setCustomerContactNote] = useState("");
 
   useEffect(() => {
     setCurrentTicket(ticket);
@@ -194,6 +238,10 @@ export function TicketWorkspacePage({
     setMcpContext(null);
     setMcpContextError("");
     setRetryFeedback(null);
+    setCloseFormOpen(false);
+    setClosureNote("");
+    setCustomerContactStatus("not_recorded");
+    setCustomerContactNote("");
     void Promise.all([
       api.support(ticket.customer_id),
       api.customer(ticket.customer_id),
@@ -246,33 +294,31 @@ export function TicketWorkspacePage({
     };
   }, [ticket]);
 
-  async function updateNocStatus(status: "in_progress" | "closed") {
-    if (
-      status === "closed" &&
-      !window.confirm(
-        `Encerrar a análise do ticket ${currentTicket.ticket_id}? O histórico será preservado.`,
-      )
-    ) {
-      return;
-    }
+  async function updateNocStatus(
+    status: "in_progress" | "closed",
+    closure?: {
+      closureNote?: string;
+      customerContactStatus?: CustomerContactStatus;
+      customerContactNote?: string;
+    },
+  ) {
     setBusy(true);
     setError("");
     try {
       const updated = await api.updateNocTicketStatus(
         currentTicket.ticket_id,
         status,
+        closure,
       );
-      setCurrentTicket((previous) => ({
-        ...previous,
-        noc_status: updated.noc_status,
-      }));
+      setCurrentTicket(updated);
       setAllTickets((previous) =>
         previous.map((item) =>
           item.ticket_id === currentTicket.ticket_id
-            ? { ...item, noc_status: updated.noc_status }
+            ? { ...item, ...updated }
             : item,
         ),
       );
+      if (status === "closed") setCloseFormOpen(false);
       await onNocQueueChanged?.();
     } catch (reason) {
       setError(
@@ -283,6 +329,23 @@ export function TicketWorkspacePage({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function submitNocClosure(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const note = closureNote.trim();
+    const contactNote = customerContactNote.trim();
+    if (note.length < 10) {
+      setError(
+        "Descreva em pelo menos 10 caracteres o que foi confirmado ou combinado.",
+      );
+      return;
+    }
+    await updateNocStatus("closed", {
+      closureNote: note,
+      customerContactStatus,
+      customerContactNote: contactNote || undefined,
+    });
   }
 
   async function retryTriage() {
@@ -329,6 +392,7 @@ export function TicketWorkspacePage({
   );
   const triageContext = (triageRuns[0]?.input_snapshot ??
     null) as TicketTriageContextSnapshot | null;
+  const nocClosure = readNocClosure(currentTicket.source_payload);
 
   function openTicketChat(problemId = currentTicket.related_problem_id) {
     onOpenAssistant?.({
@@ -388,11 +452,9 @@ export function TicketWorkspacePage({
                 className="ticket-workspace-action"
                 disabled={busy}
                 onClick={() =>
-                  void updateNocStatus(
-                    currentTicket.noc_status === "pending"
-                      ? "in_progress"
-                      : "closed",
-                  )
+                  currentTicket.noc_status === "pending"
+                    ? void updateNocStatus("in_progress")
+                    : setCloseFormOpen(true)
                 }
               >
                 {currentTicket.noc_status === "pending" ? (
@@ -409,6 +471,77 @@ export function TicketWorkspacePage({
             )}
         </div>
       </header>
+
+      {closeFormOpen && currentTicket.noc_status === "in_progress" && (
+        <section
+          className="ticket-workspace-close-form"
+          aria-labelledby="ticket-close-title"
+        >
+          <header>
+            <div>
+              <span className="section-label">Fechamento operacional</span>
+              <h2 id="ticket-close-title">
+                Registre o resultado antes de encerrar
+              </h2>
+              <p>
+                Preserve o que foi confirmado no NOC e o retorno dado ao
+                cliente.
+              </p>
+            </div>
+            <TicketCheck size={21} />
+          </header>
+          <form onSubmit={(event) => void submitNocClosure(event)}>
+            <label>
+              Resumo do encerramento
+              <textarea
+                value={closureNote}
+                onChange={(event) => setClosureNote(event.target.value)}
+                minLength={10}
+                maxLength={600}
+                placeholder="Ex.: potência normalizada após ajuste no trecho compartilhado."
+                required
+              />
+            </label>
+            <label>
+              Retorno ao cliente
+              <select
+                value={customerContactStatus}
+                onChange={(event) =>
+                  setCustomerContactStatus(
+                    event.target.value as CustomerContactStatus,
+                  )
+                }
+              >
+                <option value="not_recorded">Ainda não registrado</option>
+                <option value="contacted">Cliente contatado</option>
+                <option value="not_required">Contato não necessário</option>
+              </select>
+            </label>
+            <label>
+              Observação do contato (opcional)
+              <textarea
+                value={customerContactNote}
+                onChange={(event) => setCustomerContactNote(event.target.value)}
+                maxLength={600}
+                placeholder="Ex.: cliente confirmou a normalização às 14h30."
+              />
+            </label>
+            <div className="ticket-workspace-close-actions">
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => setCloseFormOpen(false)}
+                disabled={busy}
+              >
+                Cancelar
+              </button>
+              <button type="submit" disabled={busy}>
+                {busy ? "Encerrando…" : "Salvar e encerrar ticket"}
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
 
       <header className="ticket-workspace-hero">
         <div>
@@ -585,6 +718,25 @@ export function TicketWorkspacePage({
                 <FieldWorkSummary
                   fieldWork={readTicketFieldWork(currentTicket.source_payload)!}
                 />
+              )}
+              {nocClosure && (
+                <div className="ticket-workspace-closure-summary">
+                  <span>Fechamento operacional registrado</span>
+                  <strong>{nocClosure.note || "Sem observação"}</strong>
+                  <small>
+                    {
+                      customerContactStatusLabel[
+                        nocClosure.customerContactStatus
+                      ]
+                    }
+                    {nocClosure.customerContactNote
+                      ? ` · ${nocClosure.customerContactNote}`
+                      : ""}
+                    {nocClosure.recordedAt
+                      ? ` · ${formatDate(nocClosure.recordedAt)}`
+                      : ""}
+                  </small>
+                </div>
               )}
               <RawSourcePayload payload={currentTicket.source_payload} />
             </article>
