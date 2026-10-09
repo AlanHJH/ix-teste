@@ -275,7 +275,13 @@ function MetricValue({
   );
 }
 
-function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
+function SupportDesk({
+  initialCustomer,
+  operatorName,
+}: {
+  initialCustomer?: string;
+  operatorName?: string;
+}) {
   const agentPolicy = useAgentPolicy();
   const showN1Advisor = n1GuidanceEnabled(agentPolicy);
   const [query, setQuery] = useState("");
@@ -288,7 +294,7 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [ticketOpenedBy, setTicketOpenedBy] = useState("");
+  const [ticketOpenedBy, setTicketOpenedBy] = useState(operatorName ?? "");
   const [ticketCategory, setTicketCategory] = useState("Lentidão");
   const [ticketDescription, setTicketDescription] = useState("");
   const [ticketOutcome, setTicketOutcome] = useState<
@@ -346,6 +352,28 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
   useEffect(() => {
     if (initialCustomer) void load(initialCustomer);
   }, [initialCustomer]);
+
+  useEffect(() => {
+    if (operatorName) {
+      setTicketOpenedBy((current) => current.trim() || operatorName);
+    }
+  }, [operatorName]);
+
+  const ticketOutcomeLabel = {
+    resolver_telefone: "Registrar como resolvido no N1",
+    escalar_noc: "Registrar e encaminhar ao NOC",
+    agendar_visita: "Registrar visita técnica",
+  }[ticketOutcome];
+
+  function goToTicketForm() {
+    const form = document.getElementById("n1-ticket-form");
+    form?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => {
+      form
+        ?.querySelector<HTMLTextAreaElement>("textarea")
+        ?.focus({ preventScroll: true });
+    }, 250);
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -490,6 +518,51 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
               </small>
             </div>
           </div>
+          <section
+            className="n1-journey-card"
+            aria-labelledby="n1-journey-title"
+          >
+            <div className="n1-journey-heading">
+              <span className="section-label">Roteiro do atendimento</span>
+              <h2 id="n1-journey-title">
+                Cliente identificado. Decida e registre.
+              </h2>
+              <p>
+                Os dados do cliente, do equipamento e da rede já estão
+                conferidos. Siga a orientação abaixo e registre o desfecho da
+                ligação.
+              </p>
+            </div>
+            <div
+              className="n1-journey-steps"
+              aria-label="Etapas concluídas do atendimento"
+            >
+              <div className="n1-journey-step">
+                <CheckCircle2 size={16} />
+                <span>1 · Cliente</span>
+                <strong>{profile.customer.id}</strong>
+              </div>
+              <div className="n1-journey-step">
+                <CheckCircle2 size={16} />
+                <span>2 · Equipamento</span>
+                <strong>
+                  {profile.equipment.vendor} {profile.equipment.model}
+                </strong>
+              </div>
+              <div className="n1-journey-step current">
+                <ArrowRight size={16} />
+                <span>3 · Próximo passo</span>
+                <strong>{ticketOutcomeLabel}</strong>
+              </div>
+            </div>
+            <div className="n1-journey-action">
+              <span>Quando terminar a ligação</span>
+              <strong>{ticketOutcomeLabel}</strong>
+              <button type="button" onClick={goToTicketForm}>
+                Ir para o registro <ArrowRight size={15} />
+              </button>
+            </div>
+          </section>
           <section
             className="n1-preflight"
             aria-labelledby="n1-preflight-title"
@@ -723,14 +796,18 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
               onOutcomeChange={setTicketOutcome}
             />
           )}
-          <form className="n1-ticket-card" onSubmit={createTicket}>
+          <form
+            id="n1-ticket-form"
+            className="n1-ticket-card"
+            onSubmit={createTicket}
+          >
             <header>
               <div>
                 <span className="section-label">Registro do atendimento</span>
-                <h2>Abrir chamado para este cliente</h2>
+                <h2>Registrar próximo passo</h2>
                 <p>
-                  O chamado registra esta ligação. Ele pode ser individual ou
-                  ficar vinculado a um problema compartilhado do NOC.
+                  Confirme o relato e salve a decisão: {ticketOutcomeLabel}. O
+                  contexto técnico será anexado automaticamente.
                 </p>
               </div>
               <TicketPlus size={26} />
@@ -745,6 +822,11 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
                   maxLength={100}
                   required
                 />
+                <small className="n1-field-hint">
+                  {operatorName
+                    ? "Preenchido pela sessão atual; altere se necessário."
+                    : "Nome ou matrícula de quem conduziu a ligação."}
+                </small>
               </label>
               <label>
                 Categoria
@@ -826,7 +908,7 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
                 }
               >
                 <TicketPlus size={16} />
-                {ticketBusy ? "Abrindo…" : "Abrir chamado"}
+                {ticketBusy ? "Registrando…" : ticketOutcomeLabel}
               </button>
             </div>
             {ticketError && <p className="n1-ticket-error">{ticketError}</p>}
@@ -1325,7 +1407,10 @@ function OperationsApp({
           ) : view === "diagnostics" ? (
             <DiagnosticsDirectory />
           ) : view === "support" ? (
-            <SupportDesk initialCustomer={supportCustomer} />
+            <SupportDesk
+              initialCustomer={supportCustomer}
+              operatorName={user.name}
+            />
           ) : view === "offline-diagnosis" ? (
             <OfflineDiagnosis
               customerId={offlineCustomer}
