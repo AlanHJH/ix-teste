@@ -12,6 +12,7 @@ import {
 import { api } from "./api";
 import { HelpTooltip } from "./HelpTooltip";
 import { InvestigationReview } from "./InvestigationReview";
+import { PhysicalTopology } from "./PhysicalTopology";
 import { groupingAgentEnabled, useAgentPolicy } from "./agentPolicy";
 import { providerGlossary, TechnicalText } from "./ProviderGlossary";
 import type {
@@ -298,6 +299,8 @@ export function NocOperations({
   const [modalOpen, setModalOpen] = useState(false);
   const [closingGrouping, setClosingGrouping] = useState("");
   const [selectedGroupingId, setSelectedGroupingId] = useState("");
+  const [topologyGrouping, setTopologyGrouping] =
+    useState<OperationalIncident | null>(null);
   async function refresh() {
     try {
       const nextIncidents = await api.operationalIncidents();
@@ -670,8 +673,10 @@ export function NocOperations({
               <div className="grouping-detail-overview">
                 <div>
                   <span>Alcance</span>
-                  <strong>
-                    <TechnicalText text={selectedGroupingData.location} />
+                  <strong className="grouping-detail-scope-value">
+                    <GroupingScopePath
+                      location={selectedGroupingData.location}
+                    />
                   </strong>
                   <small>Escopo comum investigado</small>
                 </div>
@@ -684,7 +689,7 @@ export function NocOperations({
                 </div>
                 <div>
                   <span>Responsável</span>
-                  <strong>
+                  <strong className="grouping-detail-owner-value">
                     <TechnicalText text={selectedGroupingData.owner} />
                   </strong>
                   <small>{selectedGroupingData.origin}</small>
@@ -765,6 +770,14 @@ export function NocOperations({
                 <div>
                   <button
                     type="button"
+                    className="grouping-topology-open"
+                    onClick={() => setTopologyGrouping(selectedGrouping)}
+                  >
+                    <Network size={15} aria-hidden="true" />
+                    Ver infraestrutura afetada
+                  </button>
+                  <button
+                    type="button"
                     className="text-button"
                     onClick={() => setSelectedGroupingId("")}
                     disabled={Boolean(closingGrouping)}
@@ -791,6 +804,13 @@ export function NocOperations({
             </div>
           </section>
         </div>
+      )}
+
+      {topologyGrouping && (
+        <PhysicalTopology
+          focusGrouping={topologyGrouping}
+          onClose={() => setTopologyGrouping(null)}
+        />
       )}
 
       {modalOpen && (

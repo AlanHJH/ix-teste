@@ -388,6 +388,9 @@ function OltConstellation({
       serial?: string;
       customerId?: string;
       softwareVersion?: string;
+      equipment?: string;
+      city?: string;
+      neighborhood?: string;
     },
   ): GraphNodeIssue | undefined {
     const candidates = topologyIssues.flatMap((issue) => {
@@ -412,18 +415,57 @@ function OltConstellation({
       if (scope.pon && !location.pon) return [];
       if (scope.cto && !location.cto) return [];
 
+      if (
+        scopeType === "olt" &&
+        identifier &&
+        normalized(location.olt) !== identifier
+      ) {
+        return [];
+      }
+      if (
+        scopeType === "pon" &&
+        identifier &&
+        normalized(location.pon) !== identifier &&
+        normalized(`${location.olt} · PON ${location.pon}`) !== identifier
+      ) {
+        return [];
+      }
+      if (
+        scopeType === "cto" &&
+        identifier &&
+        normalized(location.cto) !== identifier &&
+        normalized(
+          `${location.olt} · PON ${location.pon} · ${location.cto}`,
+        ) !== identifier
+      ) {
+        return [];
+      }
+
       if (isSpecificEquipment) {
         if (kind !== "cpe") return [];
         const matchesIdentifier =
           (scopeType === "equipment" &&
-            [location.serial, location.customerId]
+            [location.serial, location.customerId, location.equipment]
               .map(normalized)
-              .includes(identifier)) ||
+              .some(
+                (value) =>
+                  value === identifier ||
+                  Boolean(value && identifier && value.includes(identifier)),
+              )) ||
           (scopeType === "customer" &&
             normalized(location.customerId) === identifier) ||
           (scopeType === "firmware" &&
             normalized(location.softwareVersion) === identifier);
         if (!matchesIdentifier) return [];
+      } else if (scopeType === "region") {
+        const region = normalized(identifier);
+        if (
+          ![location.city, location.neighborhood]
+            .map(normalized)
+            .some((value) => value === region || value.includes(region))
+        ) {
+          return [];
+        }
       } else if (
         !scope.olt &&
         !scope.pon &&
@@ -677,6 +719,8 @@ function OltConstellation({
                 olt: olt.olt,
                 pon: selectedPon,
                 cto: node.item.cto,
+                city: node.item.city,
+                neighborhood: node.item.neighborhood,
               })}
               muted={hasVisualFocus && !isHighlightedCto(node.item)}
               collapsedChildren={
@@ -702,6 +746,9 @@ function OltConstellation({
                 serial: node.item.serial,
                 customerId: node.item.customer_id,
                 softwareVersion: node.item.software_version,
+                equipment: `${node.item.vendor} ${node.item.model} ${node.item.hw_revision}`,
+                city: node.item.city,
+                neighborhood: node.item.neighborhood,
               })}
               muted={hasVisualFocus && !isHighlightedDevice(node.item)}
               onSelect={() => onSelectDevice(node.item)}
