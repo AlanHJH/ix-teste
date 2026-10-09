@@ -1,22 +1,26 @@
-import { Controller, Get, Query } from "@nestjs/common";
-import { ApiQuery, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Get, Post, Query } from "@nestjs/common";
+import { ApiBody, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { parsePageQuery } from "../pagination";
 import {
   ApiInvalidRequest,
   ApiPagination,
   ApiRead,
+  ApiWrite,
   apiDate,
   apiDateTime,
+  apiBoolean,
   apiInteger,
   apiNumber,
   apiPageSchema,
   apiString,
 } from "../openapi";
+import { BulkIngestInformsDto, IngestInformDto } from "../contracts/input.dto";
 import { TelemetryQueries } from "../mcp/contexts/telemetry/application/telemetry-queries";
 import {
   TelemetryDailyMetricsQueryDto,
   TelemetryInformsQueryDto,
 } from "../contracts/query.dto";
+import { TelemetryKafkaService } from "./telemetry-kafka.service";
 
 const informSchema = {
   type: "object" as const,
@@ -107,10 +111,130 @@ const dailyMetricSchema = {
   ],
 };
 
+const informIngestionSchema = {
+  type: "object" as const,
+  description:
+    "Resultado auditável da entrada, normalização e idempotência do Inform.",
+  required: [
+    "status",
+    "ingestionKey",
+    "providerId",
+    "serial",
+    "eventTime",
+    "receivedAt",
+  ],
+  properties: {
+    status: {
+      type: "string",
+      enum: ["accepted", "duplicate", "quarantined", "queued"],
+    },
+    ingestionKey: apiString("Chave idempotente do evento."),
+    providerId: apiString("Provedor que originou o Inform."),
+    serial: apiString("Serial do equipamento."),
+    eventTime: apiDateTime("Momento produzido pela CPE."),
+    receivedAt: apiDateTime("Momento recebido pela plataforma."),
+    reason: { ...apiString("Motivo da quarentena."), nullable: true },
+    transport: {
+      type: "string",
+      enum: ["kafka", "direct-fallback"],
+    },
+    topic: { ...apiString("Tópico Kafka."), nullable: true },
+  },
+};
+
+const bulkInformIngestionSchema = {
+  type: "object" as const,
+  description: "Resultado agregado de um lote controlado de Informs.",
+  required: ["total", "accepted", "duplicate", "quarantined", "results"],
+  properties: {
+    total: apiInteger("Quantidade enviada."),
+    accepted: apiInteger("Eventos persistidos."),
+    duplicate: apiInteger("Eventos já persistidos."),
+    quarantined: apiInteger("Eventos enviados para quarentena."),
+    results: { type: "array", items: informIngestionSchema },
+    queued: apiInteger("Eventos publicados no Kafka."),
+    transport: {
+      type: "string",
+      enum: ["kafka", "direct-fallback"],
+    },
+    topic: { ...apiString("Tópico Kafka."), nullable: true },
+  },
+};
+
+const kafkaStatusSchema = {
+  type: "object" as const,
+  required: [
+    "enabled",
+    "ready",
+    "topic",
+    "consumerGroup",
+    "brokers",
+    "consumerRunning",
+    "lastError",
+  ],
+  properties: {
+    enabled: apiBoolean("Se o transporte Kafka está habilitado."),
+    ready: apiBoolean("Se producer e consumer estão conectados."),
+    topic: apiString("Tópico de telemetria."),
+    consumerGroup: apiString("Grupo consumidor da normalização."),
+    brokers: { type: "array", items: apiString("Broker Kafka.") },
+    consumerRunning: apiBoolean("Se o consumidor está processando eventos."),
+    lastError: { ...apiString("Último erro de transporte."), nullable: true },
+  },
+};
+
 @ApiTags("Telemetria")
 @Controller("telemetry")
 export class TelemetryController {
-  constructor(private readonly telemetry: TelemetryQueries) {}
+  constructor(
+    private readonly telemetry: TelemetryQueries,
+    private readonly kafka: TelemetryKafkaService,
+  ) {}
+
+  @ApiWrite({
+    summary: "Receber e normalizar um Inform",
+    description:
+      "Recebe um evento canônico da CPE/ACS, preserva o payload bruto, rejeita schema incompatível ou serial desconhecido em quarentena e não duplica a mesma chave idempotente.",
+    responseDescription: "Resultado da ingestão do evento.",
+    schema: informIngestionSchema,
+  })
+  @ApiBody({
+    description: "Evento normalizado pelo adaptador do provedor.",
+    type: IngestInformDto,
+  })
+  @ApiInvalidRequest(
+    "Evento ausente, inválido ou incompatível com o schema 1.0.",
+  )
+  @Post("informs")
+  ingest(@Body() input: IngestInformDto) {
+    return this.kafka.enqueue(input);
+  }
+
+  @ApiWrite({
+    summary: "Receber lote controlado de Informs",
+    description:
+      "Processa até 500 Informs em paralelo limitado, preservando idempotência e quarentena por evento. O cliente deve dividir cargas maiores em lotes.",
+    responseDescription: "Resumo e resultados da ingestão do lote.",
+    schema: bulkInformIngestionSchema,
+  })
+  @ApiBody({ type: BulkIngestInformsDto })
+  @ApiInvalidRequest("Lote ausente, vazio ou maior que 500 eventos.")
+  @Post("informs/bulk")
+  ingestBulk(@Body() input: BulkIngestInformsDto) {
+    return this.kafka.enqueueMany(input.informs);
+  }
+
+  @ApiRead({
+    summary: "Consultar transporte Kafka da telemetria",
+    description:
+      "Exibe o estado do broker, tópico e consumidor que normaliza Informs em PostgreSQL.",
+    responseDescription: "Estado do pipeline Kafka.",
+    schema: kafkaStatusSchema,
+  })
+  @Get("kafka")
+  kafkaStatus() {
+    return this.kafka.status();
+  }
 
   @ApiRead({
     summary: "Listar eventos brutos de uma CPE",

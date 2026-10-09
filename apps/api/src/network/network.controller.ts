@@ -87,7 +87,7 @@ const detectedIncidentSchema = {
     id: apiString("Identificador estável do agrupamento.", "pon-olt2-ja"),
     severity: {
       type: "string" as const,
-      enum: ["critical", "high", "medium"],
+      enum: ["critical", "high", "medium", "low"],
       description: "Severidade operacional.",
     },
     scope: {
@@ -103,6 +103,12 @@ const detectedIncidentSchema = {
     affected: apiInteger("Quantidade estimada de CPEs afetadas.", 42),
     score: apiInteger("Pontuação de prioridade entre 0 e 100.", 98),
     confidence: apiString("Confiança da correlação.", "Alta"),
+    ruleVersion: apiString("Versão das regras determinísticas.", "detector-v2"),
+    scoreComponents: {
+      type: "object",
+      description: "Componentes normalizados usados no score explicável.",
+      additionalProperties: { type: "number" },
+    },
     signal: apiString("Sinal dominante que originou o agrupamento."),
     evidence: apiArray(
       apiString("Evidência textual."),

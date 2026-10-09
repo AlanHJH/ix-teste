@@ -1,7 +1,10 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { SQL_EXECUTOR, SqlExecutor } from "../infrastructure/sql-executor";
-import { decideTicketTriagePolicy } from "./ticket-triage-policy";
+import {
+  decideTicketTriagePolicy,
+  ticketTriageAutoEscalateNocEnabled,
+} from "./ticket-triage-policy";
 import { TicketTriageAgent } from "./ticket-triage-agent";
 import type {
   TicketTriageContext,
@@ -92,6 +95,12 @@ export class TicketTriageService {
         1,
         100,
       ),
+      concurrency: boundedInteger(
+        process.env.TICKET_TRIAGE_CONCURRENCY,
+        2,
+        1,
+        5,
+      ),
       minConfidence: Number.isFinite(
         Number(process.env.TICKET_TRIAGE_MIN_CONFIDENCE),
       )
@@ -101,6 +110,7 @@ export class TicketTriageService {
           )
         : 0.9,
       autoClose: process.env.TICKET_TRIAGE_AUTO_CLOSE === "true",
+      autoEscalateNoc: ticketTriageAutoEscalateNocEnabled(),
       automaticActions: [
         "corrigir categoria do atendimento N1",
         "encaminhar ticket individual para a fila do NOC",
@@ -113,7 +123,7 @@ export class TicketTriageService {
     };
   }
 
-  async runPending(limit = this.config().batchSize) {
+  async runPending(limit = this.config().batchSize, dataLabJobId?: string) {
     if (this.running) {
       return {
         skipped: true,
@@ -137,6 +147,13 @@ export class TicketTriageService {
 
     this.running = true;
     try {
+      await this.database.query(
+        `UPDATE tickets
+         SET ai_triage_status='failed',
+           ai_triage_reason='A execução anterior excedeu o tempo máximo e voltou para a fila.'
+         WHERE ai_triage_status='running'
+           AND ai_triage_at < now() - interval '5 minutes'`,
+      );
       const candidates = await this.database.query<TicketTriageRow>(
         `SELECT ${ticketColumns}
          FROM tickets t
@@ -149,9 +166,13 @@ export class TicketTriageService {
          ) equipment ON true
          WHERE t.source='n1'
            AND t.ai_triage_status IN ('unprocessed', 'failed')
+           AND ($2::text IS NULL OR t.source_payload->>'dataLabJobId'=$2)
          ORDER BY t.opened_at ASC, t.ticket_id ASC
          LIMIT $1`,
-        [Math.max(1, Math.min(100, Math.floor(limit)))],
+        [
+          Math.max(1, Math.min(100, Math.floor(limit))),
+          dataLabJobId?.trim() || null,
+        ],
       );
       const summary = {
         skipped: false,
@@ -160,12 +181,22 @@ export class TicketTriageService {
         needsReview: 0,
         failed: 0,
       };
-      for (const candidate of candidates.rows) {
-        const result = await this.process(candidate);
-        if (result.status === "completed") summary.completed += 1;
-        if (result.status === "needs_review") summary.needsReview += 1;
-        if (result.status === "failed") summary.failed += 1;
-      }
+      let nextCandidate = 0;
+      const worker = async () => {
+        while (true) {
+          const candidate = candidates.rows[nextCandidate++];
+          if (!candidate) return;
+          const result = await this.process(candidate);
+          if (result.status === "completed") summary.completed += 1;
+          if (result.status === "needs_review") summary.needsReview += 1;
+          if (result.status === "failed") summary.failed += 1;
+        }
+      };
+      const concurrency = Math.min(
+        this.config().concurrency,
+        candidates.rows.length,
+      );
+      await Promise.all(Array.from({ length: concurrency }, () => worker()));
       return summary;
     } finally {
       this.running = false;
@@ -221,7 +252,7 @@ export class TicketTriageService {
            ai_triage_action=NULL,
            ai_triage_reason='Reavaliação solicitada manualmente.',
            ai_triage_review_required=true, ai_triage_at=now()
-         WHERE ticket_id=$1`,
+         WHERE upper(ticket_id)=upper($1)`,
         [normalizedTicketId],
       );
       const result = await this.process(candidate, true);
@@ -249,7 +280,7 @@ export class TicketTriageService {
          ORDER BY status='active' DESC, installed_at DESC
          LIMIT 1
        ) equipment ON true
-       WHERE t.ticket_id=$1`,
+       WHERE upper(t.ticket_id)=upper($1)`,
       [ticketId],
     );
     return result.rows[0] ?? null;

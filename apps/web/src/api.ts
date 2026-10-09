@@ -68,6 +68,80 @@ type PaginatedResponse<T> = {
   totalPages: number;
 };
 
+export type SyntheticJob = {
+  id: string;
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  scenario: string;
+  providerId: string;
+  requestedItems: number;
+  processedItems: number;
+  acceptedItems: number;
+  duplicateItems: number;
+  quarantinedItems: number;
+  progress: number;
+  configuration: {
+    providerId: string;
+    scenario: string;
+    cpeCount: number;
+    informsPerCpe: number;
+    startTime: string;
+    intervalMinutes: number;
+    seed: string;
+    batchSize: number;
+  };
+  error: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  updatedAt: string;
+};
+
+export type SyntheticCatalog = {
+  active_cpes: number;
+  olt_count: number;
+  firmware_count: number;
+  maxBatchSize: number;
+  maxCpesPerJob: number;
+};
+
+export type DataLabInput = {
+  scenario:
+    | "baseline"
+    | "optical"
+    | "fec"
+    | "firmware"
+    | "capacity"
+    | "missing-inform"
+    | "mixed";
+  cpeCount: number;
+  days: number;
+  informsPerDay: number;
+  batchSize: number;
+  includeTickets: boolean;
+  includeDiagnostics: boolean;
+  routeTicketsThroughN1: boolean;
+};
+
+export type DataLabJob = {
+  jobId: string;
+  scenario: DataLabInput["scenario"];
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  cpeCount: number;
+  days: number;
+  informsPerDay: number;
+  batchSize: number;
+  targetRows: number;
+  processedCpes: number;
+  generatedRows: number;
+  includeTickets: boolean;
+  includeDiagnostics: boolean;
+  routeTicketsThroughN1: boolean;
+  error: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
 async function request<T>(
   path: string,
   cache: RequestCache = "default",
@@ -120,6 +194,29 @@ export const api = {
       username,
       password,
     }),
+  dataLabPreview: (input: DataLabInput) =>
+    mutate<{
+      targetRows: number;
+      maxRows: number;
+      activeInventoryCpes: number;
+      syntheticInventory: number;
+      accepted: boolean;
+      recommendation: string;
+    }>("/api/data-lab/preview", "POST", input),
+  dataLabCreateJob: (input: DataLabInput) =>
+    mutate<DataLabJob>("/api/data-lab/jobs", "POST", input),
+  dataLabJob: (jobId: string) =>
+    request<DataLabJob>(
+      `/api/data-lab/jobs/${encodeURIComponent(jobId)}`,
+      "no-store",
+    ),
+  dataLabJobs: () =>
+    request<{ data: DataLabJob[] }>("/api/data-lab/jobs", "no-store"),
+  dataLabRemoveJob: (jobId: string) =>
+    mutate<{ jobId: string; status: "removed" }>(
+      `/api/data-lab/jobs/${encodeURIComponent(jobId)}`,
+      "DELETE",
+    ),
   dashboardLibrary: (userId: string) =>
     request<DashboardLibrary>(
       `/api/dashboard/dashboards/${encodeURIComponent(userId)}`,
@@ -241,6 +338,49 @@ export const api = {
     if (fromDay) params.set("fromDay", fromDay);
     return request<DailyMetricPage>(`/api/telemetry/daily-metrics?${params}`);
   },
+  syntheticCatalog: () =>
+    request<SyntheticCatalog>("/api/telemetry/synthetic/catalog", "no-store"),
+  syntheticJobs: () =>
+    request<{ data: SyntheticJob[] }>(
+      "/api/telemetry/synthetic/jobs",
+      "no-store",
+    ),
+  createSyntheticJob: (input: {
+    providerId: string;
+    scenario: string;
+    cpeCount: number;
+    informsPerCpe: number;
+    startTime: string;
+    intervalMinutes: number;
+    seed?: string;
+    batchSize?: number;
+  }) => mutate<SyntheticJob>("/api/telemetry/synthetic/jobs", "POST", input),
+  syntheticJob: (jobId: string) =>
+    request<SyntheticJob>(
+      `/api/telemetry/synthetic/jobs/${encodeURIComponent(jobId)}`,
+      "no-store",
+    ),
+  cancelSyntheticJob: (jobId: string) =>
+    mutate<SyntheticJob | null>(
+      `/api/telemetry/synthetic/jobs/${encodeURIComponent(jobId)}/cancel`,
+      "POST",
+    ),
+  ingestInformBulk: (informs: Array<Record<string, unknown>>) =>
+    mutate<{
+      total: number;
+      accepted: number;
+      duplicate: number;
+      quarantined: number;
+      results: Array<{
+        status: "accepted" | "duplicate" | "quarantined";
+        ingestionKey: string;
+        providerId: string;
+        serial: string;
+        eventTime: string;
+        receivedAt: string;
+        reason?: string;
+      }>;
+    }>("/api/telemetry/informs/bulk", "POST", { informs }),
   dashboardDiagnostics: (from = "") => {
     const params = new URLSearchParams({
       page: "1",

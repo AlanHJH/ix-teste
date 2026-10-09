@@ -63,6 +63,15 @@ const groupingCandidateSchema = {
     affectedCpes: apiInteger("CPEs que atendem ao critério.", 42),
     totalCpes: apiInteger("CPEs ativas existentes no escopo.", 50),
     affectedPercent: apiNumber("Percentual afetado no escopo.", 84),
+    peakSignalValue: apiNumber("Maior valor observado para o sinal.", 212163),
+    score: apiInteger("Pontuação determinística entre 0 e 100.", 82),
+    severity: apiString("Prioridade calculada pela regra.", "high"),
+    confidence: apiNumber("Confiança determinística entre 0 e 1.", 0.82),
+    ruleVersion: apiString("Versão da regra aplicada.", "detector-v2"),
+    scoreComponents: {
+      type: "object",
+      additionalProperties: { type: "number" },
+    },
   },
   required: [
     "candidateKey",
@@ -72,6 +81,12 @@ const groupingCandidateSchema = {
     "affectedCpes",
     "totalCpes",
     "affectedPercent",
+    "peakSignalValue",
+    "score",
+    "severity",
+    "confidence",
+    "ruleVersion",
+    "scoreComponents",
   ],
 };
 

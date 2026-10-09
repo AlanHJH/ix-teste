@@ -77,6 +77,8 @@ flowchart LR
 
 Kafka/Pulsar não é necessário pela média de 42 eventos por segundo; ele existe para absorver rajadas, desacoplar o ACS, permitir replay e transformar indisponibilidade de consumidores em atraso observável, não em perda.
 
+O protótipo executável materializa esse desenho no `docker-compose.yml`: o serviço `redpanda` fornece o protocolo Kafka, a API NestJS publica no tópico `ondaluz.informs.v1` e o `TelemetryKafkaService` consome pelo grupo `ondaluz-telemetry-normalizer`. A normalização continua usando a mesma idempotência e quarentena do caminho direto. O Data Lab é uma exceção intencional: seus jobs são backfills controlados em SQL para gerar volume sem inundar o barramento; a entrada operacional permanece no fluxo Kafka. O nó único local é adequado para demonstração, não representa alta disponibilidade de produção.
+
 ## Fluxo do Inform até o alerta
 
 1. **Recepção.** O gateway recebe o Inform, adiciona `provider_id`, serial, `event_time`, `received_at`, versão de schema e chave idempotente. A resposta ao ACS ocorre após a gravação no barramento.

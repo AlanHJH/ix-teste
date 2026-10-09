@@ -61,6 +61,28 @@ describe("McpGateway", () => {
     assert.equal(typeof completed?.duration_ms, "number");
   });
 
+  it("repassa um corpo JSON válido ao transporte MCP", async () => {
+    const response = await fetch(`${baseUrl}/mcp/operations`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "gateway-test", version: "1.0.0" },
+        },
+      }),
+    });
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /protocolVersion/);
+  });
+
   it("deixa rotas não MCP seguirem para o NestJS", async () => {
     const response = await fetch(`${baseUrl}/health`);
     assert.equal(response.status, 204);

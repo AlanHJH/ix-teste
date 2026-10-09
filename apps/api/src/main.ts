@@ -11,7 +11,14 @@ import { InvestigationSchedulerService } from "./investigations/investigation-sc
 type Next = (error?: unknown) => void;
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  (
+    app as unknown as {
+      useBodyParser: (type: string, options: { limit: string }) => void;
+    }
+  ).useBodyParser("json", {
+    limit: process.env.API_JSON_LIMIT ?? "8mb",
+  });
   app.enableShutdownHooks();
   app.useGlobalPipes(
     new ValidationPipe({

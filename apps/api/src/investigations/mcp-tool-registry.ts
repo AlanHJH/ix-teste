@@ -55,6 +55,7 @@ type RegisteredTool = {
 
 const DEFAULT_MAX_TOOL_OUTPUT_CHARS = 10_000;
 const DEFAULT_MAX_PAGE_SIZE_FOR_AGENT = 50;
+const DEFAULT_TOOL_TIMEOUT_MS = 20_000;
 
 function boundedInteger(
   value: string | undefined,
@@ -134,6 +135,12 @@ export class McpToolRegistry {
     2_000,
     30_000,
   );
+  private readonly toolTimeoutMs = boundedInteger(
+    process.env.MCP_TOOL_TIMEOUT_MS,
+    DEFAULT_TOOL_TIMEOUT_MS,
+    2_000,
+    120_000,
+  );
 
   constructor(
     private readonly baseUrl = process.env.INTERNAL_MCP_BASE_URL ??
@@ -178,25 +185,43 @@ export class McpToolRegistry {
     const registered = this.registered.get(name);
     if (!registered) throw new Error(`Ferramenta MCP não permitida: ${name}`);
     const normalizedArguments = normalizeAgentToolArguments(argumentsValue);
-    const result = await registered.client.callTool({
-      name,
-      arguments: normalizedArguments,
-    });
-    if (result.isError) {
-      throw new Error(`A ferramenta MCP ${name} retornou erro.`);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await Promise.race([
+        registered.client.callTool({
+          name,
+          arguments: normalizedArguments,
+        }),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(
+            () =>
+              reject(
+                new Error(
+                  `A ferramenta MCP ${name} excedeu o limite de ${this.toolTimeoutMs} ms.`,
+                ),
+              ),
+            this.toolTimeoutMs,
+          );
+        }),
+      ]);
+      if (result.isError) {
+        throw new Error(`A ferramenta MCP ${name} retornou erro.`);
+      }
+      const payload = result.structuredContent ?? result.content;
+      const output = compactToolOutput(payload, this.maxToolOutputCharacters);
+      return {
+        output,
+        trace: {
+          domain: registered.domain,
+          tool: name,
+          arguments: normalizedArguments,
+          outputPreview:
+            output.length > 2_000 ? `${output.slice(0, 2_000)}…` : output,
+        },
+      };
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
-    const payload = result.structuredContent ?? result.content;
-    const output = compactToolOutput(payload, this.maxToolOutputCharacters);
-    return {
-      output,
-      trace: {
-        domain: registered.domain,
-        tool: name,
-        arguments: normalizedArguments,
-        outputPreview:
-          output.length > 2_000 ? `${output.slice(0, 2_000)}…` : output,
-      },
-    };
   }
 
   async close(): Promise<void> {

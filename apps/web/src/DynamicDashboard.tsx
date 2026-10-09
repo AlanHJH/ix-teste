@@ -1283,7 +1283,7 @@ export function DynamicDashboard({
               <span className={`ai-plan-source ${plan.generatedBy}`}>
                 {plan.generatedBy === "openai"
                   ? `Composição por IA · ${plan.model}`
-                  : "Composição de demonstração · OpenAI não configurada"}
+                  : "Composição de demonstração · plano salvo"}
               </span>
               <span>
                 {discoveredResourceCount(plan)} recursos REST descobertos pelo

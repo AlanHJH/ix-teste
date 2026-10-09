@@ -632,6 +632,10 @@ export function AgentConfiguration() {
                   <dd>{triageConfig.batchSize} tickets</dd>
                 </div>
                 <div>
+                  <dt>Análises simultâneas</dt>
+                  <dd>{triageConfig.concurrency}</dd>
+                </div>
+                <div>
                   <dt>Confiança mínima</dt>
                   <dd>{formatConfidence(triageConfig.minConfidence)}</dd>
                 </div>
@@ -643,6 +647,10 @@ export function AgentConfiguration() {
               <div className="agent-settings-runtime-flags">
                 <span>
                   Ações automáticas: {triageConfig.automaticActions.join(" · ")}
+                </span>
+                <span>
+                  Encaminhamento automático ao NOC:{" "}
+                  {triageConfig.autoEscalateNoc ? "ativo" : "desligado"}
                 </span>
                 <span>
                   Revisão humana: {triageConfig.humanReviewActions.join(" · ")}

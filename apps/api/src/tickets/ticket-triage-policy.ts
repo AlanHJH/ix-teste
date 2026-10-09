@@ -27,6 +27,12 @@ export function ticketTriageAutoCloseEnabled(
   return environment.TICKET_TRIAGE_AUTO_CLOSE === "true";
 }
 
+export function ticketTriageAutoEscalateNocEnabled(
+  environment: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return environment.TICKET_TRIAGE_AUTO_ESCALATE_NOC !== "false";
+}
+
 export function decideTicketTriagePolicy(
   decision: TicketTriageDecision,
   currentCategory: string,
@@ -42,6 +48,7 @@ export function decideTicketTriagePolicy(
     categoryChanged &&
     decision.action === ("reclassify" satisfies TicketTriageAction);
   const escalateNoc =
+    ticketTriageAutoEscalateNocEnabled(environment) &&
     safeDecision &&
     ticketIsOpen &&
     decision.caseScope === "shared" &&

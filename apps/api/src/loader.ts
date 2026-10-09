@@ -230,6 +230,9 @@ async function main(): Promise<void> {
     // where the referencing table is still empty.
     await client.query(datasetResetSql);
     for (const definition of imports) await copyCsv(client, definition);
+    await client.query(
+      "UPDATE informs SET event_time=ts, received_at=ts, provider_id='dataset', schema_version='1.0' WHERE event_time IS NULL",
+    );
     await preserveTicketSourcePayloads(client);
 
     console.log("[loader] Calculando metricas diarias e indices...");

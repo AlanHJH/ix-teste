@@ -108,7 +108,7 @@ export class InvestigationsService {
       metricTriggerEnabled: process.env.AGENT_METRIC_TRIGGER_ENABLED === "true",
       metricTriggerIntervalMs: boundedInteger(
         process.env.AGENT_METRIC_TRIGGER_INTERVAL_MS,
-        300_000,
+        900_000,
         60_000,
         86_400_000,
       ),
@@ -268,16 +268,29 @@ export class InvestigationsService {
     });
   }
 
-  async triggerScheduled() {
+  async triggerScheduled(kind: "hourly" | "daily" | "weekly" = "hourly") {
     this.assertConfigured();
-    const hourBucket = new Date().toISOString().slice(0, 13);
+    const now = new Date();
+    const bucket =
+      kind === "weekly"
+        ? `${now.getUTCFullYear()}-W${Math.ceil(now.getUTCDate() / 7)}`
+        : kind === "daily"
+          ? now.toISOString().slice(0, 10)
+          : now.toISOString().slice(0, 13);
+    const scheduledObjectives = {
+      hourly:
+        "Procure degradações compartilhadas após mudanças recentes de firmware ou equipamento. Compare versões afetadas com o controle, consulte telemetria e topologia e retorne apenas uma pergunta delimitada para revisão humana.",
+      daily:
+        "Compare planos contratados, capacidade negociada e sinais de saturação por equipamento, firmware, PON e região. Procure incompatibilidades comerciais/técnicas ainda não cobertas por agrupamentos ativos.",
+      weekly:
+        "Revise tendências de chamados, regiões, fabricantes e topologia que ainda não possuem regra específica. Priorize padrões persistentes e registre evidências contrárias antes de propor uma investigação.",
+    } as const;
     return this.enqueue({
       triggerType: "schedule",
-      triggerLabel: "Revisão recorrente do parque",
-      objective:
-        "Procure problemas compartilhados ainda não cobertos por agrupamentos ativos. Considere parque, OLT, PON, CTO, região, firmware, equipamento e cliente; escolha o menor escopo que explique os afetados e confirme com telemetria, inventário, chamados ou diagnósticos.",
-      scope: { type: "park", window: "latest_available" },
-      dedupKey: `schedule:park-health:${hourBucket}`,
+      triggerLabel: `Revisão ${kind} do parque`,
+      objective: scheduledObjectives[kind],
+      scope: { type: "park", window: "latest_available", cadence: kind },
+      dedupKey: `schedule:${kind}:${bucket}`,
     });
   }
 
@@ -298,7 +311,12 @@ export class InvestigationsService {
     const asOf = latest.rows[0]?.day ?? "unknown";
     const queued = [];
     let covered = 0;
+    let cooldown = 0;
     for (const candidate of candidates) {
+      if (!(await this.markCandidateSeen(candidate))) {
+        cooldown += 1;
+        continue;
+      }
       if (await this.isCoveredByActiveGrouping(candidate.scope)) {
         covered += 1;
         continue;
@@ -331,8 +349,59 @@ export class InvestigationsService {
       candidates: candidates.length,
       queued: queued.length,
       covered,
+      cooldown,
       investigations: queued,
     };
+  }
+
+  private async markCandidateSeen(candidate: {
+    candidateKey: string;
+    score: number;
+    confidence: number;
+    ruleVersion: string;
+    scoreComponents: Record<string, number>;
+  }): Promise<boolean> {
+    const result = await this.database.query<{
+      status: "candidate" | "cooldown" | "resolved";
+      cooldown_until: string | null;
+    }>(
+      `INSERT INTO grouping_detection_states(
+         candidate_key, status, score, confidence, rule_version, score_components
+       ) VALUES ($1,'candidate',$2,$3,$4,$5::jsonb)
+       ON CONFLICT (candidate_key) DO UPDATE
+       SET last_seen_at=now(), score=EXCLUDED.score,
+           confidence=EXCLUDED.confidence, rule_version=EXCLUDED.rule_version,
+           score_components=EXCLUDED.score_components,
+           status=CASE
+             WHEN grouping_detection_states.status='cooldown'
+               AND grouping_detection_states.cooldown_until > now()
+             THEN 'cooldown'
+             ELSE 'candidate'
+           END
+       RETURNING status, cooldown_until`,
+      [
+        candidate.candidateKey,
+        candidate.score,
+        candidate.confidence,
+        candidate.ruleVersion,
+        JSON.stringify(candidate.scoreComponents),
+      ],
+    );
+    const state = result.rows[0];
+    return !(
+      state?.status === "cooldown" &&
+      state.cooldown_until &&
+      new Date(state.cooldown_until).getTime() > Date.now()
+    );
+  }
+
+  private async cooldownCandidate(candidateKey: string): Promise<void> {
+    await this.database.query(
+      `UPDATE grouping_detection_states
+       SET status='cooldown', cooldown_until=now() + interval '2 hours'
+       WHERE candidate_key=$1`,
+      [candidateKey],
+    );
   }
 
   private async findActiveMetricCandidate(
@@ -600,6 +669,13 @@ export class InvestigationsService {
           JSON.stringify(analysis.toolTrace),
         ],
       );
+      if (!analysis.finding.problemDetected) {
+        const candidateKey =
+          typeof row.scope.candidateKey === "string"
+            ? row.scope.candidateKey
+            : null;
+        if (candidateKey) await this.cooldownCandidate(candidateKey);
+      }
       if (
         shouldAutomaticallyCreateGrouping(row.trigger_type, analysis.finding)
       ) {

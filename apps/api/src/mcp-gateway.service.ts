@@ -161,7 +161,7 @@ export class McpGatewayService implements OnModuleDestroy {
             return investigations.triggerManual(objective ?? "");
           }
           if (kind === "scheduled") {
-            return investigations.triggerScheduled();
+            return investigations.triggerScheduled("hourly");
           }
           return investigations.triggerMetricCandidates();
         },

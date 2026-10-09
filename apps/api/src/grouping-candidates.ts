@@ -1,4 +1,8 @@
 import type { Queryable } from "./mcp/shared/infrastructure/database.js";
+import {
+  DETECTION_RULE_VERSION,
+  scoreDetectionCandidate,
+} from "./detection-score.js";
 
 export const groupingScopeTypes = [
   "park",
@@ -27,6 +31,11 @@ export type GroupingCandidate = {
   totalCpes: number;
   affectedPercent: number;
   peakSignalValue: number;
+  score: number;
+  severity: "critical" | "high" | "medium" | "low";
+  confidence: number;
+  ruleVersion: string;
+  scoreComponents: ReturnType<typeof scoreDetectionCandidate>["components"];
   summary: string;
 };
 
@@ -170,29 +179,42 @@ export async function listGroupingCandidates(
     [scopeType, limit],
   );
 
-  return result.rows.map((row) => ({
-    candidateKey: [
-      row.scope_type,
-      row.identifier,
-      row.signal,
-      row.olt ?? "",
-      row.pon ?? "",
-      row.cto ?? "",
-    ]
-      .join(":")
-      .toLowerCase(),
-    scope: {
-      type: row.scope_type,
-      identifier: row.identifier,
-      olt: row.olt,
-      pon: row.pon,
-      cto: row.cto,
-    },
-    signal: row.signal,
-    affectedCpes: row.affected_cpes,
-    totalCpes: row.total_cpes,
-    affectedPercent: row.affected_percent,
-    peakSignalValue: row.peak_signal_value,
-    summary: `${row.affected_cpes} de ${row.total_cpes} CPEs (${row.affected_percent}%) apresentam ${signalLabels[row.signal]}.`,
-  }));
+  return result.rows.map((row) => {
+    const score = scoreDetectionCandidate({
+      scopeType: row.scope_type,
+      affectedCpes: row.affected_cpes,
+      totalCpes: row.total_cpes,
+      signal: row.signal,
+    });
+    return {
+      candidateKey: [
+        row.scope_type,
+        row.identifier,
+        row.signal,
+        row.olt ?? "",
+        row.pon ?? "",
+        row.cto ?? "",
+      ]
+        .join(":")
+        .toLowerCase(),
+      scope: {
+        type: row.scope_type,
+        identifier: row.identifier,
+        olt: row.olt,
+        pon: row.pon,
+        cto: row.cto,
+      },
+      signal: row.signal,
+      affectedCpes: row.affected_cpes,
+      totalCpes: row.total_cpes,
+      affectedPercent: row.affected_percent,
+      peakSignalValue: row.peak_signal_value,
+      score: score.score,
+      severity: score.severity,
+      confidence: score.confidence,
+      ruleVersion: DETECTION_RULE_VERSION,
+      scoreComponents: score.components,
+      summary: `${row.affected_cpes} de ${row.total_cpes} CPEs (${row.affected_percent}%) apresentam ${signalLabels[row.signal]}.`,
+    };
+  });
 }

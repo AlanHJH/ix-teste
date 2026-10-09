@@ -13,12 +13,20 @@ export class InvestigationSchedulerService
     if (process.env.AGENT_SCHEDULE_ENABLED === "true") {
       this.addTimer(
         Number(process.env.AGENT_SCHEDULE_INTERVAL_MS ?? 3_600_000),
-        () => this.investigations.triggerScheduled(),
+        () => this.investigations.triggerScheduled("hourly"),
+      );
+      this.addTimer(
+        Number(process.env.AGENT_DAILY_SCHEDULE_INTERVAL_MS ?? 86_400_000),
+        () => this.investigations.triggerScheduled("daily"),
+      );
+      this.addTimer(
+        Number(process.env.AGENT_WEEKLY_SCHEDULE_INTERVAL_MS ?? 604_800_000),
+        () => this.investigations.triggerScheduled("weekly"),
       );
     }
     if (process.env.AGENT_METRIC_TRIGGER_ENABLED === "true") {
       this.addTimer(
-        Number(process.env.AGENT_METRIC_TRIGGER_INTERVAL_MS ?? 300_000),
+        Number(process.env.AGENT_METRIC_TRIGGER_INTERVAL_MS ?? 900_000),
         () => this.investigations.triggerMetricCandidates(),
       );
     }

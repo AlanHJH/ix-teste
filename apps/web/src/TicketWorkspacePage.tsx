@@ -74,7 +74,8 @@ function formatDate(value: string | null) {
   });
 }
 
-function formatShortDate(value: string) {
+function formatShortDate(value: string | null) {
+  if (!value) return "Não informado";
   const date = new Date(value);
   if (Number.isNaN(date.valueOf())) return value;
   return date.toLocaleDateString("pt-BR", {

@@ -5,6 +5,10 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { SQL_EXECUTOR, SqlExecutor } from "../infrastructure/sql-executor";
+import {
+  DETECTION_RULE_VERSION,
+  scoreDetectionCandidate,
+} from "../detection-score";
 
 type WeeklyTicket = {
   week: string;
@@ -16,19 +20,21 @@ type WeeklyTicket = {
 
 type Incident = {
   id: string;
-  severity: "critical" | "high" | "medium";
+  severity: "critical" | "high" | "medium" | "low";
   scope: "firmware" | "network" | "equipment" | "customer";
   title: string;
   location: string;
   affected: number;
   score: number;
-  confidence: "Alta" | "Média";
+  confidence: "Alta" | "Média" | "Baixa";
   signal: string;
   evidence: string[];
   recommendation: string;
   owner: string;
   cost: number;
   costLabel: string;
+  ruleVersion: string;
+  scoreComponents: ReturnType<typeof scoreDetectionCandidate>["components"];
 };
 
 const detectedGroupingIds = new Set([
@@ -336,7 +342,9 @@ export class NetworkService {
     const [firmware, network, capacity, optical] = await Promise.all([
       this.database.query<{
         affected: number;
+        total_scope: number;
         reboots: number;
+        baseline_reboots: number;
         min_memory: number;
         tickets: number;
         escalations: number;
@@ -349,9 +357,15 @@ export class NetworkService {
             AND (m.mem_min_pct < 10 OR m.reboot_count >= 2)
         )
         SELECT count(DISTINCT a.serial)::int AS affected,
+          (SELECT count(*)::int FROM inventory
+             WHERE status='active' AND software_version='2.4.1') AS total_scope,
           (SELECT coalesce(sum(m.reboot_count),0)::int
              FROM daily_cpe_metrics m JOIN inventory i USING(serial), b
             WHERE m.day > b.max_day - 7 AND m.software_version='2.4.1' AND i.status='active') AS reboots,
+          (SELECT coalesce(sum(m.reboot_count),0)::double precision / 2
+             FROM daily_cpe_metrics m JOIN inventory i USING(serial), b
+            WHERE m.day > b.max_day - 21 AND m.day <= b.max_day - 7
+              AND m.software_version='2.4.1' AND i.status='active') AS baseline_reboots,
           (SELECT round(min(m.mem_min_pct)::numeric,1)
              FROM daily_cpe_metrics m JOIN inventory i USING(serial), b
             WHERE m.day > b.max_day - 7 AND m.software_version='2.4.1' AND i.status='active') AS min_memory,
@@ -361,7 +375,9 @@ export class NetworkService {
         LEFT JOIN tickets t ON t.customer_id=a.customer_id AND t.opened_at >= (SELECT max(opened_at)-interval '14 days' FROM tickets)`),
       this.database.query<{
         affected: number;
+        total_scope: number;
         fec_errors: number;
+        baseline_fec_errors: number;
         tickets: number;
         visits: number;
         escalations: number;
@@ -371,10 +387,17 @@ export class NetworkService {
           WHERE m.day > b.max_day - 7 AND m.olt='OLT-2' AND m.pon_port IN ('1/7','1/8') AND inv.status='active'
         )
         SELECT count(DISTINCT a.serial)::int AS affected,
+          (SELECT count(*)::int FROM inventory
+             WHERE status='active' AND olt='OLT-2' AND pon_port IN ('1/7','1/8')) AS total_scope,
           (SELECT coalesce(sum(m.fec_errors),0)
              FROM daily_cpe_metrics m JOIN inventory i USING(serial), b
             WHERE m.day > b.max_day-7 AND m.olt='OLT-2' AND m.pon_port IN ('1/7','1/8')
               AND i.status='active') AS fec_errors,
+          (SELECT coalesce(sum(m.fec_errors),0)::double precision / 2
+             FROM daily_cpe_metrics m JOIN inventory i USING(serial), b
+            WHERE m.day > b.max_day - 21 AND m.day <= b.max_day - 7
+              AND m.olt='OLT-2' AND m.pon_port IN ('1/7','1/8')
+              AND i.status='active') AS baseline_fec_errors,
           count(t.ticket_id)::int AS tickets,
           count(t.ticket_id) FILTER (WHERE t.resolution='Visita técnica agendada')::int AS visits,
           count(t.ticket_id) FILTER (WHERE t.resolution='Escalado para NOC')::int AS escalations
@@ -382,10 +405,15 @@ export class NetworkService {
         LEFT JOIN tickets t ON t.customer_id=a.customer_id AND t.opened_at >= (SELECT max(opened_at)-interval '14 days' FROM tickets)`),
       this.database.query<{
         affected: number;
+        total_scope: number;
         tickets: number;
         escalations: number;
       }>(`
         SELECT count(DISTINCT i.serial)::int AS affected,
+          (SELECT count(*)::int FROM inventory i2
+             WHERE i2.status='active' AND i2.vendor='Norvik' AND i2.hw_revision='A'
+               AND i2.previous_plan_mbps IS NOT NULL AND i2.plan_mbps > 100
+               AND i2.plan_since >= DATE '2026-07-13') AS total_scope,
           count(t.ticket_id)::int AS tickets,
           count(t.ticket_id) FILTER (WHERE t.resolution='Escalado para NOC')::int AS escalations
         FROM inventory i
@@ -397,7 +425,9 @@ export class NetworkService {
           AND i.plan_since >= DATE '2026-07-13'`),
       this.database.query<{
         affected: number;
+        total_scope: number;
         tickets: number;
+        baseline_low_days: number;
         visits: number;
       }>(`
         WITH b AS (SELECT max(day) max_day FROM daily_cpe_metrics), affected AS (
@@ -409,7 +439,16 @@ export class NetworkService {
           HAVING count(DISTINCT m.day) FILTER (WHERE m.optical_rx_min_dbm < -27) >= 2
         )
         SELECT count(DISTINCT a.serial)::int AS affected,
+          (SELECT count(DISTINCT i2.serial)::int FROM inventory i2
+             WHERE i2.status='active'
+               AND NOT (i2.olt='OLT-2' AND i2.pon_port IN ('1/7','1/8'))) AS total_scope,
           count(t.ticket_id)::int AS tickets,
+          (SELECT coalesce(count(DISTINCT m2.day),0)::double precision / 7
+             FROM daily_cpe_metrics m2 JOIN inventory i2 USING(serial), b
+            WHERE m2.day > b.max_day - 10 AND m2.day <= b.max_day - 3
+              AND i2.status='active'
+              AND NOT (m2.olt='OLT-2' AND m2.pon_port IN ('1/7','1/8'))
+              AND m2.optical_rx_min_dbm < -27) AS baseline_low_days,
           count(t.ticket_id) FILTER (WHERE t.resolution='Visita técnica agendada')::int AS visits
         FROM affected a
         LEFT JOIN tickets t ON t.customer_id=a.customer_id AND t.opened_at >= (SELECT max(opened_at)-interval '14 days' FROM tickets)`),
@@ -419,16 +458,54 @@ export class NetworkService {
     const net = network.rows[0];
     const cap = capacity.rows[0];
     const opt = optical.rows[0];
+    const firmwareScore = scoreDetectionCandidate({
+      scopeType: "firmware",
+      affectedCpes: fw.affected,
+      totalCpes: fw.total_scope,
+      signal: "stability",
+      growthRatio: (fw.reboots + 1) / (fw.baseline_reboots + 1),
+      ticketCount: fw.tickets,
+      escalationCount: fw.escalations,
+    });
+    const networkScore = scoreDetectionCandidate({
+      scopeType: "network",
+      affectedCpes: net.affected,
+      totalCpes: net.total_scope,
+      signal: "fec",
+      growthRatio: (net.fec_errors + 1) / (net.baseline_fec_errors + 1),
+      ticketCount: net.tickets,
+      escalationCount: net.escalations,
+      visitCount: net.visits,
+    });
+    const capacityScore = scoreDetectionCandidate({
+      scopeType: "equipment",
+      affectedCpes: cap.affected,
+      totalCpes: cap.total_scope,
+      signal: "capacity",
+      ticketCount: cap.tickets,
+      escalationCount: cap.escalations,
+    });
+    const opticalScore = scoreDetectionCandidate({
+      scopeType: "customer",
+      affectedCpes: opt.affected,
+      totalCpes: opt.total_scope,
+      signal: "optical",
+      growthRatio: (opt.affected + 1) / (opt.baseline_low_days + 1),
+      ticketCount: opt.tickets,
+      visitCount: opt.visits,
+    });
+    const confidenceLabel = (confidence: number): "Alta" | "Média" | "Baixa" =>
+      confidence >= 0.75 ? "Alta" : confidence >= 0.5 ? "Média" : "Baixa";
     const detectedGroups: Incident[] = [
       {
         id: "pon-olt2-ja",
-        severity: "critical",
+        severity: networkScore.severity,
         scope: "network",
-        score: 98,
+        score: networkScore.score,
         title: "Degradação coletiva na fibra",
         location: "OLT-2 · PON 1/7 e 1/8 · Jardim Aurora",
         affected: net.affected,
-        confidence: "Alta",
+        confidence: confidenceLabel(networkScore.confidence),
         signal: `${net.fec_errors.toLocaleString("pt-BR")} erros FEC em 7 dias`,
         evidence: [
           `${net.tickets} chamados recentes no grupo`,
@@ -440,16 +517,18 @@ export class NetworkService {
         owner: "Rede externa",
         cost: net.tickets * 18 + net.visits * 120 + net.escalations * 25,
         costLabel: "custo recente de tratamento",
+        ruleVersion: DETECTION_RULE_VERSION,
+        scoreComponents: networkScore.components,
       },
       {
         id: "firmware-kestrel-241",
-        severity: "critical",
+        severity: firmwareScore.severity,
         scope: "firmware",
-        score: 94,
+        score: firmwareScore.score,
         title: "Instabilidade no Kestrel 2.4.1",
         location: "Parque KX-3000 atualizado em 20–24/07",
         affected: fw.affected,
-        confidence: "Alta",
+        confidence: confidenceLabel(firmwareScore.confidence),
         signal: `memória livre chegou a ${fw.min_memory}%`,
         evidence: [
           `${fw.reboots.toLocaleString("pt-BR")} boots na última semana`,
@@ -461,16 +540,18 @@ export class NetworkService {
         owner: "NOC + fornecedor",
         cost: fw.tickets * 18 + fw.escalations * 25,
         costLabel: "suporte e NOC recentes",
+        ruleVersion: DETECTION_RULE_VERSION,
+        scoreComponents: firmwareScore.components,
       },
       {
         id: "capacity-norvik-a",
-        severity: "high",
+        severity: capacityScore.severity,
         scope: "equipment",
-        score: 86,
+        score: capacityScore.score,
         title: "Turbo 500 limitado a 100 Mbps",
         location: "Norvik NV-G1 revisão A · clientes com upgrade",
         affected: cap.affected,
-        confidence: "Alta",
+        confidence: confidenceLabel(capacityScore.confidence),
         signal: "porta LAN negocia permanentemente em 100 Mbps",
         evidence: [
           `${cap.tickets} chamados de lentidão após o upgrade`,
@@ -482,16 +563,18 @@ export class NetworkService {
         owner: "Comercial + campo",
         cost: cap.affected * 530,
         costLabel: "exposição para troca completa",
+        ruleVersion: DETECTION_RULE_VERSION,
+        scoreComponents: capacityScore.components,
       },
       {
         id: "optical-isolated",
-        severity: "medium",
+        severity: opticalScore.severity,
         scope: "customer",
-        score: 62,
+        score: opticalScore.score,
         title: "Sinal óptico fora da especificação",
         location: "Clientes isolados fora do cluster do Jardim Aurora",
         affected: opt.affected,
-        confidence: "Média",
+        confidence: confidenceLabel(opticalScore.confidence),
         signal: "Rx abaixo de -27 dBm em pelo menos 2 de 3 dias",
         evidence: [
           `${opt.tickets} chamados recentes`,
@@ -503,6 +586,8 @@ export class NetworkService {
         owner: "Campo",
         cost: opt.affected * 120,
         costLabel: "exposição de visitas",
+        ruleVersion: DETECTION_RULE_VERSION,
+        scoreComponents: opticalScore.components,
       },
     ];
     const resolvedResult = await this.database.query<{ grouping_id: string }>(`
