@@ -3,7 +3,7 @@ import { api } from "./api";
 import { NetworkEntityModal } from "./NetworkEntityModal";
 import type { NetworkEntity } from "./NetworkEntityModal";
 import { NetworkExplorerGraph } from "./NetworkExplorerGraph";
-import type { EquipmentPath, TopologySnapshot } from "./types";
+import type { EquipmentPath, TopologyIssue, TopologySnapshot } from "./types";
 
 export function PhysicalTopology() {
   const [topology, setTopology] = useState<TopologySnapshot | null>(null);
@@ -15,13 +15,51 @@ export function PhysicalTopology() {
     Record<string, EquipmentPath[]>
   >({});
   const [modalEntity, setModalEntity] = useState<NetworkEntity | null>(null);
+  const [topologyIssues, setTopologyIssues] = useState<TopologyIssue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const activeBranch = useRef("");
 
   useEffect(() => {
     void loadInitialTopology();
+    void loadTopologyIssues();
   }, []);
+
+  async function loadTopologyIssues() {
+    try {
+      const [pendingReview, approved] = await Promise.all([
+        api.investigations("pending_review"),
+        api.investigations("approved"),
+      ]);
+      setTopologyIssues(
+        [...pendingReview.data, ...approved.data].flatMap((investigation) => {
+          const finding = investigation.finding;
+          if (
+            !finding ||
+            !finding.problemDetected ||
+            !["pending_review", "approved"].includes(investigation.status)
+          ) {
+            return [];
+          }
+
+          return [
+            {
+              investigationId: investigation.investigation_id,
+              title: finding.title,
+              severity: finding.severity,
+              confidence: finding.confidence,
+              status: investigation.status,
+              scope: finding.scope,
+              affectedCpes: finding.affectedCpes,
+            },
+          ];
+        }),
+      );
+    } catch {
+      // A falha nesta camada não impede a navegação pela topologia.
+      setTopologyIssues([]);
+    }
+  }
 
   async function loadInitialTopology() {
     setLoading(true);
@@ -178,6 +216,7 @@ export function PhysicalTopology() {
           selectedCto={selectedCto}
           selectedPath={selectedPath}
           highlightedEntity={modalEntity}
+          topologyIssues={topologyIssues}
           loading={loading}
           onChangeOlt={(olt) => void chooseOlt(olt)}
           onSelectOlt={setModalEntity}

@@ -8,7 +8,7 @@ import {
 } from "react";
 import { HelpTooltip } from "./HelpTooltip";
 import { providerGlossary } from "./ProviderGlossary";
-import type { EquipmentPath, TopologySnapshot } from "./types";
+import type { EquipmentPath, TopologyIssue, TopologySnapshot } from "./types";
 import type { NetworkEntity } from "./NetworkEntityModal";
 
 type Point = { x: number; y: number };
@@ -33,6 +33,25 @@ function textLengthForNode(
 ) {
   const estimatedWidth = value.length * fontSize * 0.68;
   return estimatedWidth > availableWidth ? availableWidth : undefined;
+}
+
+type GraphNodeKind = "olt" | "pon" | "cto" | "cpe";
+type GraphNodeIssue = {
+  relation: "origin" | "descendant";
+  severity: TopologyIssue["severity"];
+  confidence: number;
+  title: string;
+};
+
+const severityRank: Record<TopologyIssue["severity"], number> = {
+  critical: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
+function normalized(value: string | null | undefined) {
+  return value?.trim().toLowerCase() ?? "";
 }
 
 function centerOf(point: Point) {
@@ -165,6 +184,7 @@ function GraphNode({
   detail,
   active = false,
   muted = false,
+  issue,
   collapsedChildren,
   onSelect,
 }: {
@@ -174,10 +194,12 @@ function GraphNode({
   detail: string;
   active?: boolean;
   muted?: boolean;
+  issue?: GraphNodeIssue;
   collapsedChildren?: { count: number; label: string };
   onSelect: () => void;
 }) {
-  const textWidth = collapsedChildren ? NODE_TEXT_WIDTH - 34 : NODE_TEXT_WIDTH;
+  const textWidth =
+    collapsedChildren || issue ? NODE_TEXT_WIDTH - 34 : NODE_TEXT_WIDTH;
 
   function handleKeyDown(event: KeyboardEvent<SVGGElement>) {
     if (event.key === "Enter" || event.key === " ") {
@@ -193,6 +215,10 @@ function GraphNode({
       role="button"
       tabIndex={0}
       aria-label={`${title}: ${detail}${
+        issue
+          ? `. ${issue.relation === "origin" ? "Problema indicativo neste nó" : "Impacto descendente indicado"}: ${issue.title}, confiança de ${Math.round(issue.confidence * 100)}%`
+          : ""
+      }${
         collapsedChildren
           ? `. Clique para expandir ${collapsedChildren.count} ${collapsedChildren.label}`
           : ""
@@ -202,6 +228,10 @@ function GraphNode({
       onKeyDown={handleKeyDown}
     >
       <title>{`${title}: ${detail}. ${
+        issue
+          ? `${issue.relation === "origin" ? "Problema indicativo neste nó" : "Impacto descendente indicado"}: ${issue.title}, confiança de ${Math.round(issue.confidence * 100)}%.`
+          : ""
+      } ${
         collapsedChildren
           ? `Clique para expandir ${collapsedChildren.count} ${collapsedChildren.label}.`
           : "Clique para ver os dados deste item."
@@ -225,6 +255,17 @@ function GraphNode({
       >
         {detail}
       </text>
+      {issue && (
+        <g
+          className={`network-graph-node-issue ${issue.relation} ${issue.severity}`}
+          aria-hidden="true"
+        >
+          <circle cx={NODE_WIDTH - 16} cy={NODE_HEIGHT - 14} r="8" />
+          <text x={NODE_WIDTH - 16} y={NODE_HEIGHT - 11}>
+            !
+          </text>
+        </g>
+      )}
       {collapsedChildren && (
         <g className="network-graph-node-expand-indicator" aria-hidden="true">
           <circle cx={NODE_WIDTH - 16} cy="14" r="9" />
@@ -244,6 +285,7 @@ function OltConstellation({
   selectedCto,
   selectedPath,
   highlightedEntity,
+  topologyIssues,
   zoom,
   resetToken,
   onWheel,
@@ -260,6 +302,7 @@ function OltConstellation({
   selectedCto: string;
   selectedPath: EquipmentPath | null;
   highlightedEntity: NetworkEntity | null;
+  topologyIssues: TopologyIssue[];
   zoom: number;
   resetToken: number;
   onWheel: (event: WheelEvent<SVGSVGElement>) => void;
@@ -335,6 +378,96 @@ function OltConstellation({
   const isFocusedCto = highlightedEntity?.kind === "cto";
   const isFocusedCpe = highlightedEntity?.kind === "cpe";
   const hasVisualFocus = highlightedEntity !== null;
+
+  function issueForNode(
+    kind: GraphNodeKind,
+    location: {
+      olt: string;
+      pon?: string;
+      cto?: string;
+      serial?: string;
+      customerId?: string;
+      softwareVersion?: string;
+    },
+  ): GraphNodeIssue | undefined {
+    const candidates = topologyIssues.flatMap((issue) => {
+      const scope = issue.scope;
+      const scopeType = scope.type;
+      const isSpecificEquipment = [
+        "equipment",
+        "customer",
+        "firmware",
+      ].includes(scopeType);
+      const identifier = normalized(scope.identifier);
+
+      if (scope.olt && normalized(scope.olt) !== normalized(location.olt)) {
+        return [];
+      }
+      if (scope.pon && normalized(scope.pon) !== normalized(location.pon)) {
+        return [];
+      }
+      if (scope.cto && normalized(scope.cto) !== normalized(location.cto)) {
+        return [];
+      }
+      if (scope.pon && !location.pon) return [];
+      if (scope.cto && !location.cto) return [];
+
+      if (isSpecificEquipment) {
+        if (kind !== "cpe") return [];
+        const matchesIdentifier =
+          (scopeType === "equipment" &&
+            [location.serial, location.customerId]
+              .map(normalized)
+              .includes(identifier)) ||
+          (scopeType === "customer" &&
+            normalized(location.customerId) === identifier) ||
+          (scopeType === "firmware" &&
+            normalized(location.softwareVersion) === identifier);
+        if (!matchesIdentifier) return [];
+      } else if (
+        !scope.olt &&
+        !scope.pon &&
+        !scope.cto &&
+        !["network", "park", "region"].includes(scopeType)
+      ) {
+        return [];
+      }
+
+      const isOrigin =
+        (scope.cto && kind === "cto") ||
+        (scope.pon && kind === "pon") ||
+        (scope.olt && kind === "olt") ||
+        (isSpecificEquipment && kind === "cpe") ||
+        (!scope.olt &&
+          !scope.pon &&
+          !scope.cto &&
+          ["network", "park", "region"].includes(scopeType) &&
+          kind === "olt");
+
+      return [
+        {
+          issue,
+          relation: isOrigin ? ("origin" as const) : ("descendant" as const),
+        },
+      ];
+    });
+
+    return candidates
+      .sort(
+        (first, second) =>
+          Number(second.relation === "origin") -
+            Number(first.relation === "origin") ||
+          severityRank[second.issue.severity] -
+            severityRank[first.issue.severity] ||
+          second.issue.confidence - first.issue.confidence,
+      )
+      .map(({ issue, relation }) => ({
+        relation,
+        severity: issue.severity,
+        confidence: issue.confidence,
+        title: issue.title,
+      }))[0];
+  }
 
   function isHighlightedOlt() {
     return (
@@ -507,6 +640,7 @@ function OltConstellation({
             title={olt.olt}
             detail={`${number.format(olt.cpes)} CPEs`}
             active
+            issue={issueForNode("olt", { olt: olt.olt })}
             muted={hasVisualFocus && !isHighlightedOlt()}
             onSelect={onSelectOlt}
           />
@@ -518,6 +652,10 @@ function OltConstellation({
               title={`PON ${node.item.pon}`}
               detail={`${number.format(node.item.ctos)} CTOs`}
               active={node.item.pon === selectedPon}
+              issue={issueForNode("pon", {
+                olt: olt.olt,
+                pon: node.item.pon,
+              })}
               muted={hasVisualFocus && !isHighlightedPon(node.item)}
               collapsedChildren={
                 node.item.pon === selectedPon
@@ -535,6 +673,11 @@ function OltConstellation({
               title={node.item.cto}
               detail={`${number.format(node.item.cpes)} CPEs`}
               active={node.item.cto === selectedCto}
+              issue={issueForNode("cto", {
+                olt: olt.olt,
+                pon: selectedPon,
+                cto: node.item.cto,
+              })}
               muted={hasVisualFocus && !isHighlightedCto(node.item)}
               collapsedChildren={
                 expandedCtos.has(node.item.cto)
@@ -552,6 +695,14 @@ function OltConstellation({
               title={node.item.customer_id}
               detail={node.item.logical_drop_id ?? node.item.serial}
               active={node.item.serial === selectedPath?.serial}
+              issue={issueForNode("cpe", {
+                olt: olt.olt,
+                pon: node.item.pon,
+                cto: node.item.cto,
+                serial: node.item.serial,
+                customerId: node.item.customer_id,
+                softwareVersion: node.item.software_version,
+              })}
               muted={hasVisualFocus && !isHighlightedDevice(node.item)}
               onSelect={() => onSelectDevice(node.item)}
             />
@@ -570,6 +721,7 @@ export function NetworkExplorerGraph({
   selectedCto,
   selectedPath,
   highlightedEntity,
+  topologyIssues,
   loading,
   onChangeOlt,
   onSelectOlt,
@@ -584,6 +736,7 @@ export function NetworkExplorerGraph({
   selectedCto: string;
   selectedPath: EquipmentPath | null;
   highlightedEntity: NetworkEntity | null;
+  topologyIssues: TopologyIssue[];
   loading: boolean;
   onChangeOlt: (olt: string) => void;
   onSelectOlt: (olt: NetworkEntity & { kind: "olt" }) => void;
@@ -721,6 +874,11 @@ export function NetworkExplorerGraph({
               description={providerGlossary.drop.description}
             />
           </small>
+          {topologyIssues.length > 0 && (
+            <small className="network-graph-issue-legend">
+              <b aria-hidden="true">!</b> Problema indicativo; filhos impactados
+            </small>
+          )}
         </div>
         {olt && (
           <p className="network-graph-summary">
@@ -744,6 +902,7 @@ export function NetworkExplorerGraph({
             selectedCto={selectedCto}
             selectedPath={selectedPath}
             highlightedEntity={highlightedEntity}
+            topologyIssues={topologyIssues}
             zoom={zoom}
             resetToken={resetToken}
             onWheel={handleWheel}

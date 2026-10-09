@@ -39,8 +39,11 @@ type PaginatedResponse<T> = {
   totalPages: number;
 };
 
-async function request<T>(path: string): Promise<T> {
-  const response = await fetch(path);
+async function request<T>(
+  path: string,
+  cache: RequestCache = "default",
+): Promise<T> {
+  const response = await fetch(path, { cache });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new Error(body?.message ?? `Falha ${response.status}`);
@@ -342,10 +345,18 @@ export const api = {
       `/api/diagnostics/filter-options?${params.toString()}`,
     ).then((response) => response.data);
   },
-  investigations: () =>
-    request<InvestigationPage>(
-      "/api/investigations?page=1&pageSize=100&sort=created_at_desc",
-    ),
+  investigations: (status = "") => {
+    const params = new URLSearchParams({
+      page: "1",
+      pageSize: "100",
+      sort: "created_at_desc",
+    });
+    if (status) params.set("status", status);
+    return request<InvestigationPage>(
+      `/api/investigations?${params.toString()}`,
+      "no-store",
+    );
+  },
   aiConfiguration: async (): Promise<AiConfigurationSnapshot> => {
     const [runtime, catalog] = await Promise.all([
       request<AgentRuntimeConfiguration>("/api/investigations/config"),

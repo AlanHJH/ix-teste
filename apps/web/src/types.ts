@@ -622,6 +622,16 @@ export type Investigation = {
   incident_id: string | null;
 };
 
+export type TopologyIssue = {
+  investigationId: string;
+  title: string;
+  severity: InvestigationFinding["severity"];
+  confidence: number;
+  status: Investigation["status"];
+  scope: InvestigationFinding["scope"];
+  affectedCpes: number;
+};
+
 export type AgentRuntimeConfiguration = {
   openaiConfigured: boolean;
   model: string;
