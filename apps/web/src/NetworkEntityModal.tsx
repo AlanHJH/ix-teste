@@ -48,6 +48,8 @@ const detailHints: Record<string, string> = {
   Equipamento: providerGlossary.hardware.description,
   "Plano contratado": providerGlossary.mbps.description,
   Caminho: providerGlossary.logicalTopology.description,
+  "Tipo de vínculo":
+    "Indica como este ponto se conecta à rede. Uma porta PON compartilhada atende várias CTOs e clientes.",
 };
 
 type HistoryState =
@@ -667,6 +669,11 @@ export function NetworkEntityModal({
           </div>
           <button
             type="button"
+            className={
+              directChildren.expanded
+                ? "entity-modal-children-action is-expanded"
+                : "entity-modal-children-action"
+            }
             onClick={() => {
               directChildren.onExpand();
             }}

@@ -4290,8 +4290,15 @@ h3 {
 }
 .entity-modal-children button:disabled {
   cursor: default;
-  color: #698088;
-  background: #e1eceb;
+  color: #23636a;
+  border: 1px solid #9bd8c4;
+  background: #dff5ed;
+  opacity: 1;
+}
+.entity-modal-children button.is-expanded {
+  color: #23636a;
+  border-color: #9bd8c4;
+  background: #dff5ed;
 }
 .entity-modal dl {
   display: grid;
@@ -4443,7 +4450,8 @@ h3 {
 .entity-history-actions {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
+  padding-top: 7px;
   flex-shrink: 0;
 }
 .entity-history-refresh {
@@ -14610,6 +14618,107 @@ main {
   color: #ffffff !important;
   border-color: #087f78 !important;
   background: #087f78 !important;
+}
+
+.side-drawer.entity-modal .entity-modal-children-action:not(:disabled) {
+  color: #ffffff !important;
+  border-color: #087f78 !important;
+  background: #087f78 !important;
+  opacity: 1 !important;
+}
+
+.side-drawer.entity-modal .entity-modal-children-action:not(:disabled):hover,
+.side-drawer.entity-modal
+  .entity-modal-children-action:not(:disabled):focus-visible {
+  color: #ffffff !important;
+  border-color: #066d68 !important;
+  background: #066d68 !important;
+}
+
+.side-drawer.entity-modal .entity-modal-children-action.is-expanded,
+.side-drawer.entity-modal .entity-modal-children-action.is-expanded:disabled {
+  color: #23636a !important;
+  border-color: #9bd8c4 !important;
+  background: #dff5ed !important;
+  opacity: 1 !important;
+}
+
+.side-drawer.entity-modal .entity-operational-action.primary:not(:disabled) {
+  color: #ffffff !important;
+  border-color: #b35437 !important;
+  background: #b35437 !important;
+  opacity: 1 !important;
+}
+
+.side-drawer.entity-modal
+  .entity-operational-action.primary:not(:disabled):hover,
+.side-drawer.entity-modal
+  .entity-operational-action.primary:not(:disabled):focus-visible {
+  color: #ffffff !important;
+  border-color: #963f27 !important;
+  background: #963f27 !important;
+}
+
+.side-drawer.entity-modal .entity-operational-action.secondary:not(:disabled) {
+  color: #7d493b !important;
+  border-color: #e9bba9 !important;
+  background: #fffdfc !important;
+  opacity: 1 !important;
+}
+
+.side-drawer.entity-modal
+  .entity-operational-action.secondary:not(:disabled):hover,
+.side-drawer.entity-modal
+  .entity-operational-action.secondary:not(:disabled):focus-visible {
+  color: #713a2c !important;
+  border-color: #d9947b !important;
+  background: #fff1eb !important;
+}
+
+/* Investigation drawers combine a dark shell with light reading cards. Keep
+   confidence and human-review content on the light cards dark enough to read. */
+.investigation-modal
+  .investigation-modal-header
+  .investigation-confidence
+  strong {
+  color: #155f54 !important;
+}
+
+.investigation-modal
+  .investigation-modal-header
+  .investigation-confidence
+  span {
+  color: #3f6765 !important;
+}
+
+.investigation-modal .human-review {
+  color: #8d5b22 !important;
+  border-color: #efd7b8 !important;
+  background: #fffaf2 !important;
+}
+
+.investigation-modal .human-review > div:first-child,
+.investigation-modal .human-review > div:first-child p,
+.investigation-modal .human-review > div:first-child strong {
+  color: #8d5b22 !important;
+}
+
+.investigation-modal .human-review textarea {
+  color: #23464f !important;
+  border-color: #decdb5 !important;
+  background: #ffffff !important;
+}
+
+.investigation-modal .review-actions .reject {
+  color: #974c38 !important;
+  border-color: #d8b8ac !important;
+  background: #ffffff !important;
+}
+
+.investigation-modal .review-actions .approve {
+  color: #ffffff !important;
+  border-color: #177966 !important;
+  background: #177966 !important;
 }
 
 /* Keep browser focus/annotation scrolling from hiding the inventory toolbar. */
