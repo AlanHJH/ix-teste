@@ -14,6 +14,8 @@ export type McpRequestLogContext = {
   requestId: string;
   correlationId: string;
   sessionId: string | null;
+  /** Request-scoped credential for trusted internal forwarding; never logged. */
+  authorizationHeader: string | null;
   route: string;
   httpMethod: string;
   rpcMethod: string | null;

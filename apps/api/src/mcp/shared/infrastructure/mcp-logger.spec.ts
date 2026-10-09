@@ -12,6 +12,7 @@ function context(logger: McpStructuredLogger): McpRequestLogContext {
     requestId: "req-123",
     correlationId: "corr-456",
     sessionId: "session-789",
+    authorizationHeader: null,
     route: "/mcp/application",
     httpMethod: "POST",
     rpcMethod: "tools/call",

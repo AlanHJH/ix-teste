@@ -39,6 +39,8 @@ export type OpenApiDocumentProvider = () => OpenAPIObject | null;
 export type OpenApiBridgeOptions = {
   baseUrl: string;
   fetchImplementation?: typeof fetch;
+  /** Supplies the current MCP credential without exposing it as tool input. */
+  getAuthorizationHeader?: () => string | null | undefined;
 };
 
 const methods = new Set(["get", "post", "put", "patch", "delete"]);
@@ -246,10 +248,18 @@ function appendQuery(url: URL, name: string, value: unknown): void {
   url.searchParams.append(name, String(value));
 }
 
+function normalizeAuthorizationHeader(
+  value: string | null | undefined,
+): string | null {
+  const match = value?.trim().match(/^Bearer\s+(\S+)$/i);
+  return match ? `Bearer ${match[1]}` : null;
+}
+
 export function buildOpenApiBridgeRequest(
   baseUrl: string,
   operation: OpenApiBridgeOperation,
   input: Record<string, unknown>,
+  authorizationHeader?: string | null,
 ): { url: URL; init: RequestInit } {
   let path = operation.path;
   for (const parameter of operation.parameters) {
@@ -275,12 +285,17 @@ export function buildOpenApiBridgeRequest(
     ? input.body
     : body;
   const hasBody = operation.bodyPropertyNames.length > 0;
+  const normalizedAuthorization =
+    normalizeAuthorizationHeader(authorizationHeader);
   return {
     url,
     init: {
       method: operation.method,
       headers: {
         accept: "application/json",
+        ...(normalizedAuthorization
+          ? { authorization: normalizedAuthorization }
+          : {}),
         ...(hasBody ? { "content-type": "application/json" } : {}),
       },
       ...(hasBody ? { body: JSON.stringify(rawBody) } : {}),
@@ -289,12 +304,17 @@ export function buildOpenApiBridgeRequest(
   };
 }
 
-async function executeOperation(
+export async function executeOpenApiBridgeOperation(
   operation: OpenApiBridgeOperation,
   input: Record<string, unknown>,
   options: OpenApiBridgeOptions,
 ) {
-  const request = buildOpenApiBridgeRequest(options.baseUrl, operation, input);
+  const request = buildOpenApiBridgeRequest(
+    options.baseUrl,
+    operation,
+    input,
+    options.getAuthorizationHeader?.(),
+  );
   const response = await (options.fetchImplementation ?? fetch)(
     request.url,
     request.init,
@@ -423,7 +443,7 @@ export function createOpenApiBridgeServer(
           "ondaluz/dashboard-resource": operation.dashboardResource,
         },
       },
-      async (input) => executeOperation(operation, input, options),
+      async (input) => executeOpenApiBridgeOperation(operation, input, options),
     );
   }
 

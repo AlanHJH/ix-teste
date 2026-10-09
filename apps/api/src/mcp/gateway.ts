@@ -35,6 +35,7 @@ import {
   OpenApiDocumentProvider,
 } from "./contexts/openapi/presentation/openapi-bridge-server.js";
 import {
+  currentMcpRequestContext,
   elapsedMilliseconds,
   McpStructuredLogger,
   McpRequestLogContext,
@@ -219,7 +220,11 @@ export class McpGateway {
             [
               "/mcp/openapi",
               createMcpHandler(() =>
-                createOpenApiBridgeServer(openApi.document, openApi.bridge),
+                createOpenApiBridgeServer(openApi.document, {
+                  ...openApi.bridge,
+                  getAuthorizationHeader: () =>
+                    currentMcpRequestContext()?.authorizationHeader ?? null,
+                }),
               ),
             ],
           ] as const)
@@ -267,6 +272,7 @@ export class McpGateway {
       requestId,
       correlationId,
       sessionId,
+      authorizationHeader: headerValue(request, "authorization"),
       route: path,
       httpMethod: request.method ?? "UNKNOWN",
       rpcMethod: null,

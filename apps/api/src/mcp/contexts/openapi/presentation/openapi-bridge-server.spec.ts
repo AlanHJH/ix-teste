@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { OpenAPIObject } from "@nestjs/swagger";
 import {
   buildOpenApiBridgeRequest,
+  executeOpenApiBridgeOperation,
   openApiBridgeOperations,
 } from "./openapi-bridge-server.js";
 
@@ -108,6 +109,55 @@ describe("bridge OpenAPI para MCP", () => {
     );
     assert.equal(request.init.method, "GET");
     assert.equal(request.init.body, undefined);
+  });
+
+  it("encaminha somente o Bearer da requisição MCP para o REST interno", async () => {
+    const [operation] = openApiBridgeOperations(document);
+    let forwardedAuthorization: string | null = null;
+    const result = await executeOpenApiBridgeOperation(
+      operation,
+      { customerId: "C545968" },
+      {
+        baseUrl: "http://127.0.0.1:3000",
+        getAuthorizationHeader: () => "  bearer jwt-teste  ",
+        fetchImplementation: async (_input, init) => {
+          forwardedAuthorization = new Headers(init.headers).get(
+            "authorization",
+          );
+          return new Response(JSON.stringify({ customer_id: "C545968" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        },
+      },
+    );
+
+    assert.equal(forwardedAuthorization, "Bearer jwt-teste");
+    assert.equal(result.isError, undefined);
+  });
+
+  it("não encaminha credenciais que não sejam Bearer", async () => {
+    const [operation] = openApiBridgeOperations(document);
+    let forwardedAuthorization: string | null = "unexpected";
+    await executeOpenApiBridgeOperation(
+      operation,
+      { customerId: "C545968" },
+      {
+        baseUrl: "http://127.0.0.1:3000",
+        getAuthorizationHeader: () => "Basic segredo-nao-encaminhar",
+        fetchImplementation: async (_input, init) => {
+          forwardedAuthorization = new Headers(init.headers).get(
+            "authorization",
+          );
+          return new Response(JSON.stringify({ customer_id: "C545968" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        },
+      },
+    );
+
+    assert.equal(forwardedAuthorization, null);
   });
 
   it("separa o corpo JSON dos parâmetros da rota", () => {
