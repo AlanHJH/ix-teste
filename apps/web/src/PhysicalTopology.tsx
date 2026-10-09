@@ -6,8 +6,8 @@ import type { NetworkEntity } from "./NetworkEntityModal";
 import { NetworkExplorerGraph } from "./NetworkExplorerGraph";
 import type {
   EquipmentPath,
-  OperationalIncident,
   TopologyIssue,
+  TopologyFocus,
   TopologySnapshot,
 } from "./types";
 
@@ -15,7 +15,7 @@ function normalized(value: string | null | undefined) {
   return value?.trim().toLocaleLowerCase("pt-BR") ?? "";
 }
 
-function focusIssue(grouping: OperationalIncident): TopologyIssue {
+function focusIssue(grouping: TopologyFocus): TopologyIssue {
   const supportedTypes: TopologyIssue["scope"]["type"][] = [
     "park",
     "olt",
@@ -34,7 +34,7 @@ function focusIssue(grouping: OperationalIncident): TopologyIssue {
     : "network";
 
   return {
-    investigationId: grouping.incident_id,
+    investigationId: grouping.id,
     title: grouping.title,
     severity: grouping.severity,
     confidence: grouping.confidence,
@@ -46,14 +46,11 @@ function focusIssue(grouping: OperationalIncident): TopologyIssue {
       pon: grouping.scope.pon ?? null,
       cto: grouping.scope.cto ?? null,
     },
-    affectedCpes: grouping.affected_cpes,
+    affectedCpes: grouping.affectedCpes,
   };
 }
 
-function focusMatchesDevice(
-  grouping: OperationalIncident,
-  device: EquipmentPath,
-) {
+function focusMatchesDevice(grouping: TopologyFocus, device: EquipmentPath) {
   const scope = grouping.scope;
   if (scope.olt && normalized(scope.olt) !== normalized(device.olt)) {
     return false;
@@ -90,7 +87,7 @@ function focusMatchesDevice(
   return true;
 }
 
-function focusPoints(grouping: OperationalIncident) {
+function focusPoints(grouping: TopologyFocus) {
   const scope = grouping.scope;
   const points: Array<{ kind: string; value: string }> = [];
   const inferredOlt =
@@ -109,7 +106,7 @@ function TopologyImpactSummary({
   grouping,
   devicesByCto,
 }: {
-  grouping: OperationalIncident;
+  grouping: TopologyFocus;
   devicesByCto: Record<string, EquipmentPath[]>;
 }) {
   const affectedDevices = Object.values(devicesByCto)
@@ -128,13 +125,17 @@ function TopologyImpactSummary({
     >
       <header>
         <div>
-          <span className="section-label">Impacto do agrupamento</span>
+          <span className="section-label">
+            {grouping.kind === "grouping"
+              ? "Impacto do agrupamento"
+              : "Impacto do problema de conexão"}
+          </span>
           <h2 id="topology-impact-title">
             Pontos e clientes potencialmente afetados
           </h2>
         </div>
         <strong>
-          {grouping.affected_cpes.toLocaleString("pt-BR")} CPEs estimadas
+          {grouping.affectedCpes.toLocaleString("pt-BR")} CPEs estimadas
         </strong>
       </header>
       <div className="topology-impact-grid">
@@ -187,10 +188,10 @@ function TopologyImpactSummary({
 }
 
 export function PhysicalTopology({
-  focusGrouping,
+  focus,
   onClose,
 }: {
-  focusGrouping?: OperationalIncident;
+  focus?: TopologyFocus;
   onClose?: () => void;
 }) {
   const [topology, setTopology] = useState<TopologySnapshot | null>(null);
@@ -210,7 +211,7 @@ export function PhysicalTopology({
   useEffect(() => {
     void loadInitialTopology();
     void loadTopologyIssues();
-  }, [focusGrouping?.incident_id]);
+  }, [focus?.id]);
 
   async function loadTopologyIssues() {
     try {
@@ -242,7 +243,7 @@ export function PhysicalTopology({
           ];
         },
       );
-      setTopologyIssues(focusGrouping ? [focusIssue(focusGrouping)] : issues);
+      setTopologyIssues(focus ? [focusIssue(focus)] : issues);
     } catch {
       // A falha nesta camada não impede a navegação pela topologia.
       setTopologyIssues([]);
@@ -254,7 +255,7 @@ export function PhysicalTopology({
     setError("");
     try {
       const root = await api.topology();
-      const scope = focusGrouping?.scope;
+      const scope = focus?.scope;
       const requestedOlt =
         scope?.olt ??
         (scope?.type === "olt" ? scope.identifier.split(" · ")[0] : "");
@@ -420,16 +421,20 @@ export function PhysicalTopology({
 
   const topologyContent = (
     <section className="physical-topology">
-      {focusGrouping && (
+      {focus && (
         <div className="topology-focus-banner" role="status">
           <AlertTriangle size={17} aria-hidden="true" />
           <div>
-            <strong>Visão pré-filtrada pelo agrupamento</strong>
+            <strong>
+              {focus.kind === "grouping"
+                ? "Visão pré-filtrada pelo agrupamento"
+                : "Visão pré-filtrada pelo problema de conexão"}
+            </strong>
             <span className="topology-focus-path">
-              {focusGrouping.scope.identifier}
+              {focus.title}
               <b>
-                {focusGrouping.affected_cpes.toLocaleString("pt-BR")} CPEs
-                potencialmente afetadas
+                {focus.affectedCpes.toLocaleString("pt-BR")} CPEs potencialmente
+                afetadas
               </b>
             </span>
             <span className="topology-focus-help">
@@ -441,11 +446,8 @@ export function PhysicalTopology({
           </div>
         </div>
       )}
-      {focusGrouping && (
-        <TopologyImpactSummary
-          grouping={focusGrouping}
-          devicesByCto={devicesByCto}
-        />
+      {focus && (
+        <TopologyImpactSummary grouping={focus} devicesByCto={devicesByCto} />
       )}
       {error && <p className="physical-error">{error}</p>}
 
@@ -458,9 +460,7 @@ export function PhysicalTopology({
           selectedCto={selectedCto}
           selectedPath={selectedPath}
           highlightedEntity={modalEntity}
-          topologyIssues={
-            focusGrouping ? [focusIssue(focusGrouping)] : topologyIssues
-          }
+          topologyIssues={focus ? [focusIssue(focus)] : topologyIssues}
           loading={loading}
           onChangeOlt={(olt) => void chooseOlt(olt)}
           onSelectOlt={setModalEntity}
@@ -505,7 +505,7 @@ export function PhysicalTopology({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <h2 id="grouping-topology-title" className="sr-only">
-          Infraestrutura afetada pelo agrupamento
+          Infraestrutura afetada pelo problema
         </h2>
         <button
           className="entity-modal-close grouping-topology-close"

@@ -2,6 +2,7 @@ import { Controller, Get, ServiceUnavailableException } from "@nestjs/common";
 import { ApiServiceUnavailableResponse, ApiTags } from "@nestjs/swagger";
 import { DatabaseService } from "./database";
 import { ApiRead, apiErrorSchema, apiString, apiDateTime } from "./openapi";
+import { Public } from "./auth/auth.guard";
 
 @ApiTags("Sistema")
 @Controller()
@@ -55,6 +56,7 @@ export class HealthController {
       error: "Service Unavailable",
     },
   })
+  @Public()
   @Get("health")
   async health() {
     const result = await this.database.query<{

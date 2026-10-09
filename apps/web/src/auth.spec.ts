@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { canAccessView, defaultViewFor, demoUsers, parseSession } from "./auth";
 
-describe("pseudo autenticação", () => {
+describe("autenticação da interface", () => {
   it("oferece exatamente os três perfis do protótipo", () => {
     assert.deepEqual(
       demoUsers.map(({ role, name }) => ({ role, name })),

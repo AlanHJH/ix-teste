@@ -38,4 +38,4 @@ As ferramentas dos seis domínios de dados não criam, aprovam, encerram ou alte
 
 ## Limites do protótipo
 
-Os endpoints não possuem autenticação e devem permanecer restritos ao ambiente local. Produção exige TLS, autenticação, autorização por provedor e papel, paginação, cotas, auditoria e filtragem de dados sensíveis.
+Os endpoints MCP não possuem autenticação e devem permanecer restritos ao ambiente local. As rotas REST operacionais usam o JWT de demonstração descrito no README, mas isso não substitui autenticação de produção. Produção exige TLS, autenticação forte, autorização por provedor e papel, paginação, cotas, auditoria e filtragem de dados sensíveis.

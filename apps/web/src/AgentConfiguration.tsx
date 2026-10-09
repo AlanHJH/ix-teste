@@ -59,6 +59,14 @@ const defaultCapabilities: ConfigurationOption[] = [
     checked: true,
   },
   {
+    id: "global_assistant",
+    label: "Disponibilizar a Íris em todas as páginas",
+    description:
+      "Permitir perguntas contextuais à agente transversal, usando as fontes MCP somente leitura da aplicação.",
+    checked: true,
+    badge: "Íris",
+  },
+  {
     id: "execute_remote_actions",
     label: "Executar ações remotas",
     description:

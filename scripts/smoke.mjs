@@ -2,15 +2,31 @@ const baseUrl = (process.env.SMOKE_BASE_URL ?? "http://localhost:8080").replace(
   /\/$/,
   "",
 );
+let accessToken = "";
 
 async function getJson(path) {
   const response = await fetch(`${baseUrl}${path}`, {
-    headers: { accept: "application/json" },
+    headers: {
+      accept: "application/json",
+      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+    },
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) {
     throw new Error(`${path} retornou HTTP ${response.status}`);
   }
+  return response.json();
+}
+
+async function login() {
+  const response = await fetch(`${baseUrl}/api/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ username: "marina", password: "Teste@123" }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok)
+    throw new Error(`/api/auth/login retornou HTTP ${response.status}`);
   return response.json();
 }
 
@@ -41,6 +57,12 @@ expect(
 expect(
   health.interfaces?.openapi === "/api/openapi.json",
   "healthcheck não anuncia o contrato OpenAPI",
+);
+
+accessToken = (await login()).accessToken;
+expect(
+  typeof accessToken === "string" && accessToken.length > 20,
+  "login não emitiu JWT",
 );
 
 const openapi = await getJson("/api/openapi.json");

@@ -23,6 +23,9 @@ import type {
   SupportProfile,
   N1AdvisorReply,
   N1ChatMessage,
+  IrisChatMessage,
+  IrisContext,
+  IrisReply,
   OfflineAlertPage,
   TicketFilter,
   TicketFilterKind,
@@ -37,6 +40,20 @@ import type {
   CustomerDetail,
   CustomerSummaryPage,
 } from "./types";
+import { loadAccessToken } from "./auth";
+
+export type AuthLoginResponse = {
+  accessToken: string;
+  tokenType: "Bearer";
+  expiresIn: number;
+  user: {
+    id: string;
+    username: string;
+    name: string;
+    role: "admin" | "n1" | "noc";
+    roleLabel: string;
+  };
+};
 
 type PaginatedResponse<T> = {
   data: T[];
@@ -50,8 +67,15 @@ async function request<T>(
   path: string,
   cache: RequestCache = "default",
 ): Promise<T> {
-  const response = await fetch(path, { cache });
+  const token = loadAccessToken();
+  const response = await fetch(path, {
+    cache,
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("ondaluz:unauthorized"));
+    }
     const body = await response.json().catch(() => null);
     throw new Error(body?.message ?? `Falha ${response.status}`);
   }
@@ -63,12 +87,19 @@ async function mutate<T>(
   method: "POST" | "PUT" | "PATCH" | "DELETE",
   body?: Record<string, unknown>,
 ): Promise<T> {
+  const token = loadAccessToken();
   const response = await fetch(path, {
     method,
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("ondaluz:unauthorized"));
+    }
     const payload = await response.json().catch(() => null);
     const message = Array.isArray(payload?.message)
       ? payload.message.join(" ")
@@ -79,6 +110,11 @@ async function mutate<T>(
 }
 
 export const api = {
+  login: (username: string, password: string) =>
+    mutate<AuthLoginResponse>("/api/auth/login", "POST", {
+      username,
+      password,
+    }),
   dashboardLibrary: (userId: string) =>
     request<DashboardLibrary>(
       `/api/dashboard/dashboards/${encodeURIComponent(userId)}`,
@@ -243,6 +279,16 @@ export const api = {
       "POST",
       { message, history },
     ),
+  irisChat: (
+    message: string,
+    history: IrisChatMessage[],
+    context: IrisContext,
+  ) =>
+    mutate<IrisReply>("/api/assistant/chat", "POST", {
+      message,
+      history,
+      context,
+    }),
   topology: (olt?: string, pon?: string) => {
     const params = new URLSearchParams();
     if (olt) params.set("olt", olt);

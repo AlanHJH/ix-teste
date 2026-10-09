@@ -17,10 +17,12 @@ import {
   Wrench,
 } from "lucide-react";
 import { api } from "./api";
+import { OpenIrisChatButton } from "./OpenIrisChatButton";
 import { TechnicalText } from "./ProviderGlossary";
 import "./TicketWorkspacePage.css";
 import type {
   CustomerDetail,
+  IrisContext,
   SupportProfile,
   SupportTicket,
   TicketFilter,
@@ -129,14 +131,18 @@ function TicketStatus({ status }: { status: SupportTicket["noc_status"] }) {
 export function TicketWorkspacePage({
   ticket,
   canManageNoc = false,
+  canOpenAssistant = false,
   onBack,
   onOpenTicket,
+  onOpenAssistant,
   onNocQueueChanged,
 }: {
   ticket: SupportTicket;
   canManageNoc?: boolean;
   onBack: () => void;
   onOpenTicket?: (ticket: SupportTicket) => void;
+  canOpenAssistant?: boolean;
+  onOpenAssistant?: (context: IrisContext) => void;
   onNocQueueChanged?: () => void | Promise<void>;
 }) {
   const [currentTicket, setCurrentTicket] = useState(ticket);
@@ -230,6 +236,18 @@ export function TicketWorkspacePage({
     (item) => item.status === "active",
   );
 
+  function openTicketChat(problemId = currentTicket.related_problem_id) {
+    onOpenAssistant?.({
+      view: "Tickets",
+      entity: "ticket",
+      selection: `${currentTicket.ticket_id} · ${currentTicket.category} · ${currentTicket.description}`,
+      ticketId: currentTicket.ticket_id,
+      problemId: problemId ?? undefined,
+      customerId: currentTicket.customer_id,
+      serial: profile?.equipment.serial,
+    });
+  }
+
   return (
     <section className="ticket-workspace-page">
       <header className="ticket-workspace-toolbar">
@@ -242,6 +260,9 @@ export function TicketWorkspacePage({
         </button>
         <div className="ticket-workspace-toolbar-actions">
           <TicketStatus status={currentTicket.noc_status} />
+          {canOpenAssistant && onOpenAssistant && (
+            <OpenIrisChatButton onClick={() => openTicketChat()} compact />
+          )}
           {canManageNoc &&
             ["pending", "in_progress"].includes(currentTicket.noc_status) && (
               <button
@@ -552,6 +573,13 @@ export function TicketWorkspacePage({
                         </span>
                         <span>{formatShortDate(problem.openedAt)}</span>
                       </div>
+                      {canOpenAssistant && onOpenAssistant && (
+                        <OpenIrisChatButton
+                          compact
+                          label="Conversar sobre este problema"
+                          onClick={() => openTicketChat(problem.incidentId)}
+                        />
+                      )}
                       <p>
                         <strong>Causa provável:</strong> {problem.probableCause}
                       </p>

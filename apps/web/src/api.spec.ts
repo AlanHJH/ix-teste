@@ -716,4 +716,56 @@ describe("api client", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("envia a pergunta contextual para a Íris", async () => {
+    const payload = {
+      assistantMessage: "A fibra compartilhada é a prioridade.",
+      summary: "Resposta baseada no dashboard.",
+      evidence: [{ label: "FEC", detail: "Há erros elevados no recorte." }],
+      sources: [{ domain: "application", tool: "dashboard_get_overview" }],
+      suggestedQuestions: ["Qual é a próxima verificação?"],
+      actionNote: "A ação continua humana.",
+      model: "fallback",
+    };
+    const calls: Array<{
+      path: string;
+      method?: string;
+      body?: string | null;
+    }> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (
+      path: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      calls.push({
+        path: String(path),
+        method: init?.method,
+        body: typeof init?.body === "string" ? init.body : null,
+      });
+      return { ok: true, json: async () => payload } as Response;
+    }) as typeof fetch;
+    try {
+      assert.deepEqual(
+        await api.irisChat(
+          "Onde agir primeiro?",
+          [{ role: "assistant", content: "Estou pronta." }],
+          { view: "Dashboard", entity: "overview" },
+        ),
+        payload,
+      );
+      assert.deepEqual(calls, [
+        {
+          path: "/api/assistant/chat",
+          method: "POST",
+          body: JSON.stringify({
+            message: "Onde agir primeiro?",
+            history: [{ role: "assistant", content: "Estou pronta." }],
+            context: { view: "Dashboard", entity: "overview" },
+          }),
+        },
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

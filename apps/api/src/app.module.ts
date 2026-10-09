@@ -1,5 +1,7 @@
 import { Module } from "@nestjs/common";
 import { CustomersModule } from "./customers/customers.module";
+import { AuthModule } from "./auth/auth.module";
+import { AssistantModule } from "./assistant/assistant.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
 import { DiagnosticsModule } from "./diagnostics/diagnostics.module";
 import { IncidentsModule } from "./incidents/incidents.module";
@@ -15,6 +17,8 @@ import { TicketsModule } from "./tickets/tickets.module";
 
 @Module({
   imports: [
+    AuthModule,
+    AssistantModule,
     InfrastructureModule,
     SystemModule,
     CustomersModule,

@@ -346,6 +346,38 @@ export type N1ChatMessage = {
   content: string;
 };
 
+export type IrisChatMessage = N1ChatMessage;
+
+export type IrisContext = {
+  view?: string;
+  entity?: string;
+  selection?: string;
+  ticketId?: string;
+  problemId?: string;
+  customerId?: string;
+  serial?: string;
+};
+
+export type IrisEvidence = {
+  label: string;
+  detail: string;
+};
+
+export type IrisSource = {
+  domain: string;
+  tool: string;
+};
+
+export type IrisReply = {
+  assistantMessage: string;
+  summary: string;
+  evidence: IrisEvidence[];
+  sources: IrisSource[];
+  suggestedQuestions: string[];
+  actionNote: string;
+  model: "openai" | "fallback" | "unavailable";
+};
+
 export type N1DeepAnalysis = {
   headline: string;
   summary: string;
@@ -554,6 +586,22 @@ export type OperationalIncident = {
   approval_note: string | null;
   source: "agent" | "manual";
   origin_ticket_id: string | null;
+};
+
+export type TopologyFocus = {
+  id: string;
+  kind: "grouping" | "connection";
+  title: string;
+  severity: OperationalIncident["severity"];
+  confidence: number;
+  scope: {
+    type: string;
+    identifier: string;
+    olt?: string | null;
+    pon?: string | null;
+    cto?: string | null;
+  };
+  affectedCpes: number;
 };
 
 export type OperationalIncidentPage = {

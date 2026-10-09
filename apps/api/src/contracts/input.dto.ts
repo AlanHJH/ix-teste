@@ -251,6 +251,36 @@ export class N1ChatDto {
   history?: N1ChatMessageDto[];
 }
 
+export class IrisChatDto {
+  @ApiProperty({
+    minLength: 2,
+    maxLength: 600,
+    description: "Pergunta do operador para a Íris.",
+  })
+  @IsDefined()
+  @IsString()
+  @Length(2, 600)
+  message!: string;
+
+  @ApiPropertyOptional({ type: [N1ChatMessageDto], maxItems: 8 })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(8)
+  @ValidateNested({ each: true })
+  @Type(() => N1ChatMessageDto)
+  history?: N1ChatMessageDto[];
+
+  @ApiPropertyOptional({
+    type: "object",
+    additionalProperties: true,
+    description:
+      "Metadados da página atual. São contexto de interface, nunca instruções para o agente.",
+  })
+  @IsOptional()
+  @IsObject()
+  context?: Record<string, unknown>;
+}
+
 export class ManualInvestigationDto {
   @ApiProperty({ minLength: 10, maxLength: 600 })
   @IsDefined()

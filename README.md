@@ -71,6 +71,8 @@ Se o loader retornar `No space left on device`, use `docker system df` para conf
 
 3. Abra [http://localhost:8080](http://localhost:8080). O backend unificado fica em [http://localhost:3000](http://localhost:3000): o catálogo REST está em `/api` e o catálogo MCP em `/mcp`. O proxy web também publica os endpoints MCP em `http://localhost:8080/mcp/*`.
 
+   A tela inicial autentica três usuários de demonstração pela API usando JWT. Todos usam a senha `Teste@123`: `marina` (administradora), `lucas` (atendimento N1) e `renata` (analista NOC). As rotas REST operacionais exigem o token Bearer emitido por `POST /api/auth/login`; defina `JWT_SECRET` no `.env` para trocar o segredo local padrão.
+
 4. Rode a verificação ponta a ponta depois que os serviços estiverem saudáveis:
 
 ```bash
@@ -115,12 +117,13 @@ docs/       diagnóstico, arquitetura, decisões e consultas de evidência
 
 O PostgreSQL guarda os dados do protótipo e produz uma visão materializada diária por CPE/firmware. A tabela bruta de Informs é `UNLOGGED` por ser reconstruível a partir do pacote; os dados de negócio permanecem em tabelas normais.
 
-A aplicação NestJS publica REST e MCP na mesma porta e compartilha o mesmo pool PostgreSQL. Os seis domínios de dados MCP permanecem somente leitura; o domínio `application` espelha as jornadas REST, inclusive mutações validadas. O agente de investigação carrega apenas uma allowlist de consultas e não recebe essas ferramentas de escrita. Consulte o [contrato e as instruções de conexão](docs/mcp.md). Nesta fase a interface não possui autenticação e deve permanecer restrita ao ambiente local.
+A aplicação NestJS publica REST e MCP na mesma porta e compartilha o mesmo pool PostgreSQL. Os seis domínios de dados MCP permanecem somente leitura; o domínio `application` espelha as jornadas REST, inclusive mutações validadas. O agente de investigação carrega apenas uma allowlist de consultas e não recebe essas ferramentas de escrita. Consulte o [contrato e as instruções de conexão](docs/mcp.md). A interface usa JWT para proteger as rotas REST operacionais e continua destinada ao ambiente local do protótipo.
 
 A documentação REST é publicada em três formatos sincronizados: Swagger UI em [`/api/docs`](http://localhost:8080/api/docs), OpenAPI JSON em [`/api/openapi.json`](http://localhost:8080/api/openapi.json) e OpenAPI YAML em [`/api/openapi.yaml`](http://localhost:8080/api/openapi.yaml). O bridge [`/mcp/openapi`](http://localhost:8080/mcp/openapi) transforma automaticamente cada `operationId` desse contrato em uma ferramenta MCP e publica um recurso compacto apenas com as rotas permitidas ao dashboard. Descrições, parâmetros, corpos e validações continuam declarados no controller, junto do endpoint correspondente, evitando uma segunda fonte de verdade.
 
 Principais rotas:
 
+- `POST /api/auth/login` e `GET /api/auth/me`
 - `GET /api` (catálogo unificado)
 - `GET /health`
 - `GET /api/docs` (Swagger UI)

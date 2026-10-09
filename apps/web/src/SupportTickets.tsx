@@ -13,6 +13,7 @@ import {
 import { api } from "./api";
 import { DateRangeFilter, type DateRange } from "./DateRangeFilter";
 import { HelpTooltip } from "./HelpTooltip";
+import { OpenIrisChatButton } from "./OpenIrisChatButton";
 import {
   InventoryContextModal,
   type InventoryContext,
@@ -22,6 +23,7 @@ import { TicketFilterSelect } from "./TicketFilterSelect";
 import { SortableHeader } from "./SortableHeader";
 import type {
   SupportTicket,
+  IrisContext,
   TicketFilter,
   TicketPage,
   TicketSort,
@@ -74,10 +76,14 @@ function Metric({
 export function SupportTickets({
   onOpenSupport,
   onOpenTicket,
+  canOpenAssistant = false,
+  onOpenAssistant,
   preset,
 }: {
   onOpenSupport: (customerId: string) => void;
   onOpenTicket: (ticket: SupportTicket) => void;
+  canOpenAssistant?: boolean;
+  onOpenAssistant?: (context: IrisContext) => void;
   preset?: { key: number; filters: TicketFilter[] } | null;
 }) {
   const [filters, setFilters] = useState<TicketFilter[]>([]);
@@ -169,6 +175,17 @@ export function SupportTickets({
     } finally {
       if (request === customerRequest.current) setCustomerLoadingId("");
     }
+  }
+
+  function openTicketChat(ticket: SupportTicket) {
+    onOpenAssistant?.({
+      view: "Tickets",
+      entity: "ticket",
+      selection: `${ticket.ticket_id} · ${ticket.category} · ${ticket.description}`,
+      ticketId: ticket.ticket_id,
+      problemId: ticket.related_problem_id ?? undefined,
+      customerId: ticket.customer_id,
+    });
   }
 
   const totalPages = result ? Math.max(1, result.totalPages) : 1;
@@ -328,21 +345,30 @@ export function SupportTickets({
                   }
                 >
                   <td>
-                    <button
-                      type="button"
-                      className="ticket-id-action"
-                      onClick={() => onOpenTicket(ticket)}
-                      title={`Abrir a ficha completa do ticket ${ticket.ticket_id}`}
-                    >
-                      <strong>{ticket.ticket_id}</strong>
-                      <small>{formatOpenedAt(ticket.opened_at)}</small>
-                      {ticket.source === "n1" && (
-                        <span className="ticket-source-n1">
-                          Aberto pelo N1
-                          {ticket.opened_by ? ` · ${ticket.opened_by}` : ""}
-                        </span>
+                    <div className="ticket-id-cell-actions">
+                      <button
+                        type="button"
+                        className="ticket-id-action"
+                        onClick={() => onOpenTicket(ticket)}
+                        title={`Abrir a ficha completa do ticket ${ticket.ticket_id}`}
+                      >
+                        <strong>{ticket.ticket_id}</strong>
+                        <small>{formatOpenedAt(ticket.opened_at)}</small>
+                        {ticket.source === "n1" && (
+                          <span className="ticket-source-n1">
+                            Aberto pelo N1
+                            {ticket.opened_by ? ` · ${ticket.opened_by}` : ""}
+                          </span>
+                        )}
+                      </button>
+                      {canOpenAssistant && onOpenAssistant && (
+                        <OpenIrisChatButton
+                          compact
+                          label="Chat MCP"
+                          onClick={() => openTicketChat(ticket)}
+                        />
                       )}
-                    </button>
+                    </div>
                   </td>
                   <td>
                     <button

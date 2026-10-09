@@ -14,6 +14,7 @@ export type AppView =
 
 export type DemoUser = {
   id: string;
+  username: string;
   name: string;
   role: UserRole;
   roleLabel: string;
@@ -24,6 +25,7 @@ export type DemoUser = {
 export const demoUsers: DemoUser[] = [
   {
     id: "admin-marina",
+    username: "marina",
     name: "Marina Costa",
     role: "admin",
     roleLabel: "Administradora",
@@ -32,6 +34,7 @@ export const demoUsers: DemoUser[] = [
   },
   {
     id: "n1-lucas",
+    username: "lucas",
     name: "Lucas Ferreira",
     role: "n1",
     roleLabel: "Atendimento N1",
@@ -40,6 +43,7 @@ export const demoUsers: DemoUser[] = [
   },
   {
     id: "noc-renata",
+    username: "renata",
     name: "Renata Alves",
     role: "noc",
     roleLabel: "Analista NOC",
@@ -89,6 +93,11 @@ const defaultViewByRole: Record<UserRole, AppView> = {
 
 export const AUTH_SESSION_KEY = "ondaluz.demo-user";
 
+export type AuthSession = {
+  user: DemoUser;
+  accessToken: string;
+};
+
 export function canAccessView(role: UserRole, view: AppView) {
   return viewsByRole[role].includes(view);
 }
@@ -115,11 +124,34 @@ export function loadSession() {
   }
 }
 
-export function saveSession(user: DemoUser) {
+export function loadAuthSession(): AuthSession | null {
+  try {
+    const raw = window.localStorage.getItem(AUTH_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { id?: unknown; accessToken?: unknown };
+    const user = demoUsers.find((candidate) => candidate.id === parsed.id);
+    if (
+      !user ||
+      typeof parsed.accessToken !== "string" ||
+      !parsed.accessToken
+    ) {
+      return null;
+    }
+    return { user, accessToken: parsed.accessToken };
+  } catch {
+    return null;
+  }
+}
+
+export function loadAccessToken() {
+  return loadAuthSession()?.accessToken ?? null;
+}
+
+export function saveSession(user: DemoUser, accessToken = "") {
   try {
     window.localStorage.setItem(
       AUTH_SESSION_KEY,
-      JSON.stringify({ id: user.id }),
+      JSON.stringify({ id: user.id, accessToken }),
     );
   } catch {
     // A sessão continua válida em memória se o armazenamento estiver indisponível.

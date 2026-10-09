@@ -44,24 +44,33 @@ import { DiagnosticsDirectory } from "./DiagnosticsDirectory";
 import { NocOperations } from "./NocOperations";
 import { AgentConfiguration } from "./AgentConfiguration";
 import { N1AdvisorChat } from "./N1AdvisorChat";
+import { IrisAssistant } from "./IrisAssistant";
 import { DynamicDashboard } from "./DynamicDashboard";
 import { OfflineDiagnosis } from "./OfflineDiagnosis";
 import { CustomersDirectory } from "./CustomersDirectory";
-import { n1GuidanceEnabled, useAgentPolicy } from "./agentPolicy";
+import { PhysicalTopology } from "./PhysicalTopology";
+import { topologyFocusFromSupport } from "./topologyFocus";
+import {
+  globalAssistantEnabled,
+  n1GuidanceEnabled,
+  useAgentPolicy,
+} from "./agentPolicy";
 import {
   canAccessView,
   clearSession,
   defaultViewFor,
   demoUsers,
-  loadSession,
+  loadAuthSession,
   saveSession,
 } from "./auth";
-import type { AppView, DemoUser } from "./auth";
+import type { AppView, AuthSession, DemoUser } from "./auth";
 import type {
   Overview,
   SupportProfile,
   SupportTicket,
   TicketFilter,
+  IrisContext,
+  TopologyFocus,
 } from "./types";
 
 const number = new Intl.NumberFormat("pt-BR");
@@ -214,14 +223,17 @@ function ExecutiveDashboard({ overview }: { overview: Overview }) {
 function NocDashboard({
   nocTicketCount,
   onOpenNocTickets,
+  onOpenAssistant,
 }: {
   nocTicketCount: number;
   onOpenNocTickets: () => void;
+  onOpenAssistant: (context: IrisContext) => void;
 }) {
   return (
     <NocOperations
       nocTicketCount={nocTicketCount}
       onOpenNocTickets={onOpenNocTickets}
+      onOpenAssistant={onOpenAssistant}
     />
   );
 }
@@ -258,6 +270,12 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
   const showN1Advisor = n1GuidanceEnabled(agentPolicy);
   const [query, setQuery] = useState("");
   const [profile, setProfile] = useState<SupportProfile | null>(null);
+  const [connectionFocus, setConnectionFocus] = useState<TopologyFocus | null>(
+    null,
+  );
+  const [topologyFocus, setTopologyFocus] = useState<TopologyFocus | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [ticketOpenedBy, setTicketOpenedBy] = useState("");
@@ -294,9 +312,14 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
     setLoading(true);
     setError("");
     setQuery(customerId);
+    setConnectionFocus(null);
+    setTopologyFocus(null);
     try {
       const nextProfile = await api.support(customerId.trim().toUpperCase());
       setProfile(nextProfile);
+      const nextTopologyFocus = topologyFocusFromSupport(nextProfile);
+      setConnectionFocus(nextTopologyFocus);
+      setTopologyFocus(nextTopologyFocus);
       setTicketCategory(suggestedCategory(nextProfile.decision.issue));
       setTicketDescription(nextProfile.decision.issue);
       setTicketOutcome(nextProfile.decision.action);
@@ -457,6 +480,30 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
                 <CheckCircle2 size={15} /> Análise pronta
               </span>
             </header>
+            {connectionFocus && (
+              <div className="n1-connection-alert" role="status">
+                <div>
+                  <span className="section-label">
+                    Problema de conexão detectado
+                  </span>
+                  <strong>
+                    O mapa já foi aberto com o caminho afetado em foco.
+                  </strong>
+                  <small>
+                    {connectionFocus.scope.olt} · PON{" "}
+                    {connectionFocus.scope.pon} · {connectionFocus.scope.cto}
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className="grouping-topology-open"
+                  onClick={() => setTopologyFocus(connectionFocus)}
+                >
+                  <Network size={15} aria-hidden="true" />
+                  Ver onde está a falha
+                </button>
+              </div>
+            )}
             <div className="n1-preflight-checks">
               <article>
                 <span>Infraestrutura</span>
@@ -793,11 +840,41 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
           )}
         </section>
       )}
+      {topologyFocus && (
+        <PhysicalTopology
+          focus={topologyFocus}
+          onClose={() => setTopologyFocus(null)}
+        />
+      )}
     </>
   );
 }
 
-function LoginScreen({ onLogin }: { onLogin: (user: DemoUser) => void }) {
+function LoginScreen({
+  onLogin,
+}: {
+  onLogin: (user: DemoUser, password: string) => Promise<void>;
+}) {
+  const [selectedUser, setSelectedUser] = useState(demoUsers[0]);
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      await onLogin(selectedUser, password);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Não foi possível entrar.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <main className="login-page">
       <section className="login-shell" aria-labelledby="login-title">
@@ -829,7 +906,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: DemoUser) => void }) {
             <ShieldCheck size={18} />
             <span>
               <strong>Acesso simplificado</strong>
-              <small>Sem senha e sem cadastro neste protótipo.</small>
+              <small>Três perfis com permissões operacionais distintas.</small>
             </span>
           </div>
         </div>
@@ -838,16 +915,17 @@ function LoginScreen({ onLogin }: { onLogin: (user: DemoUser) => void }) {
           <div className="login-heading">
             <span className="section-label">Acessar a plataforma</span>
             <h2 id="login-title">Quem está entrando?</h2>
-            <p>Selecione um usuário para iniciar com as permissões do papel.</p>
+            <p>Selecione um usuário e informe a senha para iniciar.</p>
           </div>
           <div className="login-users">
             {demoUsers.map((user) => (
               <button
-                className={`login-user-card ${user.role}`}
+                className={`login-user-card ${user.role} ${selectedUser.id === user.id ? "selected" : ""}`}
                 key={user.id}
                 type="button"
-                onClick={() => onLogin(user)}
+                onClick={() => setSelectedUser(user)}
                 aria-label={`Entrar como ${user.name}, ${user.roleLabel}`}
+                aria-pressed={selectedUser.id === user.id}
               >
                 <span className="login-avatar">{user.initials}</span>
                 <span className="login-user-copy">
@@ -861,9 +939,34 @@ function LoginScreen({ onLogin }: { onLogin: (user: DemoUser) => void }) {
               </button>
             ))}
           </div>
+          <form className="login-form" onSubmit={submit}>
+            <label htmlFor="login-password">Senha</label>
+            <input
+              id="login-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Digite a senha"
+              required
+            />
+            {error && (
+              <p className="login-error" role="alert">
+                {error}
+              </p>
+            )}
+            <button
+              className="login-submit"
+              type="submit"
+              disabled={submitting}
+            >
+              {submitting ? "Validando…" : `Entrar como ${selectedUser.name}`}
+              <ArrowRight size={17} aria-hidden="true" />
+            </button>
+          </form>
           <p className="login-disclaimer">
-            A identidade selecionada fica salva somente neste navegador. Este
-            fluxo simula autenticação e não protege a API.
+            Senha dos três perfis: <strong>Teste@123</strong>. O acesso é
+            validado pela API e a sessão usa um token JWT de curta duração.
           </p>
         </div>
       </section>
@@ -878,6 +981,8 @@ function OperationsApp({
   user: DemoUser;
   onLogout: () => void;
 }) {
+  const agentPolicy = useAgentPolicy();
+  const showGlobalAssistant = globalAssistantEnabled(agentPolicy);
   const [view, setView] = useState<View>(() => defaultViewFor(user.role));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [supportCustomer, setSupportCustomer] = useState<string>();
@@ -891,6 +996,8 @@ function OperationsApp({
   const [ticketWorkspace, setTicketWorkspace] = useState<SupportTicket | null>(
     null,
   );
+  const [assistantContext, setAssistantContext] = useState<IrisContext>({});
+  const [assistantRequestKey, setAssistantRequestKey] = useState(0);
   const [error, setError] = useState("");
   useEffect(() => {
     api
@@ -943,8 +1050,14 @@ function OperationsApp({
   function navigate(nextView: View) {
     if (!canAccessView(user.role, nextView)) return;
     setTicketWorkspace(null);
+    setAssistantContext({});
     setView(nextView);
     setSidebarOpen(false);
+  }
+
+  function openAssistant(context: IrisContext) {
+    setAssistantContext(context);
+    setAssistantRequestKey((current) => current + 1);
   }
   return (
     <div className="app-shell">
@@ -1150,14 +1263,18 @@ function OperationsApp({
               <TicketWorkspacePage
                 ticket={ticketWorkspace}
                 canManageNoc={canAccessView(user.role, "noc")}
+                canOpenAssistant={showGlobalAssistant}
                 onBack={() => setTicketWorkspace(null)}
                 onOpenTicket={setTicketWorkspace}
+                onOpenAssistant={openAssistant}
                 onNocQueueChanged={refreshNocTicketCount}
               />
             ) : (
               <SupportTickets
                 preset={ticketPreset}
+                canOpenAssistant={showGlobalAssistant}
                 onOpenTicket={setTicketWorkspace}
+                onOpenAssistant={openAssistant}
                 onOpenSupport={(customerId) => {
                   setSupportCustomer(customerId);
                   navigate("support");
@@ -1212,6 +1329,7 @@ function OperationsApp({
             <NocDashboard
               nocTicketCount={nocTicketCount}
               onOpenNocTickets={openNocTickets}
+              onOpenAssistant={openAssistant}
             />
           )}
         </main>
@@ -1225,24 +1343,48 @@ function OperationsApp({
           </footer>
         )}
       </div>
+      <IrisAssistant
+        view={view}
+        context={assistantContext}
+        requestKey={assistantRequestKey}
+      />
     </div>
   );
 }
 
 export default function App() {
-  const [user, setUser] = useState<DemoUser | null>(() => loadSession());
+  const [session, setSession] = useState<AuthSession | null>(() =>
+    loadAuthSession(),
+  );
 
-  function login(nextUser: DemoUser) {
-    saveSession(nextUser);
-    setUser(nextUser);
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      clearSession();
+      setSession(null);
+    };
+    window.addEventListener("ondaluz:unauthorized", handleUnauthorized);
+    return () =>
+      window.removeEventListener("ondaluz:unauthorized", handleUnauthorized);
+  }, []);
+
+  async function login(nextUser: DemoUser, password: string) {
+    const result = await api.login(nextUser.username, password);
+    saveSession(nextUser, result.accessToken);
+    setSession({ user: nextUser, accessToken: result.accessToken });
   }
 
   function logout() {
     clearSession();
-    setUser(null);
+    setSession(null);
   }
 
-  if (!user) return <LoginScreen onLogin={login} />;
+  if (!session) return <LoginScreen onLogin={login} />;
 
-  return <OperationsApp key={user.id} user={user} onLogout={logout} />;
+  return (
+    <OperationsApp
+      key={session.user.id}
+      user={session.user}
+      onLogout={logout}
+    />
+  );
 }

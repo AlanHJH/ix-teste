@@ -15,13 +15,16 @@ import {
 import { api } from "./api";
 import { HelpTooltip } from "./HelpTooltip";
 import { InvestigationReview } from "./InvestigationReview";
+import { OpenIrisChatButton } from "./OpenIrisChatButton";
 import { PhysicalTopology } from "./PhysicalTopology";
+import { topologyFocusFromIncident } from "./topologyFocus";
 import { SideDrawer } from "./SideDrawer";
 import { groupingAgentEnabled, useAgentPolicy } from "./agentPolicy";
 import { providerGlossary, TechnicalText } from "./ProviderGlossary";
 import type {
   IncidentOptionType,
   Investigation,
+  IrisContext,
   OperationalIncident,
   OperationalIncidentPage,
 } from "./types";
@@ -435,9 +438,11 @@ function GroupingCard({
 export function NocOperations({
   nocTicketCount,
   onOpenNocTickets,
+  onOpenAssistant,
 }: {
   nocTicketCount: number;
   onOpenNocTickets: () => void;
+  onOpenAssistant: (context: IrisContext) => void;
 }) {
   const agentPolicy = useAgentPolicy();
   const showGroupingAgent = groupingAgentEnabled(agentPolicy);
@@ -817,7 +822,10 @@ export function NocOperations({
         )}
 
         {showGroupingAgent && (
-          <InvestigationReview onGroupingChanged={() => void refresh()} />
+          <InvestigationReview
+            onGroupingChanged={() => void refresh()}
+            onOpenAssistant={onOpenAssistant}
+          />
         )}
 
         <div className="incidents-list">
@@ -970,6 +978,18 @@ export function NocOperations({
                 mantendo o histórico para auditoria.
               </p>
               <div>
+                <OpenIrisChatButton
+                  compact
+                  label="Conversar sobre este problema"
+                  onClick={() =>
+                    onOpenAssistant({
+                      view: "Visão NOC",
+                      entity: "problem",
+                      selection: `${selectedGroupingData.id} · ${selectedGroupingData.title} · escopo ${selectedGroupingData.location}`,
+                      problemId: selectedGroupingData.id,
+                    })
+                  }
+                />
                 <button
                   type="button"
                   className="grouping-topology-open"
@@ -1009,7 +1029,7 @@ export function NocOperations({
 
       {topologyGrouping && (
         <PhysicalTopology
-          focusGrouping={topologyGrouping}
+          focus={topologyFocusFromIncident(topologyGrouping)}
           onClose={() => setTopologyGrouping(null)}
         />
       )}

@@ -3,6 +3,7 @@ import { ApiTags } from "@nestjs/swagger";
 import { MCP_ENDPOINTS } from "./mcp/catalog";
 import { ApiRead, apiArray, apiInteger, apiString } from "./openapi";
 import { OpenApiCatalogService } from "./openapi-catalog.service";
+import { Public } from "./auth/auth.guard";
 
 @ApiTags("Sistema")
 @Controller()
@@ -77,6 +78,7 @@ export class CatalogController {
       },
     },
   })
+  @Public()
   @Get()
   catalog() {
     const operations = this.openApiCatalog.restOperations();

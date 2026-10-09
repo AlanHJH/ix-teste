@@ -8,8 +8,9 @@ import {
   X,
 } from "lucide-react";
 import { api } from "./api";
+import { OpenIrisChatButton } from "./OpenIrisChatButton";
 import { SideDrawer } from "./SideDrawer";
-import type { Investigation, InvestigationPage } from "./types";
+import type { Investigation, InvestigationPage, IrisContext } from "./types";
 
 const statusLabel: Record<Investigation["status"], string> = {
   queued: "Na fila",
@@ -218,6 +219,7 @@ function InvestigationDetailModal({
   onRetry,
   onClose,
   busy,
+  onOpenAssistant,
 }: {
   investigation: Investigation;
   reviewer: string;
@@ -228,6 +230,7 @@ function InvestigationDetailModal({
   onRetry: () => void;
   onClose: () => void;
   busy: boolean;
+  onOpenAssistant?: (context: IrisContext) => void;
 }) {
   const finding = investigation.finding;
   const titleId = useId();
@@ -262,6 +265,22 @@ function InvestigationDetailModal({
           </div>
         )}
       </header>
+
+      {onOpenAssistant && (
+        <OpenIrisChatButton
+          compact
+          label="Conversar sobre este problema"
+          onClick={() =>
+            onOpenAssistant({
+              view: "Visão NOC",
+              entity: "problem",
+              selection: `${investigation.investigation_id} · ${finding?.title ?? investigation.trigger_label}`,
+              problemId:
+                investigation.incident_id ?? investigation.investigation_id,
+            })
+          }
+        />
+      )}
 
       <div className="investigation-modal-content">
         {!finding && !investigation.error && (
@@ -471,8 +490,10 @@ function InvestigationDetailModal({
 
 export function InvestigationReview({
   onGroupingChanged,
+  onOpenAssistant,
 }: {
   onGroupingChanged?: () => void;
+  onOpenAssistant?: (context: IrisContext) => void;
 }) {
   const [page, setPage] = useState<InvestigationPage | null>(null);
   const [reviewer, setReviewer] = useState("");
@@ -619,6 +640,7 @@ export function InvestigationReview({
           }
           onClose={() => setSelectedInvestigationId("")}
           busy={busy === selectedInvestigation.investigation_id}
+          onOpenAssistant={onOpenAssistant}
         />
       )}
     </section>

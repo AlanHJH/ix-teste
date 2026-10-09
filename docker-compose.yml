@@ -37,6 +37,7 @@ services:
     environment:
       DATABASE_URL: postgresql://ondaluz:ondaluz@postgres:5432/ondaluz
       PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-ondaluz-local-jwt-secret-change-in-production}
       MCP_ALLOWED_HOSTS: localhost,127.0.0.1,::1,api
       INTERNAL_MCP_BASE_URL: http://127.0.0.1:3000
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}

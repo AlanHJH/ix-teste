@@ -317,6 +317,10 @@ export function configureOpenApi(app: INestApplication): OpenAPIObject {
     .setVersion("1.1.0")
     .setOpenAPIVersion("3.0.3")
     .addServer("/", "Mesma origem da interface web")
+    .addBearerAuth(
+      { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+      "access-token",
+    )
     .addTag("Sistema", "Saúde, catálogo e descoberta da plataforma.")
     .addTag("Clientes", "Cadastro consolidado e histórico de CPEs por cliente.")
     .addTag("Atendimento N1", "Contexto e apoio ao primeiro nível de suporte.")

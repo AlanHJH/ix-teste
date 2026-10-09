@@ -12,6 +12,7 @@ export const defaultAgentPolicy: AgentPolicy = {
     detect_grouping_candidates: true,
     propose_grouping: true,
     generate_n1_guidance: true,
+    global_assistant: true,
     execute_remote_actions: false,
   },
   resources: {
@@ -21,6 +22,7 @@ export const defaultAgentPolicy: AgentPolicy = {
     diagnostics: true,
     tickets: true,
     operations: true,
+    application: true,
   },
 };
 
@@ -93,6 +95,13 @@ export function groupingAgentEnabled(policy: AgentPolicy): boolean {
   return (
     policy.capabilities.detect_grouping_candidates === true &&
     policy.capabilities.propose_grouping === true &&
+    Object.values(policy.resources).every(Boolean)
+  );
+}
+
+export function globalAssistantEnabled(policy: AgentPolicy): boolean {
+  return (
+    policy.capabilities.global_assistant === true &&
     Object.values(policy.resources).every(Boolean)
   );
 }
