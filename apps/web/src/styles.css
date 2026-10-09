@@ -7180,17 +7180,11 @@ h3 {
 }
 .agent-investigation-overview {
   display: grid;
-  gap: 16px;
-  padding: 20px 22px;
+  gap: 13px;
+  padding: 16px;
   border: 1px solid #cfe1e1;
-  border-radius: 16px;
-  background:
-    radial-gradient(
-      circle at 95% 10%,
-      rgba(55, 164, 147, 0.12),
-      transparent 28%
-    ),
-    #f7fbfb;
+  border-radius: 12px;
+  background: #f6f9f9;
 }
 .agent-investigation-overview > header {
   display: flex;
@@ -7199,9 +7193,9 @@ h3 {
   gap: 18px;
 }
 .agent-investigation-overview h2 {
-  margin: 6px 0 0;
+  margin: 5px 0 0;
   color: #244b53;
-  font-size: 19px;
+  font-size: 17px;
 }
 .agent-investigation-overview > header > p {
   max-width: 290px;
@@ -7214,16 +7208,16 @@ h3 {
 .agent-investigation-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 .agent-investigation-metric {
   display: grid;
-  min-height: 92px;
+  min-height: 78px;
   align-content: space-between;
   gap: 6px;
-  padding: 13px;
+  padding: 11px;
   border: 1px solid #dce9e9;
-  border-radius: 11px;
+  border-radius: 9px;
   background: #fff;
 }
 .agent-investigation-metric > span {
@@ -7235,7 +7229,7 @@ h3 {
 }
 .agent-investigation-metric strong {
   color: #28535a;
-  font-size: 25px;
+  font-size: 22px;
   line-height: 1;
 }
 .agent-investigation-metric small {
@@ -12359,6 +12353,7 @@ main {
 .incident-card,
 .investigation-card,
 .active-grouping-card,
+.agent-investigation-overview,
 .investigation-modal,
 .grouping-detail-modal {
   color: var(--ixc-text) !important;
@@ -12381,6 +12376,10 @@ main {
 .grouping-card-metadata,
 .investigation-card-copy small,
 .investigation-confidence span,
+.agent-investigation-overview > header > p,
+.agent-investigation-overview > footer,
+.agent-investigation-metric > span,
+.agent-investigation-metric small,
 .noc-incident-form > header p {
   color: var(--ixc-muted) !important;
 }
@@ -12393,6 +12392,7 @@ main {
 .incident-card h3,
 .investigation-card-copy h3,
 .active-grouping-card h3,
+.agent-investigation-overview h2,
 .investigation-confidence strong {
   color: var(--ixc-text) !important;
 }
@@ -12500,6 +12500,66 @@ main {
 
 .investigation-card-preview p {
   border-top-color: rgba(157, 190, 214, 0.14) !important;
+}
+
+.agent-investigation-metric {
+  border-color: rgba(157, 190, 214, 0.14) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+}
+
+.agent-investigation-metric strong {
+  color: var(--ixc-accent) !important;
+}
+
+.agent-investigation-metric.attention strong {
+  color: #f2d28b !important;
+}
+
+.agent-investigation-metric.active strong {
+  color: #7ce7ca !important;
+}
+
+.agent-investigation-metric.danger strong {
+  color: #ffaaa1 !important;
+}
+
+.agent-investigation-overview > footer span::before {
+  background: var(--ixc-accent) !important;
+}
+
+.investigation-card-facts span {
+  color: #c9e7f4 !important;
+  background: rgba(94, 192, 237, 0.12) !important;
+}
+
+.investigation-deep-actions .secondary {
+  color: #c8edff !important;
+  border-color: rgba(94, 192, 237, 0.3) !important;
+  background: rgba(94, 192, 237, 0.08) !important;
+}
+
+.investigation-deep-actions .secondary:hover {
+  color: #061725 !important;
+  border-color: var(--ixc-accent) !important;
+  background: var(--ixc-accent) !important;
+}
+
+.investigation-raw-data {
+  border-color: rgba(157, 190, 214, 0.14) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+}
+
+.investigation-raw-data > div > span {
+  color: var(--ixc-text) !important;
+}
+
+.investigation-raw-data > div > small,
+.investigation-raw-data pre {
+  color: var(--ixc-muted) !important;
+}
+
+.investigation-raw-data pre {
+  background: rgba(1, 13, 24, 0.62) !important;
 }
 
 .investigation-tags > span,
