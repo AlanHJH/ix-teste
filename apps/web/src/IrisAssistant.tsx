@@ -35,6 +35,7 @@ type Props = {
   view: string;
   context?: IrisContext;
   requestKey?: number;
+  showLauncher?: boolean;
 };
 
 type IrisMessage = IrisChatMessage & {
@@ -306,6 +307,7 @@ export function IrisAssistant({
   view,
   context: initialContext = {},
   requestKey = 0,
+  showLauncher = true,
 }: Props) {
   const policy = useAgentPolicy();
   const enabled = globalAssistantEnabled(policy);
@@ -572,23 +574,25 @@ export function IrisAssistant({
           </p>
         </aside>
       )}
-      <button
-        className={`iris-launcher ${open ? "is-open" : ""}`}
-        type="button"
-        onClick={() => {
-          if (open) {
-            setOpen(false);
-          } else {
-            openAssistant();
-          }
-        }}
-        aria-expanded={open}
-        aria-label={open ? "Fechar Agente IA" : "Abrir Agente IA"}
-        title="Explicar com o Agente IA"
-      >
-        {open ? <X size={20} /> : <Sparkles size={20} />}
-        <span>{open ? "Fechar" : "Agente IA"}</span>
-      </button>
+      {showLauncher && (
+        <button
+          className={`iris-launcher ${open ? "is-open" : ""}`}
+          type="button"
+          onClick={() => {
+            if (open) {
+              setOpen(false);
+            } else {
+              openAssistant();
+            }
+          }}
+          aria-expanded={open}
+          aria-label={open ? "Fechar Agente IA" : "Abrir Agente IA"}
+          title="Explicar com o Agente IA"
+        >
+          {open ? <X size={20} /> : <Sparkles size={20} />}
+          <span>{open ? "Fechar" : "Agente IA"}</span>
+        </button>
+      )}
     </>
   );
 }

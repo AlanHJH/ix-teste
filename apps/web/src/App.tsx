@@ -1216,8 +1216,9 @@ function OperationsApp({
   onLogout: () => void;
 }) {
   const agentPolicy = useAgentPolicy();
-  const showGlobalAssistant = globalAssistantEnabled(agentPolicy);
   const [view, setView] = useState<View>(() => defaultViewFor(user.role));
+  const assistantEnabled = globalAssistantEnabled(agentPolicy);
+  const showGlobalAssistant = view === "noc" && assistantEnabled;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [supportCustomer, setSupportCustomer] = useState<string>();
   const [offlineCustomer, setOfflineCustomer] = useState<string>();
@@ -1517,23 +1518,19 @@ function OperationsApp({
               <TicketWorkspacePage
                 ticket={ticketWorkspace}
                 canManageNoc={canAccessView(user.role, "noc")}
-                canOpenAssistant={showGlobalAssistant}
+                canOpenAssistant={assistantEnabled}
                 onBack={() => setTicketWorkspace(null)}
                 onOpenTicket={setTicketWorkspace}
-                onOpenAssistant={
-                  showGlobalAssistant ? openAssistant : undefined
-                }
+                onOpenAssistant={assistantEnabled ? openAssistant : undefined}
                 onNocQueueChanged={refreshNocTicketCount}
                 onOpenGrouping={openNocGrouping}
               />
             ) : (
               <SupportTickets
                 preset={ticketPreset}
-                canOpenAssistant={showGlobalAssistant}
+                canOpenAssistant={assistantEnabled}
                 onOpenTicket={setTicketWorkspace}
-                onOpenAssistant={
-                  showGlobalAssistant ? openAssistant : undefined
-                }
+                onOpenAssistant={assistantEnabled ? openAssistant : undefined}
                 onOpenSupport={(customerId) => {
                   setSupportCustomer(customerId);
                   navigate("support");
@@ -1593,7 +1590,7 @@ function OperationsApp({
             <NocDashboard
               nocTicketCount={nocTicketCount}
               onOpenNocTickets={openNocTickets}
-              onOpenAssistant={showGlobalAssistant ? openAssistant : undefined}
+              onOpenAssistant={assistantEnabled ? openAssistant : undefined}
               originTicket={nocOriginTicket}
               onOriginTicketConsumed={() => setNocOriginTicket(null)}
             />
@@ -1609,11 +1606,12 @@ function OperationsApp({
           </footer>
         )}
       </div>
-      {showGlobalAssistant && (
+      {assistantEnabled && (
         <IrisAssistant
           view={view}
           context={assistantContext}
           requestKey={assistantRequestKey}
+          showLauncher={showGlobalAssistant}
         />
       )}
     </div>
