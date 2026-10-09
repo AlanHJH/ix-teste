@@ -65,6 +65,7 @@ export type ApplicationApi = {
   }): Promise<unknown>;
   ticketTriage(ticketId: string): Promise<unknown>;
   ticketTriageConfig(): unknown;
+  retryTicketTriage(ticketId: string): Promise<unknown>;
   createTicket(input: Record<string, unknown>): Promise<unknown>;
   updateTicketStatus(
     ticketId: string,
@@ -139,6 +140,7 @@ export function createApplicationServer(api: ApplicationApi): McpServer {
       "tickets_list_noc_queue",
       "tickets_get_triage",
       "tickets_get_triage_config",
+      "tickets_retry_triage",
       "tickets_create",
       "tickets_update_noc_status",
       "incidents_list_active",
@@ -367,6 +369,16 @@ export function createApplicationServer(api: ApplicationApi): McpServer {
       annotations: readOnlyAnnotations,
     },
     async () => mcpJson(await api.ticketTriageConfig()),
+  );
+  server.registerTool(
+    "tickets_retry_triage",
+    {
+      description:
+        "Solicita uma nova análise de um ticket, preservando o histórico das triagens anteriores.",
+      inputSchema: z.object({ ticketId: z.string().min(1).max(120) }),
+      annotations: writeAnnotations,
+    },
+    async ({ ticketId }) => mcpJson(await api.retryTicketTriage(ticketId)),
   );
   server.registerTool(
     "tickets_create",

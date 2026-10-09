@@ -11078,6 +11078,82 @@ main {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
 }
+.agent-settings-retry-card {
+  margin-top: 18px;
+  padding: 22px;
+}
+.agent-settings-retry-form {
+  display: grid;
+  gap: 8px;
+}
+.agent-settings-retry-form label {
+  color: #42636b;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.agent-settings-retry-controls {
+  display: flex;
+  gap: 9px;
+}
+.agent-settings-retry-controls input {
+  min-width: 0;
+  flex: 1;
+  padding: 11px 12px;
+  border: 1px solid #cbdedf;
+  border-radius: 9px;
+  color: #244a53;
+  background: #fcfefe;
+  font: inherit;
+  font-size: 12px;
+}
+.agent-settings-retry-controls input:focus {
+  outline: 3px solid rgba(8, 127, 120, 0.16);
+  border-color: var(--teal);
+}
+.agent-settings-retry-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 0 15px;
+  border: 1px solid #0b7771;
+  border-radius: 9px;
+  color: white;
+  background: var(--teal);
+  font-size: 11px;
+  font-weight: 800;
+}
+.agent-settings-retry-controls button:hover:not(:disabled) {
+  background: #086660;
+}
+.agent-settings-retry-controls button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.agent-settings-retry-hint {
+  margin: 10px 0 0;
+  color: #71868b;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.agent-settings-retry-feedback {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #c3e2d6;
+  border-radius: 9px;
+  color: #176d5c;
+  background: #effaf6;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.agent-settings-retry-feedback.error {
+  border-color: #ecc7bd;
+  color: #94503d;
+  background: #fff8f5;
+}
 .agent-settings-runtime-card {
   min-width: 0;
   padding: 22px;
@@ -11503,6 +11579,16 @@ main {
   }
   .agent-settings-runtime-card {
     padding: 20px;
+  }
+  .agent-settings-retry-card {
+    padding: 20px;
+  }
+  .agent-settings-retry-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .agent-settings-retry-controls button {
+    min-height: 40px;
   }
   .agent-settings-runtime-facts,
   .agent-settings-contract-metrics {

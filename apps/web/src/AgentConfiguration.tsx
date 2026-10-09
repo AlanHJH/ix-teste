@@ -183,6 +183,12 @@ export function AgentConfiguration() {
   const [triageConfig, setTriageConfig] = useState<TicketTriageConfig | null>(
     null,
   );
+  const [retryTicketId, setRetryTicketId] = useState("");
+  const [retryBusy, setRetryBusy] = useState(false);
+  const [retryFeedback, setRetryFeedback] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
   const [runtimeError, setRuntimeError] = useState("");
   const [refreshing, setRefreshing] = useState(true);
 
@@ -270,6 +276,49 @@ export function AgentConfiguration() {
       setFeedback("Configuração padrão restaurada.");
     } catch {
       setFeedback("Configuração padrão restaurada nesta sessão.");
+    }
+  }
+
+  async function requestTicketRetry() {
+    const ticketId = retryTicketId.trim().toUpperCase();
+    if (!ticketId) {
+      setRetryFeedback({
+        tone: "error",
+        message: "Informe o identificador do ticket.",
+      });
+      return;
+    }
+    setRetryBusy(true);
+    setRetryFeedback(null);
+    try {
+      const result = await api.retryTicketTriage(ticketId);
+      if (result.skipped) {
+        setRetryFeedback({
+          tone: "error",
+          message: result.reason ?? "A triagem não foi iniciada.",
+        });
+      } else {
+        const status =
+          result.status === "completed"
+            ? "concluída"
+            : result.status === "needs_review"
+              ? "concluída e enviada para revisão humana"
+              : "encerrada com falha";
+        setRetryFeedback({
+          tone: result.status === "failed" ? "error" : "success",
+          message: `Ticket ${ticketId}: nova análise ${status}. Histórico anterior preservado.`,
+        });
+      }
+    } catch (error) {
+      setRetryFeedback({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível solicitar a nova análise.",
+      });
+    } finally {
+      setRetryBusy(false);
     }
   }
 
@@ -572,6 +621,65 @@ export function AgentConfiguration() {
           )}
         </section>
       </div>
+
+      <section
+        className="panel agent-settings-retry-card"
+        aria-labelledby="agent-settings-retry-title"
+      >
+        <header className="agent-settings-card-heading">
+          <div>
+            <span className="section-label">Revisão assistida</span>
+            <h2 id="agent-settings-retry-title">Reavaliar um ticket pela IA</h2>
+          </div>
+          <History size={23} />
+        </header>
+        <p className="agent-settings-card-note">
+          Informe um ticket que já foi analisado ou encaminhado pela IA. Uma
+          nova execução usa os dados técnicos atuais, não apaga as análises
+          anteriores e registra uma nova decisão no histórico de auditoria.
+        </p>
+        <form
+          className="agent-settings-retry-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void requestTicketRetry();
+          }}
+        >
+          <label htmlFor="agent-settings-retry-ticket">
+            Identificador do ticket
+          </label>
+          <div className="agent-settings-retry-controls">
+            <input
+              id="agent-settings-retry-ticket"
+              value={retryTicketId}
+              onChange={(event) => {
+                setRetryTicketId(event.target.value);
+                setRetryFeedback(null);
+              }}
+              placeholder="Ex.: T000123 ou OL-0200557"
+              maxLength={120}
+              disabled={retryBusy}
+            />
+            <button type="submit" disabled={retryBusy}>
+              <RefreshCw size={15} />
+              {retryBusy ? "Reavaliando…" : "Solicitar nova análise"}
+            </button>
+          </div>
+        </form>
+        <p className="agent-settings-retry-hint">
+          A reavaliação manual também pode ser usada em tickets históricos; a
+          triagem automática recorrente continua priorizando tickets novos do
+          N1.
+        </p>
+        {retryFeedback && (
+          <div
+            className={`agent-settings-retry-feedback ${retryFeedback.tone}`}
+            role={retryFeedback.tone === "error" ? "alert" : "status"}
+          >
+            {retryFeedback.message}
+          </div>
+        )}
+      </section>
 
       <div className="agent-settings-grid">
         <section className="panel agent-settings-card">

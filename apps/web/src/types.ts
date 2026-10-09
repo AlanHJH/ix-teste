@@ -564,6 +564,16 @@ export type TicketTriageConfig = {
   humanReviewActions: string[];
 };
 
+export type TicketTriageRetryResult = {
+  skipped: boolean;
+  requested: boolean;
+  reason?: string;
+  ticketId: string;
+  triageId?: string | null;
+  status?: "completed" | "needs_review" | "failed";
+  previousRunsPreserved?: boolean;
+};
+
 export type TicketFilterKind =
   | "ticket"
   | "customer"

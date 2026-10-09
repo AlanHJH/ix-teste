@@ -133,6 +133,7 @@ export class McpGatewayService implements OnModuleDestroy {
           tickets.nocQueue(input.page, input.pageSize, input.sort),
         ticketTriage: (ticketId) => ticketTriage.listRuns(ticketId),
         ticketTriageConfig: () => ticketTriage.config(),
+        retryTicketTriage: (ticketId) => ticketTriage.retry(ticketId),
         createTicket: (input) => tickets.create(input as never),
         updateTicketStatus: (ticketId, status) =>
           tickets.updateNocStatus(ticketId, status),

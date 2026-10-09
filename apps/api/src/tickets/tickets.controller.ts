@@ -40,7 +40,11 @@ import {
   TicketsListQueryDto,
   TicketsQueueQueryDto,
 } from "../contracts/query.dto";
-import { CreateTicketDto, NocStatusDto } from "../contracts/input.dto";
+import {
+  CreateTicketDto,
+  NocStatusDto,
+  TicketTriageRetryDto,
+} from "../contracts/input.dto";
 import { TicketIdParamDto } from "../contracts/params.dto";
 
 const ticketFilterKinds = new Set<TicketFilterKind>([
@@ -221,6 +225,33 @@ export class TicketsController {
   @Post("triage/run")
   runTriage() {
     return this.triage.runPending();
+  }
+
+  @ApiWrite({
+    summary: "Solicitar nova triagem de um ticket",
+    description:
+      "Reabre a fila de análise do ticket informado, preserva as execuções anteriores e inicia uma nova avaliação com o contexto técnico atual.",
+    responseDescription: "Resultado da nova avaliação.",
+    schema: { type: "object", additionalProperties: true },
+  })
+  @ApiBody({
+    description: "Identificador do ticket que será reavaliado.",
+    schema: {
+      type: "object",
+      required: ["ticketId"],
+      properties: {
+        ticketId: apiString("Ticket a ser reavaliado.", "T000123"),
+      },
+    },
+  })
+  @ApiInvalidRequest("Identificador do ticket inválido.")
+  @ApiNotFoundResponse({
+    description: "Ticket não encontrado.",
+    schema: apiErrorSchema,
+  })
+  @Post("triage/retry")
+  retryTriage(@Body() body: TicketTriageRetryDto) {
+    return this.triage.retry(body.ticketId);
   }
 
   @ApiRead({

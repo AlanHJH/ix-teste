@@ -106,19 +106,19 @@ O contrato de erro descreve a resposta pública; não expõe stack trace, segred
 
 Todas as rotas abaixo têm parâmetros, sucesso e erros detalhados no OpenAPI. A tabela serve como mapa de descoberta.
 
-| Domínio       | Operações                                                                                                                                                                                             |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sistema       | `GET /health`, `GET /api`                                                                                                                                                                             |
-| Clientes/N1   | `GET /api/customers`, `/filter-options`, `/search`, `/:customerId`, `/:customerId/support`; `POST /:customerId/n1-chat`                                                                               |
-| Rede          | `GET /api/network/overview`, `/topology/path`, `/topology/devices`, `/topology`, `/incidents`, `/incidents/:id`; `PATCH /incidents/:id/status`                                                        |
-| Inventário    | `GET /api/inventory`, `/topology`, `/:serial`                                                                                                                                                         |
-| Telemetria    | `GET /api/telemetry/informs`, `/daily-metrics`                                                                                                                                                        |
-| Diagnósticos  | `GET /api/diagnostics`, `/filter-options`                                                                                                                                                             |
-| Chamados      | `GET /api/tickets`, `/filter-options`, `/noc-queue`, `/:ticketId`, `/:ticketId/triage`, `/triage/config`; `POST /api/tickets`, `/triage/run`; `PATCH /api/tickets/:ticketId/noc-status`               |
-| Incidentes    | `GET /api/incidents`, `/options`; `POST /api/incidents`; `PATCH /api/incidents/:incidentId/status`                                                                                                    |
-| Operação      | `GET /api/operations/dataset-loads`, `/grouping-candidates`, `/active-groupings`                                                                                                                      |
-| Investigações | `GET /api/investigations`, `/config`; `POST /api/investigations/trigger/metrics`, `/trigger/groupings`, `/trigger/scheduled`, `/trigger/manual`, `/:id/retry`; `PATCH /api/investigations/:id/review` |
-| Dashboard     | `POST /api/dashboard/compose`; `GET` e `PUT /api/dashboard/preferences/:userId`                                                                                                                       |
+| Domínio       | Operações                                                                                                                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sistema       | `GET /health`, `GET /api`                                                                                                                                                                                |
+| Clientes/N1   | `GET /api/customers`, `/filter-options`, `/search`, `/:customerId`, `/:customerId/support`; `POST /:customerId/n1-chat`                                                                                  |
+| Rede          | `GET /api/network/overview`, `/topology/path`, `/topology/devices`, `/topology`, `/incidents`, `/incidents/:id`; `PATCH /incidents/:id/status`                                                           |
+| Inventário    | `GET /api/inventory`, `/topology`, `/:serial`                                                                                                                                                            |
+| Telemetria    | `GET /api/telemetry/informs`, `/daily-metrics`                                                                                                                                                           |
+| Diagnósticos  | `GET /api/diagnostics`, `/filter-options`                                                                                                                                                                |
+| Chamados      | `GET /api/tickets`, `/filter-options`, `/noc-queue`, `/:ticketId`, `/:ticketId/triage`, `/triage/config`; `POST /api/tickets`, `/triage/run`, `/triage/retry`; `PATCH /api/tickets/:ticketId/noc-status` |
+| Incidentes    | `GET /api/incidents`, `/options`; `POST /api/incidents`; `PATCH /api/incidents/:incidentId/status`                                                                                                       |
+| Operação      | `GET /api/operations/dataset-loads`, `/grouping-candidates`, `/active-groupings`                                                                                                                         |
+| Investigações | `GET /api/investigations`, `/config`; `POST /api/investigations/trigger/metrics`, `/trigger/groupings`, `/trigger/scheduled`, `/trigger/manual`, `/:id/retry`; `PATCH /api/investigations/:id/review`    |
+| Dashboard     | `POST /api/dashboard/compose`; `GET` e `PUT /api/dashboard/preferences/:userId`                                                                                                                          |
 
 Os objetos de negócio seguem a mesma regra: campos retornados estão listados em `properties`, campos sempre presentes em `required`, campos sem valor em `nullable`, e datas usam `date` ou `date-time`. Objetos compostos importantes — perfil de suporte, incidente operacional, investigação, topologia e composição do dashboard — não são mais publicados como objetos sem propriedades.
 
@@ -136,7 +136,7 @@ O bridge `/mcp/openapi` transforma cada `operationId` documentado em ferramenta.
 - `diagnostics`: `diagnostics_list`.
 - `tickets`: `tickets_list`, `tickets_get`.
 - `operations`: `operations_list_dataset_loads`, `operations_list_grouping_candidates`, `operations_list_active_groupings`.
-- `application`: saúde, dashboard, topologia, suporte N1, fila NOC, histórico/configuração da triagem automática, incidentes, agrupamentos detectados e investigações, incluindo as mutações interativas validadas.
+- `application`: saúde, dashboard, topologia, suporte N1, fila NOC, histórico/configuração/reavaliação da triagem automática, incidentes, agrupamentos detectados e investigações, incluindo as mutações interativas validadas.
 - `openapi`: uma ferramenta por `operationId` REST, com o mesmo contrato do OpenAPI.
 
 Recursos MCP publicados incluem `ondaluz://<domain>/about`, recursos de cliente, dispositivo, chamado, suporte, agrupamento, documento OpenAPI e rotas do dashboard. Recursos são leitura; escritas continuam sendo ferramentas explicitamente identificadas.

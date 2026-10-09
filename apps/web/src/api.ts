@@ -35,6 +35,7 @@ import type {
   SupportTicket,
   TicketTriageRun,
   TicketTriageConfig,
+  TicketTriageRetryResult,
   TopologySnapshot,
   AgentRuntimeConfiguration,
   AiConfigurationSnapshot,
@@ -371,6 +372,10 @@ export const api = {
     ),
   ticketTriageConfig: () =>
     request<TicketTriageConfig>("/api/tickets/triage/config", "no-store"),
+  retryTicketTriage: (ticketId: string) =>
+    mutate<TicketTriageRetryResult>("/api/tickets/triage/retry", "POST", {
+      ticketId,
+    }),
   createTicket: (input: {
     customerId: string;
     openedBy: string;

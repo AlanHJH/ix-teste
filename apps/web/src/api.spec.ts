@@ -655,6 +655,46 @@ describe("api client", () => {
     }
   });
 
+  it("solicita nova triagem e preserva o histórico do ticket", async () => {
+    const payload = {
+      skipped: false,
+      requested: true,
+      ticketId: "OL-0200557",
+      triageId: "TRI-AB12CD34",
+      status: "needs_review",
+      previousRunsPreserved: true,
+    };
+    const calls: Array<{
+      path: string;
+      method?: string;
+      body?: string | null;
+    }> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (
+      path: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      calls.push({
+        path: String(path),
+        method: init?.method,
+        body: typeof init?.body === "string" ? init.body : null,
+      });
+      return { ok: true, json: async () => payload } as Response;
+    }) as typeof fetch;
+    try {
+      assert.deepEqual(await api.retryTicketTriage("OL-0200557"), payload);
+      assert.deepEqual(calls, [
+        {
+          path: "/api/tickets/triage/retry",
+          method: "POST",
+          body: JSON.stringify({ ticketId: "OL-0200557" }),
+        },
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("solicita a busca especializada por agrupamentos", async () => {
     const calls: Array<{ path: string; method?: string }> = [];
     const originalFetch = globalThis.fetch;

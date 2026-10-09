@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { SQL_EXECUTOR, SqlExecutor } from "../infrastructure/sql-executor";
 import { decideTicketTriagePolicy } from "./ticket-triage-policy";
@@ -36,6 +36,11 @@ type TicketTriageRunRow = {
   error: string | null;
   created_at: string;
   completed_at: string | null;
+};
+
+type TicketTriageProcessResult = {
+  status: "completed" | "needs_review" | "failed";
+  triageId?: string;
 };
 
 const ticketColumns = `
@@ -183,13 +188,82 @@ export class TicketTriageService {
     return result.rows;
   }
 
-  private async process(candidate: TicketTriageRow): Promise<{
-    status: "completed" | "needs_review" | "failed";
-  }> {
+  async retry(ticketId: string) {
+    if (this.running) {
+      return {
+        skipped: true,
+        requested: false,
+        reason: "Uma execução de triagem já está em andamento.",
+        ticketId: ticketId.trim().toUpperCase(),
+      };
+    }
+    if (!this.agent.configured()) {
+      return {
+        skipped: true,
+        requested: false,
+        reason: "OPENAI_API_KEY não configurada.",
+        ticketId: ticketId.trim().toUpperCase(),
+      };
+    }
+    const normalizedTicketId = ticketId.trim().toUpperCase();
+    this.running = true;
+    try {
+      const candidate = await this.findTicket(normalizedTicketId);
+      if (!candidate) {
+        throw new NotFoundException(
+          `Ticket ${normalizedTicketId} não encontrado.`,
+        );
+      }
+      await this.database.query(
+        `UPDATE tickets
+         SET ai_triage_status='unprocessed', ai_triage_run_id=NULL,
+           ai_triage_category=NULL, ai_triage_confidence=NULL,
+           ai_triage_action=NULL,
+           ai_triage_reason='Reavaliação solicitada manualmente.',
+           ai_triage_review_required=true, ai_triage_at=now()
+         WHERE ticket_id=$1`,
+        [normalizedTicketId],
+      );
+      const result = await this.process(candidate, true);
+      return {
+        skipped: false,
+        requested: true,
+        ticketId: normalizedTicketId,
+        triageId: result.triageId ?? null,
+        status: result.status,
+        previousRunsPreserved: true,
+      };
+    } finally {
+      this.running = false;
+    }
+  }
+
+  private async findTicket(ticketId: string): Promise<TicketTriageRow | null> {
+    const result = await this.database.query<TicketTriageRow>(
+      `SELECT ${ticketColumns}
+       FROM tickets t
+       LEFT JOIN LATERAL (
+         SELECT city, neighborhood, olt, pon_port, cto
+         FROM inventory
+         WHERE customer_id=t.customer_id
+         ORDER BY status='active' DESC, installed_at DESC
+         LIMIT 1
+       ) equipment ON true
+       WHERE t.ticket_id=$1`,
+      [ticketId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  private async process(
+    candidate: TicketTriageRow,
+    allowHistoricalSource = false,
+  ): Promise<TicketTriageProcessResult> {
+    const sourceCondition = allowHistoricalSource ? "TRUE" : "t.source='n1'";
     const claimed = await this.database.query<{ ticket_id: string }>(
       `UPDATE tickets t
        SET ai_triage_status='running', ai_triage_at=now()
-       WHERE t.ticket_id=$1 AND t.source='n1'
+       WHERE t.ticket_id=$1 AND ${sourceCondition}
          AND t.ai_triage_status IN ('unprocessed', 'failed')
        RETURNING t.ticket_id`,
       [candidate.ticket_id],
@@ -200,22 +274,22 @@ export class TicketTriageService {
       ai_triage_status: "running",
     };
 
-    const context = await this.contextFor(ticket);
     const triageId = `TRI-${randomUUID().slice(0, 8).toUpperCase()}`;
-    await this.database.query(
-      `INSERT INTO ticket_ai_triage_runs(
-         triage_id, ticket_id, status, observed_category, input_snapshot, model
-       ) VALUES ($1, $2, 'running', $3, $4::jsonb, $5)`,
-      [
-        triageId,
-        ticket.ticket_id,
-        ticket.category,
-        JSON.stringify(context),
-        this.agent.modelName(),
-      ],
-    );
 
     try {
+      const context = await this.contextFor(ticket);
+      await this.database.query(
+        `INSERT INTO ticket_ai_triage_runs(
+           triage_id, ticket_id, status, observed_category, input_snapshot, model
+         ) VALUES ($1, $2, 'running', $3, $4::jsonb, $5)`,
+        [
+          triageId,
+          ticket.ticket_id,
+          ticket.category,
+          JSON.stringify(context),
+          this.agent.modelName(),
+        ],
+      );
       const analysis = await this.agent.analyze(context);
       const decision = analysis.decision;
       const policy = decideTicketTriagePolicy(
@@ -310,7 +384,7 @@ export class TicketTriageService {
           policy.actionApplied,
         ],
       );
-      return { status: policy.status };
+      return { status: policy.status, triageId };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await this.database.query(
@@ -326,7 +400,7 @@ export class TicketTriageService {
          WHERE triage_id=$1`,
         [triageId, message],
       );
-      return { status: "failed" };
+      return { status: "failed", triageId };
     }
   }
 

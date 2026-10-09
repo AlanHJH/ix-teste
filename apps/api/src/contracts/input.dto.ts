@@ -234,6 +234,17 @@ export class NocStatusDto {
   status!: "in_progress" | "closed";
 }
 
+export class TicketTriageRetryDto {
+  @ApiProperty({
+    example: "T000123",
+    description: "Ticket que deve voltar para uma nova análise da IA.",
+  })
+  @IsDefined()
+  @IsString()
+  @Length(1, 120)
+  ticketId!: string;
+}
+
 export class N1ChatMessageDto {
   @ApiProperty({ enum: ["user", "assistant"] })
   @IsIn(["user", "assistant"])
