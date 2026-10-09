@@ -490,12 +490,14 @@ export function NocOperations({
   nocTicketCount,
   onOpenNocTickets,
   onOpenAssistant,
+  operatorName,
   originTicket,
   onOriginTicketConsumed,
 }: {
   nocTicketCount: number;
   onOpenNocTickets: () => void;
   onOpenAssistant?: (context: IrisContext) => void;
+  operatorName: string;
   originTicket?: SupportTicket | null;
   onOriginTicketConsumed?: () => void;
 }) {
@@ -507,7 +509,10 @@ export function NocOperations({
   const [catalogOptions, setCatalogOptions] = useState(emptyCatalogOptions);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState("");
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(() => ({
+    ...initialForm,
+    openedBy: operatorName,
+  }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState("");
@@ -571,7 +576,10 @@ export function NocOperations({
     setError("");
     setClosedGrouping(null);
     setStatusUpdated(null);
-    setForm((current) => ({ ...initialForm, openedBy: current.openedBy }));
+    setForm((current) => ({
+      ...initialForm,
+      openedBy: operatorName || current.openedBy,
+    }));
     setModalOpen(true);
   }
 
@@ -599,7 +607,7 @@ export function NocOperations({
     setError("");
     setForm((current) => ({
       ...initialForm,
-      openedBy: current.openedBy,
+      openedBy: operatorName || current.openedBy,
       originTicketId: originTicket.ticket_id,
       title:
         `Problema compartilhado a partir de ${scopeLabel || originTicket.ticket_id}`.slice(
@@ -905,7 +913,10 @@ export function NocOperations({
     try {
       const result = await api.createOperationalIncident(form);
       setCreated(result.incident_id);
-      setForm((current) => ({ ...initialForm, openedBy: current.openedBy }));
+      setForm((current) => ({
+        ...initialForm,
+        openedBy: operatorName || current.openedBy,
+      }));
       await refresh();
       setModalOpen(false);
     } catch (reason) {
@@ -1010,6 +1021,7 @@ export function NocOperations({
 
         {showGroupingAgent && (
           <InvestigationReview
+            operatorName={operatorName}
             onGroupingChanged={() => void refresh()}
             onOpenAssistant={onOpenAssistant}
             onOpenTopology={(investigation) => {
@@ -1337,18 +1349,15 @@ export function NocOperations({
                 </div>
               )}
               <div className="noc-form-grid">
+                <div className="noc-authenticated-operator">
+                  <span className="form-field-label">Responsável do NOC</span>
+                  <strong>{operatorName}</strong>
+                  <small className="form-field-description">
+                    Preenchido pela sessão autenticada.
+                  </small>
+                </div>
                 <label>
-                  Responsável do NOC
-                  <input
-                    value={form.openedBy}
-                    onChange={(event) => update("openedBy", event.target.value)}
-                    placeholder="Nome ou matrícula"
-                    maxLength={100}
-                    required
-                  />
-                </label>
-                <label>
-                  Severidade
+                  <span className="form-field-label">Severidade</span>
                   <select
                     value={form.severity}
                     onChange={(event) =>
@@ -1364,9 +1373,14 @@ export function NocOperations({
                       </option>
                     ))}
                   </select>
+                  <small className="form-field-description">
+                    Prioridade operacional usada para ordenar a resposta.
+                  </small>
                 </label>
                 <label className="noc-wide-field">
-                  Título do agrupamento
+                  <span className="form-field-label">
+                    Título do agrupamento
+                  </span>
                   <input
                     value={form.title}
                     onChange={(event) => update("title", event.target.value)}
@@ -1375,11 +1389,13 @@ export function NocOperations({
                     maxLength={160}
                     required
                   />
+                  <small className="form-field-description">
+                    Resuma o sintoma e o ponto comum afetado.
+                  </small>
                 </label>
                 <label>
-                  Área de impacto
-                  <span className="label-with-help">
-                    Tipo de escopo
+                  <span className="form-field-label">
+                    Área de impacto
                     <HelpTooltip
                       term="Escopo do agrupamento"
                       description="Define o ponto comum usado para calcular as CPEs potencialmente afetadas: parque, OLT, PON, CTO, cliente ou grupo lógico."
@@ -1397,10 +1413,13 @@ export function NocOperations({
                       </option>
                     ))}
                   </select>
+                  <small className="form-field-description">
+                    Escolha o nível comum usado para calcular o alcance.
+                  </small>
                 </label>
                 {needsOlt && (
                   <label>
-                    <span className="label-with-help">
+                    <span className="form-field-label">
                       OLT
                       <HelpTooltip
                         term="OLT"
@@ -1425,14 +1444,17 @@ export function NocOperations({
                         />
                       ))}
                     </datalist>
-                    <small id="noc-olt-hint" className="catalog-field-note">
+                    <small
+                      id="noc-olt-hint"
+                      className="catalog-field-note form-field-description"
+                    >
                       Selecione uma OLT cadastrada.
                     </small>
                   </label>
                 )}
                 {needsPon && (
                   <label>
-                    <span className="label-with-help">
+                    <span className="form-field-label">
                       PON
                       <HelpTooltip
                         term="PON"
@@ -1467,7 +1489,10 @@ export function NocOperations({
                         />
                       ))}
                     </datalist>
-                    <small id="noc-pon-hint" className="catalog-field-note">
+                    <small
+                      id="noc-pon-hint"
+                      className="catalog-field-note form-field-description"
+                    >
                       {hasSelectedOlt
                         ? "Lista filtrada pela OLT escolhida."
                         : "Campo bloqueado até selecionar uma OLT cadastrada."}
@@ -1476,7 +1501,7 @@ export function NocOperations({
                 )}
                 {needsCto && (
                   <label>
-                    <span className="label-with-help">
+                    <span className="form-field-label">
                       CTO
                       <HelpTooltip
                         term="CTO"
@@ -1511,7 +1536,10 @@ export function NocOperations({
                         />
                       ))}
                     </datalist>
-                    <small id="noc-cto-hint" className="catalog-field-note">
+                    <small
+                      id="noc-cto-hint"
+                      className="catalog-field-note form-field-description"
+                    >
                       {hasSelectedOlt && hasSelectedPon
                         ? "Lista filtrada pela OLT e PON escolhidas."
                         : "Campo bloqueado até selecionar uma OLT e uma PON cadastradas."}
@@ -1520,7 +1548,7 @@ export function NocOperations({
                 )}
                 {needsIdentifier && (
                   <label>
-                    <span className="label-with-help">
+                    <span className="form-field-label">
                       {scopeLabels[form.scopeType]}
                       {form.scopeType === "customer" && (
                         <HelpTooltip
@@ -1559,7 +1587,7 @@ export function NocOperations({
                     </datalist>
                     <small
                       id="noc-identifier-hint"
-                      className="catalog-field-note"
+                      className="catalog-field-note form-field-description"
                     >
                       {form.scopeType === "customer"
                         ? "Digite ao menos 2 caracteres e selecione o cliente cadastrado."
@@ -1568,7 +1596,7 @@ export function NocOperations({
                   </label>
                 )}
                 <label className="noc-wide-field">
-                  Causa ou hipótese
+                  <span className="form-field-label">Causa ou hipótese</span>
                   <textarea
                     value={form.probableCause}
                     onChange={(event) =>
@@ -1578,9 +1606,12 @@ export function NocOperations({
                     maxLength={600}
                     required
                   />
+                  <small className="form-field-description">
+                    Registre a hipótese com base nas evidências consultadas.
+                  </small>
                 </label>
                 <label className="noc-wide-field">
-                  Próxima ação
+                  <span className="form-field-label">Próxima ação</span>
                   <textarea
                     value={form.recommendedAction}
                     onChange={(event) =>
@@ -1590,6 +1621,9 @@ export function NocOperations({
                     maxLength={600}
                     required
                   />
+                  <small className="form-field-description">
+                    Descreva o próximo passo que depende do operador.
+                  </small>
                 </label>
               </div>
               {error && (

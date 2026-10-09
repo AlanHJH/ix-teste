@@ -252,8 +252,7 @@ function InvestigationCard({
 
 function InvestigationDetailModal({
   investigation,
-  reviewer,
-  onReviewer,
+  operatorName,
   note,
   onNote,
   onReview,
@@ -264,8 +263,7 @@ function InvestigationDetailModal({
   onOpenTopology,
 }: {
   investigation: Investigation;
-  reviewer: string;
-  onReviewer: (value: string) => void;
+  operatorName: string;
   note: string;
   onNote: (value: string) => void;
   onReview: (decision: "approve" | "reject") => void;
@@ -557,15 +555,11 @@ function InvestigationDetailModal({
                 N1. Rejeitar preserva o resultado como feedback auditável.
               </p>
             </div>
-            <label className="investigation-modal-reviewer">
-              Responsável pela decisão
-              <input
-                value={reviewer}
-                onChange={(event) => onReviewer(event.target.value)}
-                placeholder="Nome ou matrícula"
-                maxLength={120}
-              />
-            </label>
+            <div className="investigation-authenticated-reviewer">
+              <span>Responsável pela decisão</span>
+              <strong>{operatorName}</strong>
+              <small>Identificado pela sessão autenticada.</small>
+            </div>
             <textarea
               value={note}
               onChange={(event) => onNote(event.target.value)}
@@ -576,14 +570,14 @@ function InvestigationDetailModal({
             <div className="review-actions">
               <button
                 className="reject"
-                disabled={busy || !reviewer.trim()}
+                disabled={busy || !operatorName.trim()}
                 onClick={() => onReview("reject")}
               >
                 <X size={15} /> Descartar
               </button>
               <button
                 className="approve"
-                disabled={busy || !reviewer.trim()}
+                disabled={busy || !operatorName.trim()}
                 onClick={() => onReview("approve")}
               >
                 <Check size={15} /> Aprovar e criar agrupamento
@@ -614,16 +608,17 @@ function InvestigationDetailModal({
 }
 
 export function InvestigationReview({
+  operatorName,
   onGroupingChanged,
   onOpenAssistant,
   onOpenTopology,
 }: {
+  operatorName: string;
   onGroupingChanged?: () => void;
   onOpenAssistant?: (context: IrisContext) => void;
   onOpenTopology?: (investigation: Investigation) => void;
 }) {
   const [page, setPage] = useState<InvestigationPage | null>(null);
-  const [reviewer, setReviewer] = useState("");
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -673,7 +668,7 @@ export function InvestigationReview({
       await api.reviewInvestigation(
         investigation.investigation_id,
         decision,
-        reviewer,
+        operatorName,
         notes[investigation.investigation_id] ?? "",
       );
       if (decision === "approve") onGroupingChanged?.();
@@ -800,8 +795,7 @@ export function InvestigationReview({
       {selectedInvestigation && (
         <InvestigationDetailModal
           investigation={selectedInvestigation}
-          reviewer={reviewer}
-          onReviewer={setReviewer}
+          operatorName={operatorName}
           note={notes[selectedInvestigation.investigation_id] ?? ""}
           onNote={(value) =>
             setNotes((current) => ({

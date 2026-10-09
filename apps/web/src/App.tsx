@@ -234,12 +234,14 @@ function NocDashboard({
   nocTicketCount,
   onOpenNocTickets,
   onOpenAssistant,
+  operatorName,
   originTicket,
   onOriginTicketConsumed,
 }: {
   nocTicketCount: number;
   onOpenNocTickets: () => void;
   onOpenAssistant?: (context: IrisContext) => void;
+  operatorName: string;
   originTicket?: SupportTicket | null;
   onOriginTicketConsumed?: () => void;
 }) {
@@ -248,6 +250,7 @@ function NocDashboard({
       nocTicketCount={nocTicketCount}
       onOpenNocTickets={onOpenNocTickets}
       onOpenAssistant={onOpenAssistant}
+      operatorName={operatorName}
       originTicket={originTicket}
       onOriginTicketConsumed={onOriginTicketConsumed}
     />
@@ -872,7 +875,9 @@ function SupportDesk({
             </header>
             <div className="n1-ticket-fields">
               <label>
-                Responsável pelo atendimento
+                <span className="form-field-label">
+                  Responsável pelo atendimento
+                </span>
                 <input
                   value={ticketOpenedBy}
                   onChange={(event) => setTicketOpenedBy(event.target.value)}
@@ -880,14 +885,14 @@ function SupportDesk({
                   maxLength={100}
                   required
                 />
-                <small className="n1-field-hint">
+                <small className="n1-field-hint form-field-description">
                   {operatorName
                     ? "Preenchido pela sessão atual; altere se necessário."
                     : "Nome ou matrícula de quem conduziu a ligação."}
                 </small>
               </label>
               <label>
-                Categoria
+                <span className="form-field-label">Categoria</span>
                 <select
                   value={ticketCategory}
                   onChange={(event) => {
@@ -903,9 +908,12 @@ function SupportDesk({
                   <option>Wi-Fi</option>
                   <option>{opticalFieldWorkCategory}</option>
                 </select>
+                <small className="form-field-description">
+                  Classifique o motivo principal do contato.
+                </small>
               </label>
               <label>
-                Encaminhamento
+                <span className="form-field-label">Encaminhamento</span>
                 <select
                   value={ticketOutcome}
                   onChange={(event) =>
@@ -918,9 +926,12 @@ function SupportDesk({
                   <option value="escalar_noc">Escalar para o NOC</option>
                   <option value="agendar_visita">Agendar visita técnica</option>
                 </select>
+                <small className="form-field-description">
+                  Defina o próximo destino após a conversa.
+                </small>
               </label>
               <label className="n1-ticket-description">
-                Relato do cliente
+                <span className="form-field-label">Relato do cliente</span>
                 <textarea
                   value={ticketDescription}
                   onChange={(event) => setTicketDescription(event.target.value)}
@@ -928,6 +939,9 @@ function SupportDesk({
                   maxLength={600}
                   required
                 />
+                <small className="form-field-description">
+                  Registre o que o cliente relatou e o que foi confirmado.
+                </small>
               </label>
               {isOpticalFieldWork && (
                 <fieldset className="n1-fieldwork-panel">
@@ -947,7 +961,7 @@ function SupportDesk({
                       </small>
                     </div>
                     <label>
-                      Camada física
+                      <span className="form-field-label">Camada física</span>
                       <select
                         value={fieldWorkLayer}
                         onChange={(event) =>
@@ -965,6 +979,9 @@ function SupportDesk({
                           ),
                         )}
                       </select>
+                      <small className="form-field-description">
+                        Indique até onde a visita precisa investigar.
+                      </small>
                     </label>
                   </div>
                   <div className="n1-fieldwork-checklist">
@@ -1591,6 +1608,7 @@ function OperationsApp({
               nocTicketCount={nocTicketCount}
               onOpenNocTickets={openNocTickets}
               onOpenAssistant={assistantEnabled ? openAssistant : undefined}
+              operatorName={user.name}
               originTicket={nocOriginTicket}
               onOriginTicketConsumed={() => setNocOriginTicket(null)}
             />
