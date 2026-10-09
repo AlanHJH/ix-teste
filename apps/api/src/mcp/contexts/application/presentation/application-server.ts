@@ -355,6 +355,7 @@ export function createApplicationServer(api: ApplicationApi): McpServer {
         description: z.string().min(10).max(600),
         outcome: z.enum(["resolver_telefone", "escalar_noc", "agendar_visita"]),
         relatedProblemId: z.string().max(120).nullable().default(null),
+        sourcePayload: z.record(z.string(), z.unknown()).optional(),
       }),
       annotations: writeAnnotations,
     },

@@ -48,11 +48,12 @@ export class PostgresTicketsRepository implements TicketsRepository {
     const result = await this.database.query<TicketRow>(
       `INSERT INTO tickets(
          ticket_id, opened_at, customer_id, channel, category, description,
-         resolution, closed_at, source, opened_by, related_problem_id, noc_status
+         resolution, closed_at, source, opened_by, related_problem_id,
+         source_payload, noc_status
        ) VALUES (
          $1, now(), $2, 'Telefone', $3, $4, $5,
          CASE WHEN $6='resolver_telefone' THEN now() ELSE NULL END,
-         'n1', $7, $8,
+         'n1', $7, $8, $9::jsonb,
          CASE WHEN $6='escalar_noc' THEN 'pending' ELSE 'not_applicable' END
        )
        RETURNING ticket_id, opened_at::text, customer_id, channel, category,
@@ -60,6 +61,7 @@ export class PostgresTicketsRepository implements TicketsRepository {
          CASE WHEN closed_at IS NULL THEN NULL
            ELSE round(extract(epoch FROM (closed_at-opened_at))/60)::int END AS handling_minutes,
          source, opened_by, related_problem_id, noc_status,
+         source_payload,
          NULL::text AS city, NULL::text AS neighborhood, NULL::text AS olt,
          NULL::text AS pon, NULL::text AS cto`,
       [
@@ -71,6 +73,7 @@ export class PostgresTicketsRepository implements TicketsRepository {
         input.outcome,
         input.openedBy,
         input.relatedProblemId,
+        input.sourcePayload,
       ],
     );
     return result.rows[0];
@@ -138,6 +141,7 @@ export class PostgresTicketsRepository implements TicketsRepository {
         t.category, t.description, t.resolution, t.closed_at::text,
         round(extract(epoch FROM (t.closed_at - t.opened_at)) / 60)::int AS handling_minutes,
         t.source, t.opened_by, t.related_problem_id, t.noc_status,
+        t.source_payload,
         equipment.city, equipment.neighborhood, equipment.olt,
         equipment.pon_port AS pon, equipment.cto
        FROM tickets t
@@ -169,6 +173,7 @@ export class PostgresTicketsRepository implements TicketsRepository {
          description, resolution, closed_at::text,
          NULL::int AS handling_minutes, source, opened_by,
          related_problem_id, noc_status,
+         source_payload,
          NULL::text AS city, NULL::text AS neighborhood,
          NULL::text AS olt, NULL::text AS pon, NULL::text AS cto`,
       [ticketId, status],

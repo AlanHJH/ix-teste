@@ -215,6 +215,16 @@ export class CreateTicketDto {
   @IsString()
   @MaxLength(120)
   relatedProblemId?: string | null;
+
+  @ApiPropertyOptional({
+    type: "object",
+    additionalProperties: true,
+    description:
+      "Registro bruto/contextual recebido da origem. As chaves são preservadas para análise posterior.",
+  })
+  @IsOptional()
+  @IsObject()
+  sourcePayload?: Record<string, unknown>;
 }
 
 export class NocStatusDto {

@@ -33,6 +33,7 @@ export type TicketRow = {
   opened_by: string | null;
   related_problem_id: string | null;
   noc_status: TicketNocStatus;
+  source_payload?: Record<string, unknown>;
   city: string | null;
   neighborhood: string | null;
   olt: string | null;
@@ -62,6 +63,7 @@ export type CreateTicketCommand = {
   description: string;
   outcome: TicketOutcome;
   relatedProblemId: string | null;
+  sourcePayload?: Record<string, unknown>;
 };
 
 export type PersistTicketCommand = {
@@ -73,6 +75,7 @@ export type PersistTicketCommand = {
   outcome: TicketOutcome;
   resolution: string;
   relatedProblemId: string | null;
+  sourcePayload: Record<string, unknown>;
 };
 
 export type TicketListQuery = {

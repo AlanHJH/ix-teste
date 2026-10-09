@@ -99,6 +99,14 @@ export class TicketsService {
       outcome,
       resolution: ticketOutcomeResolution[outcome],
       relatedProblemId,
+      sourcePayload: input.sourcePayload ?? {
+        customer_id: customerId,
+        opened_by: openedBy,
+        category: input.category,
+        description,
+        outcome,
+        related_problem_id: relatedProblemId,
+      },
     });
   }
 

@@ -509,6 +509,7 @@ export type SupportTicket = {
   source: "dataset" | "n1";
   opened_by: string | null;
   related_problem_id: string | null;
+  source_payload?: Record<string, unknown>;
   noc_status:
     "not_applicable" | "pending" | "in_progress" | "linked" | "closed";
   city: string | null;
@@ -835,6 +836,8 @@ export type TopologyIssue = {
   status: Investigation["status"];
   scope: InvestigationFinding["scope"];
   affectedCpes: number;
+  source?: "investigation" | "measurements";
+  technicalMessage?: string;
 };
 
 export type AgentRuntimeConfiguration = {

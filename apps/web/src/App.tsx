@@ -361,6 +361,24 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
         description: ticketDescription,
         outcome: ticketOutcome,
         relatedProblemId: profile.decision.relatedProblemId,
+        sourcePayload: {
+          customer: profile.customer,
+          equipment: profile.equipment,
+          metrics: profile.metrics,
+          decision: profile.decision,
+          preflight: profile.preflight,
+          problemHistory: profile.problemHistory,
+          activeIncidents: profile.activeIncidents,
+          recentTickets: profile.recentTickets,
+          allTickets: profile.allTickets,
+          atendimento: {
+            openedBy: ticketOpenedBy,
+            category: ticketCategory,
+            description: ticketDescription,
+            outcome: ticketOutcome,
+            relatedProblemId: profile.decision.relatedProblemId,
+          },
+        },
       });
       setCreatedTicket(ticket.ticket_id);
       setProfile(await api.support(profile.customer.id));

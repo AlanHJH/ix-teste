@@ -37,6 +37,10 @@ describe("TicketsService.create", () => {
       description: "Cliente relata quedas recorrentes durante a ligação.",
       outcome: "escalar_noc",
       relatedProblemId: "pon-olt2-ja",
+      sourcePayload: {
+        cpn: { protocolo: "CPN-42", prioridade: "alta" },
+        observacoes: ["cliente confirmou queda em todos os dispositivos"],
+      },
     });
 
     assert.equal(result.ticket_id, "TN1-TESTE123");
@@ -44,6 +48,10 @@ describe("TicketsService.create", () => {
     assert.equal(queries.length, 3);
     assert.equal(queries[2].params[1], "C545968");
     assert.equal(queries[2].params[7], "pon-olt2-ja");
+    assert.deepEqual(queries[2].params[8], {
+      cpn: { protocolo: "CPN-42", prioridade: "alta" },
+      observacoes: ["cliente confirmou queda em todos os dispositivos"],
+    });
   });
 
   it("rejeita vínculo desconhecido antes de gravar", async () => {

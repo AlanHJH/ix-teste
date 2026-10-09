@@ -116,16 +116,33 @@ async function copyCsv(
   definition: ImportDefinition,
 ): Promise<void> {
   const filePath = join(datasetPath, definition.file);
-  const query = `COPY ${definition.table} (${definition.columns.join(",")}) FROM STDIN WITH (FORMAT csv, HEADER true)`;
+  await copyCsvFile(
+    client,
+    filePath,
+    definition.table,
+    definition.columns,
+    definition.gzip,
+  );
+  console.log(`[loader] ${definition.file} importado.`);
+}
+
+async function copyCsvFile(
+  client: Client,
+  filePath: string,
+  table: string,
+  columns: string[],
+  gzip = false,
+  nullValue?: string,
+): Promise<void> {
+  const nullClause = nullValue ? `, NULL '${nullValue}'` : "";
+  const query = `COPY ${table} (${columns.join(",")}) FROM STDIN WITH (FORMAT csv, HEADER true${nullClause})`;
   const target = client.query(copyFrom(query));
   const source = createReadStream(filePath);
-  console.log(`[loader] Importando ${definition.file}...`);
-  if (definition.gzip) {
+  if (gzip) {
     await pipeline(source, createGunzip(), target);
   } else {
     await pipeline(source, target);
   }
-  console.log(`[loader] ${definition.file} importado.`);
 }
 
 async function refreshGeneratedLogicalDrops(client: Client) {
@@ -138,6 +155,53 @@ async function refreshGeneratedLogicalDrops(client: Client) {
   return result.rows[0]?.logical_drops ?? "0";
 }
 
+async function preserveTicketSourcePayloads(client: Client): Promise<void> {
+  await client.query("DROP TABLE IF EXISTS ticket_source_payload_import");
+  await client.query(`
+    CREATE TEMP TABLE ticket_source_payload_import (
+      ticket_id text,
+      opened_at text,
+      customer_id text,
+      channel text,
+      category text,
+      description text,
+      resolution text,
+      closed_at text
+    )`);
+  await copyCsvFile(
+    client,
+    join(datasetPath, "tickets.csv"),
+    "ticket_source_payload_import",
+    [
+      "ticket_id",
+      "opened_at",
+      "customer_id",
+      "channel",
+      "category",
+      "description",
+      "resolution",
+      "closed_at",
+    ],
+    false,
+    "__ONDALUZ_NULL__",
+  );
+  await client.query(`
+    UPDATE tickets AS target
+    SET source_payload = jsonb_build_object(
+      'ticket_id', source.ticket_id,
+      'opened_at', source.opened_at,
+      'customer_id', source.customer_id,
+      'channel', source.channel,
+      'category', source.category,
+      'description', source.description,
+      'resolution', source.resolution,
+      'closed_at', source.closed_at
+    )
+    FROM ticket_source_payload_import AS source
+    WHERE target.ticket_id = source.ticket_id
+      AND target.source = 'dataset'`);
+}
+
 async function main(): Promise<void> {
   ensureDataset();
   const client = new Client({ connectionString: databaseUrl });
@@ -148,6 +212,7 @@ async function main(): Promise<void> {
       "SELECT status FROM dataset_loads WHERE dataset_key = 'ondaluz-2026-08'",
     );
     if (current.rows[0]?.status === "complete") {
+      await preserveTicketSourcePayloads(client);
       const logicalDrops = await refreshGeneratedLogicalDrops(client);
       await client.query(
         "UPDATE dataset_loads SET details = details || jsonb_build_object('logical_drops', $1::text) WHERE dataset_key='ondaluz-2026-08'",
@@ -165,6 +230,7 @@ async function main(): Promise<void> {
     // where the referencing table is still empty.
     await client.query(datasetResetSql);
     for (const definition of imports) await copyCsv(client, definition);
+    await preserveTicketSourcePayloads(client);
 
     console.log("[loader] Calculando metricas diarias e indices...");
     await client.query(readFileSync(join(sqlPath, "derived.sql"), "utf8"));

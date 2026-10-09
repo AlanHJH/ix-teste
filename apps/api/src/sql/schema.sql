@@ -100,6 +100,7 @@ ALTER TABLE tickets
     CHECK (source IN ('dataset', 'n1')),
   ADD COLUMN IF NOT EXISTS opened_by text,
   ADD COLUMN IF NOT EXISTS related_problem_id text,
+  ADD COLUMN IF NOT EXISTS source_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS noc_status text NOT NULL DEFAULT 'not_applicable'
     CHECK (noc_status IN ('not_applicable', 'pending', 'in_progress', 'linked', 'closed'));
 
@@ -109,6 +110,22 @@ ALTER TABLE tickets
 ALTER TABLE tickets
   ADD CONSTRAINT tickets_noc_status_check
   CHECK (noc_status IN ('not_applicable', 'pending', 'in_progress', 'linked', 'closed'));
+
+-- Mantém a cópia estruturada do registro de origem disponível para auditoria e
+-- análises futuras. Os campos normalizados continuam sendo a superfície
+-- operacional; este payload não deve ser usado para filtros de listagem.
+UPDATE tickets
+SET source_payload = jsonb_build_object(
+  'ticket_id', ticket_id,
+  'opened_at', opened_at::text,
+  'customer_id', customer_id,
+  'channel', channel,
+  'category', category,
+  'description', description,
+  'resolution', resolution,
+  'closed_at', closed_at::text
+)
+WHERE source_payload = '{}'::jsonb;
 
 UPDATE tickets
 SET noc_status='pending'

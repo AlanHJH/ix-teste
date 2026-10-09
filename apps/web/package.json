@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "tsx --test src/api.spec.ts src/auth.spec.ts src/ProviderGlossary.spec.tsx src/topologyFocus.spec.ts",
+    "test": "tsx --test src/api.spec.ts src/auth.spec.ts src/ProviderGlossary.spec.tsx src/topologyFocus.spec.ts src/topologyMeasurement.spec.ts",
     "lint": "tsc -b --pretty false"
   },
   "dependencies": {

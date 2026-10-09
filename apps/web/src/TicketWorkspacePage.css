@@ -290,6 +290,31 @@
   border-left-color: #d9a04d;
   background: #fff8ef;
 }
+.ticket-workspace-raw-payload {
+  margin-top: 16px;
+  border: 1px solid #d7e5e4;
+  border-radius: 10px;
+  background: #f8fbfb;
+}
+.ticket-workspace-raw-payload summary {
+  padding: 11px 13px;
+  color: #35616a;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+.ticket-workspace-raw-payload pre {
+  max-height: 360px;
+  margin: 0;
+  overflow: auto;
+  padding: 0 13px 13px;
+  color: #35535a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .ticket-workspace-description p,
 .ticket-workspace-script p {
   margin: 7px 0 0;

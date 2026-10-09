@@ -49,7 +49,7 @@ Escolhi PostgreSQL no protótipo porque:
 - o volume fornecido cabe em uma instância local;
 - um único banco reduz a complexidade da entrega executável.
 
-A tabela bruta de Informs é `UNLOGGED` porque deriva de um arquivo imutável e pode ser reconstruída. Inventário, chamados, diagnósticos, carga e agregados usam persistência normal. O grão diário inclui o firmware para preservar trocas de versão no mesmo dia.
+A tabela bruta de Informs é `UNLOGGED` porque deriva de um arquivo imutável e pode ser reconstruída. Inventário, chamados, diagnósticos, carga e agregados usam persistência normal. Os chamados mantêm também `source_payload` em JSONB: a camada normalizada atende a operação, enquanto o registro bruto/contextual fica disponível para auditoria e análises posteriores. O grão diário inclui o firmware para preservar trocas de versão no mesmo dia.
 
 ## Produção para 300 mil CPEs
 

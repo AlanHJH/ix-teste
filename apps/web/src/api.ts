@@ -32,6 +32,7 @@ import type {
   TicketFilterOption,
   TicketPage,
   TicketSort,
+  SupportTicket,
   TopologySnapshot,
   AgentRuntimeConfiguration,
   AiConfigurationSnapshot,
@@ -359,6 +360,8 @@ export const api = {
       `/api/tickets/filter-options?${params.toString()}`,
     ).then((response) => response.data);
   },
+  ticket: (ticketId: string) =>
+    request<SupportTicket>(`/api/tickets/${encodeURIComponent(ticketId)}`),
   createTicket: (input: {
     customerId: string;
     openedBy: string;
@@ -366,6 +369,7 @@ export const api = {
     description: string;
     outcome: "resolver_telefone" | "escalar_noc" | "agendar_visita";
     relatedProblemId: string | null;
+    sourcePayload?: Record<string, unknown>;
   }) =>
     mutate<{ ticket_id: string; resolution: string }>(
       "/api/tickets",

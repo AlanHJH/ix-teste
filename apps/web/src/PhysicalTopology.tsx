@@ -5,11 +5,17 @@ import { NetworkEntityModal } from "./NetworkEntityModal";
 import type { NetworkEntity } from "./NetworkEntityModal";
 import { NetworkExplorerGraph } from "./NetworkExplorerGraph";
 import type {
+  DiagnosticFilter,
   EquipmentPath,
   TopologyIssue,
   TopologyFocus,
   TopologySnapshot,
 } from "./types";
+import {
+  buildHistoricalTopologyIssue,
+  type HistoricalTopologyIssue,
+  type TopologyMeasurementScope,
+} from "./topologyMeasurement";
 
 function normalized(value: string | null | undefined) {
   return value?.trim().toLocaleLowerCase("pt-BR") ?? "";
@@ -187,6 +193,36 @@ function TopologyImpactSummary({
   );
 }
 
+function TopologyMeasurementAlert({
+  issue,
+}: {
+  issue: HistoricalTopologyIssue;
+}) {
+  const rate = Math.round(issue.measurement.failureRate * 100);
+
+  return (
+    <section
+      className="topology-measurement-alert"
+      role="status"
+      aria-labelledby="topology-measurement-alert-title"
+    >
+      <AlertTriangle size={18} aria-hidden="true" />
+      <div>
+        <span className="topology-measurement-label">
+          Indicação derivada do histórico de medições
+        </span>
+        <strong id="topology-measurement-alert-title">{issue.title}</strong>
+        <p>{issue.technicalMessage}</p>
+        <small>
+          {issue.measurement.errors} falhas de {issue.measurement.total} ({rate}
+          %). Valide primeiro o ponto de origem e depois os filhos antes de
+          abrir uma ordem de campo.
+        </small>
+      </div>
+    </section>
+  );
+}
+
 export function PhysicalTopology({
   focus,
   onClose,
@@ -204,14 +240,45 @@ export function PhysicalTopology({
   >({});
   const [modalEntity, setModalEntity] = useState<NetworkEntity | null>(null);
   const [topologyIssues, setTopologyIssues] = useState<TopologyIssue[]>([]);
+  const [measurementIssue, setMeasurementIssue] =
+    useState<HistoricalTopologyIssue | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const activeBranch = useRef("");
+  const measurementBranch = useRef("");
 
   useEffect(() => {
+    setMeasurementIssue(null);
+    measurementBranch.current = "";
     void loadInitialTopology();
     void loadTopologyIssues();
   }, [focus?.id]);
+
+  async function loadMeasurementIssue(
+    scope: TopologyMeasurementScope,
+    branch: string,
+  ) {
+    measurementBranch.current = branch;
+    const filters: DiagnosticFilter[] = [
+      { kind: "olt", value: scope.olt, label: "", detail: "" },
+    ];
+    if (scope.pon) {
+      filters.push({ kind: "pon", value: scope.pon, label: "", detail: "" });
+    }
+    if (scope.cto) {
+      filters.push({ kind: "cto", value: scope.cto, label: "", detail: "" });
+    }
+
+    try {
+      const result = await api.diagnostics("", 1, filters, "ts_desc");
+      if (measurementBranch.current !== branch) return;
+      setMeasurementIssue(
+        buildHistoricalTopologyIssue(scope, result.meta.summary, result.data),
+      );
+    } catch {
+      if (measurementBranch.current === branch) setMeasurementIssue(null);
+    }
+  }
 
   async function loadTopologyIssues() {
     try {
@@ -303,7 +370,10 @@ export function PhysicalTopology({
   }, [onClose]);
 
   async function chooseOlt(olt: string) {
-    activeBranch.current = `${olt}:`;
+    const branch = `${olt}:`;
+    activeBranch.current = branch;
+    setMeasurementIssue(null);
+    void loadMeasurementIssue({ olt }, branch);
     setLoading(true);
     setError("");
     setSelectedOlt(olt);
@@ -314,20 +384,26 @@ export function PhysicalTopology({
     setModalEntity(null);
 
     try {
-      setTopology(await api.topology(olt));
+      const nextTopology = await api.topology(olt);
+      if (activeBranch.current !== branch) return;
+      setTopology(nextTopology);
     } catch (reason) {
+      if (activeBranch.current !== branch) return;
       setError(
         reason instanceof Error
           ? reason.message
           : "Não foi possível carregar as portas PON",
       );
     } finally {
-      setLoading(false);
+      if (activeBranch.current === branch) setLoading(false);
     }
   }
 
   async function choosePon(olt: string, pon: string) {
-    activeBranch.current = `${olt}:${pon}`;
+    const branch = `${olt}:${pon}`;
+    activeBranch.current = branch;
+    setMeasurementIssue(null);
+    void loadMeasurementIssue({ olt, pon }, branch);
     setLoading(true);
     setError("");
     setSelectedOlt(olt);
@@ -337,21 +413,26 @@ export function PhysicalTopology({
     setDevicesByCto({});
 
     try {
-      setTopology(await api.topology(olt, pon));
+      const nextTopology = await api.topology(olt, pon);
+      if (activeBranch.current !== branch) return;
+      setTopology(nextTopology);
     } catch (reason) {
+      if (activeBranch.current !== branch) return;
       setError(
         reason instanceof Error
           ? reason.message
           : "Não foi possível carregar as CTOs",
       );
     } finally {
-      setLoading(false);
+      if (activeBranch.current === branch) setLoading(false);
     }
   }
 
   async function expandCto(olt: string, pon: string, cto: string) {
     const branch = `${olt}:${pon}`;
     activeBranch.current = branch;
+    setMeasurementIssue(null);
+    void loadMeasurementIssue({ olt, pon, cto }, `${branch}:${cto}`);
     setError("");
     setSelectedOlt(olt);
     setSelectedPon(pon);
@@ -446,6 +527,9 @@ export function PhysicalTopology({
           </div>
         </div>
       )}
+      {measurementIssue && (
+        <TopologyMeasurementAlert issue={measurementIssue} />
+      )}
       {focus && (
         <TopologyImpactSummary grouping={focus} devicesByCto={devicesByCto} />
       )}
@@ -460,7 +544,10 @@ export function PhysicalTopology({
           selectedCto={selectedCto}
           selectedPath={selectedPath}
           highlightedEntity={modalEntity}
-          topologyIssues={focus ? [focusIssue(focus)] : topologyIssues}
+          topologyIssues={[
+            ...(focus ? [focusIssue(focus)] : topologyIssues),
+            ...(measurementIssue ? [measurementIssue] : []),
+          ]}
           loading={loading}
           onChangeOlt={(olt) => void chooseOlt(olt)}
           onSelectOlt={setModalEntity}

@@ -7,6 +7,7 @@ const ticketColumns = `
   t.description, t.resolution, t.closed_at::text,
   round(extract(epoch FROM (t.closed_at - t.opened_at)) / 60)::int AS handling_minutes,
   t.source, t.opened_by, t.related_problem_id, t.noc_status,
+  t.source_payload,
   equipment.serial, equipment.olt, equipment.pon_port, equipment.cto,
   equipment.city, equipment.neighborhood`;
 

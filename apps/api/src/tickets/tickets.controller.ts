@@ -93,6 +93,12 @@ const ticketSchema = {
     opened_by: apiNullableString("Operador responsável."),
     related_problem_id: apiNullableString("Agrupamento relacionado."),
     noc_status: apiString("Estado na fila NOC.", "pending"),
+    source_payload: {
+      type: "object",
+      additionalProperties: true,
+      description:
+        "Payload bruto/contextual da origem, disponível no detalhe do chamado.",
+    },
     olt: apiString("OLT atual do cliente.", "OLT-2"),
     pon: apiString("PON atual.", "1/7"),
     cto: apiString("CTO atual.", "CTO-2-17-03"),
@@ -427,6 +433,11 @@ export class TicketsController {
           enum: ["resolver_telefone", "escalar_noc", "agendar_visita"],
         },
         relatedProblemId: apiNullableString("Agrupamento relacionado."),
+        sourcePayload: {
+          type: "object",
+          additionalProperties: true,
+          description: "Payload bruto/contextual recebido da origem.",
+        },
       },
     },
   })
@@ -440,6 +451,7 @@ export class TicketsController {
       description: body.description,
       outcome: body.outcome,
       relatedProblemId: body.relatedProblemId ?? null,
+      sourcePayload: body.sourcePayload,
     });
   }
 

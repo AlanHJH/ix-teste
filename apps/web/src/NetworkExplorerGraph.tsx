@@ -41,6 +41,7 @@ type GraphNodeIssue = {
   severity: TopologyIssue["severity"];
   confidence: number;
   title: string;
+  source?: TopologyIssue["source"];
 };
 
 const severityRank: Record<TopologyIssue["severity"], number> = {
@@ -56,6 +57,18 @@ function normalized(value: string | null | undefined) {
 
 function centerOf(point: Point) {
   return { x: point.x + NODE_WIDTH / 2, y: point.y + NODE_HEIGHT / 2 };
+}
+
+function issueRelationLabel(issue: GraphNodeIssue) {
+  if (issue.source === "measurements" && issue.relation === "descendant") {
+    return "Offline provável por falha histórica no pai";
+  }
+  if (issue.source === "measurements") {
+    return "Falha histórica de comunicação neste nó";
+  }
+  return issue.relation === "origin"
+    ? "Problema indicativo neste nó"
+    : "Impacto descendente indicado";
 }
 
 function positionOnRings<T>(
@@ -216,7 +229,7 @@ function GraphNode({
       tabIndex={0}
       aria-label={`${title}: ${detail}${
         issue
-          ? `. ${issue.relation === "origin" ? "Problema indicativo neste nó" : "Impacto descendente indicado"}: ${issue.title}, confiança de ${Math.round(issue.confidence * 100)}%`
+          ? `. ${issueRelationLabel(issue)}: ${issue.title}, confiança de ${Math.round(issue.confidence * 100)}%`
           : ""
       }${
         collapsedChildren
@@ -229,7 +242,7 @@ function GraphNode({
     >
       <title>{`${title}: ${detail}. ${
         issue
-          ? `${issue.relation === "origin" ? "Problema indicativo neste nó" : "Impacto descendente indicado"}: ${issue.title}, confiança de ${Math.round(issue.confidence * 100)}%.`
+          ? `${issueRelationLabel(issue)}: ${issue.title}, confiança de ${Math.round(issue.confidence * 100)}%.`
           : ""
       } ${
         collapsedChildren
@@ -499,6 +512,14 @@ function OltConstellation({
         (first, second) =>
           Number(second.relation === "origin") -
             Number(first.relation === "origin") ||
+          Number(
+            second.relation === "descendant" &&
+              second.issue.source === "measurements",
+          ) -
+            Number(
+              first.relation === "descendant" &&
+                first.issue.source === "measurements",
+            ) ||
           severityRank[second.issue.severity] -
             severityRank[first.issue.severity] ||
           second.issue.confidence - first.issue.confidence,
@@ -508,6 +529,7 @@ function OltConstellation({
         severity: issue.severity,
         confidence: issue.confidence,
         title: issue.title,
+        source: issue.source,
       }))[0];
   }
 
@@ -923,7 +945,8 @@ export function NetworkExplorerGraph({
           </small>
           {topologyIssues.length > 0 && (
             <small className="network-graph-issue-legend">
-              <b aria-hidden="true">!</b> Problema indicativo; filhos impactados
+              <b aria-hidden="true">!</b> Problema indicativo; descendentes
+              podem estar offline
             </small>
           )}
         </div>

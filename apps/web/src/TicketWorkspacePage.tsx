@@ -128,6 +128,20 @@ function TicketStatus({ status }: { status: SupportTicket["noc_status"] }) {
   );
 }
 
+function RawSourcePayload({
+  payload,
+}: {
+  payload: Record<string, unknown> | undefined;
+}) {
+  if (!payload || Object.keys(payload).length === 0) return null;
+  return (
+    <details className="ticket-workspace-raw-payload">
+      <summary>Dados brutos da origem (JSON)</summary>
+      <pre>{JSON.stringify(payload, null, 2)}</pre>
+    </details>
+  );
+}
+
 export function TicketWorkspacePage({
   ticket,
   canManageNoc = false,
@@ -165,16 +179,14 @@ export function TicketWorkspacePage({
       api.support(ticket.customer_id),
       api.customer(ticket.customer_id),
       loadAllCustomerTickets(ticket.customer_id),
+      api.ticket(ticket.ticket_id),
     ])
-      .then(([nextProfile, nextCustomer, nextTickets]) => {
+      .then(([nextProfile, nextCustomer, nextTickets, detailedTicket]) => {
         if (canceled) return;
         setProfile(nextProfile);
         setCustomer(nextCustomer);
         setAllTickets(nextTickets);
-        const refreshedTicket = nextTickets.find(
-          (item) => item.ticket_id === ticket.ticket_id,
-        );
-        if (refreshedTicket) setCurrentTicket(refreshedTicket);
+        setCurrentTicket(detailedTicket);
       })
       .catch((reason) => {
         if (!canceled) {
@@ -448,6 +460,7 @@ export function TicketWorkspacePage({
                 <span>Resolução ou encaminhamento registrado</span>
                 <p>{currentTicket.resolution}</p>
               </div>
+              <RawSourcePayload payload={currentTicket.source_payload} />
             </article>
 
             <aside className="ticket-workspace-card ticket-workspace-diagnosis">
