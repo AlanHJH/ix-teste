@@ -14588,6 +14588,30 @@ main {
   outline-offset: 2px;
 }
 
+/* Entity detail drawers use a light reading surface. Keep inherited theme
+   tokens from turning headings and utility actions into near-white text. */
+.side-drawer.entity-modal {
+  color: #23464f;
+}
+
+.side-drawer.entity-modal h4,
+.side-drawer.entity-modal .entity-history h4 {
+  color: #173b48;
+}
+
+.side-drawer.entity-modal .entity-history-refresh {
+  color: #245760 !important;
+  border-color: #b9d5d2 !important;
+  background: #f1f9f8 !important;
+}
+
+.side-drawer.entity-modal .entity-history-refresh:hover:not(:disabled),
+.side-drawer.entity-modal .entity-history-refresh:focus-visible {
+  color: #ffffff !important;
+  border-color: #087f78 !important;
+  background: #087f78 !important;
+}
+
 /* Keep browser focus/annotation scrolling from hiding the inventory toolbar. */
 .inventory-panel {
   overflow: clip;
