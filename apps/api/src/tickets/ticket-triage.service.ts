@@ -280,8 +280,10 @@ export class TicketTriageService {
       const context = await this.contextFor(ticket);
       await this.database.query(
         `INSERT INTO ticket_ai_triage_runs(
-           triage_id, ticket_id, status, observed_category, input_snapshot, model
-         ) VALUES ($1, $2, 'running', $3, $4::jsonb, $5)`,
+           triage_id, ticket_id, status, observed_category, action, reason,
+           case_scope, noc_candidate, input_snapshot, model
+         ) VALUES ($1, $2, 'running', $3, 'review',
+           'Análise em andamento.', 'uncertain', false, $4::jsonb, $5)`,
         [
           triageId,
           ticket.ticket_id,
