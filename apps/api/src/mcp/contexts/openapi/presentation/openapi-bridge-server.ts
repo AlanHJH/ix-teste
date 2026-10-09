@@ -315,7 +315,10 @@ async function executeOperation(
       path: operation.path,
       error: value,
     };
-    return { ...mcpJson(error), isError: true as const };
+    return {
+      ...mcpJson(error, { outcome: "error" }),
+      isError: true as const,
+    };
   }
   return mcpJson(value ?? { status: response.status });
 }

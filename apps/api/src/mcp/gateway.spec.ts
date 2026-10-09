@@ -4,8 +4,10 @@ import { after, before, describe, it } from "node:test";
 import { AddressInfo } from "node:net";
 import { createMcpGateway } from "./gateway.js";
 import { Queryable } from "./shared/infrastructure/database.js";
+import { McpStructuredLogger } from "./shared/infrastructure/mcp-logger.js";
 
 describe("McpGateway", () => {
+  const logs: string[] = [];
   const database: Queryable = {
     async query() {
       throw new Error("O catálogo não deve consultar o banco.");
@@ -13,6 +15,7 @@ describe("McpGateway", () => {
   };
   const gateway = createMcpGateway(database, {
     allowedHosts: ["127.0.0.1"],
+    logger: new McpStructuredLogger((line) => logs.push(line)),
   });
   const server = createServer(async (request, response) => {
     try {
@@ -50,6 +53,12 @@ describe("McpGateway", () => {
     assert.equal(body.restBasePath, "/api");
     assert.equal(body.mcpBasePath, "/mcp");
     assert.equal(body.endpoints.length, 8);
+    const completed = logs
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .find((record) => record.event === "mcp.request.completed");
+    assert.equal(completed?.route, "/mcp");
+    assert.equal(typeof completed?.request_id, "string");
+    assert.equal(typeof completed?.duration_ms, "number");
   });
 
   it("deixa rotas não MCP seguirem para o NestJS", async () => {

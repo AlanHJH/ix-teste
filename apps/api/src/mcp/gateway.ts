@@ -34,9 +34,18 @@ import {
   OpenApiBridgeOptions,
   OpenApiDocumentProvider,
 } from "./contexts/openapi/presentation/openapi-bridge-server.js";
+import {
+  elapsedMilliseconds,
+  McpStructuredLogger,
+  McpRequestLogContext,
+  mcpRequestContext,
+  newMcpRequestId,
+  summarizeForMcpLog,
+} from "./shared/infrastructure/mcp-logger.js";
 
 export interface McpGatewayOptions {
   allowedHosts?: string[];
+  logger?: McpStructuredLogger;
 }
 
 type McpHandler = ReturnType<typeof createMcpHandler>;
@@ -55,6 +64,90 @@ function writeJson(
   response.end(JSON.stringify(body));
 }
 
+function headerValue(request: IncomingMessage, name: string): string | null {
+  const value = request.headers[name.toLowerCase()];
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+type RpcDetails = {
+  method: string | null;
+  id: string | number | null;
+  tool: string | null;
+  resourceUri: string | null;
+  input: unknown;
+};
+
+function rpcDetails(body: string): RpcDetails {
+  if (!body.trim()) {
+    return {
+      method: null,
+      id: null,
+      tool: null,
+      resourceUri: null,
+      input: null,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    const envelope =
+      typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null;
+    const params =
+      envelope?.params &&
+      typeof envelope.params === "object" &&
+      !Array.isArray(envelope.params)
+        ? (envelope.params as Record<string, unknown>)
+        : null;
+    return {
+      method: typeof envelope?.method === "string" ? envelope.method : null,
+      id:
+        typeof envelope?.id === "string" || typeof envelope?.id === "number"
+          ? envelope.id
+          : null,
+      tool: typeof params?.name === "string" ? params.name : null,
+      resourceUri: typeof params?.uri === "string" ? params.uri : null,
+      input: params?.arguments ?? null,
+    };
+  } catch {
+    return {
+      method: null,
+      id: null,
+      tool: null,
+      resourceUri: null,
+      input: null,
+    };
+  }
+}
+
+function requestDetails(
+  request: IncomingMessage,
+  body: string,
+): Record<string, unknown> {
+  const rpc = rpcDetails(body);
+  return {
+    http_method: request.method ?? "UNKNOWN",
+    route: requestPath(request),
+    rpc_method: rpc.method,
+    rpc_id: rpc.id,
+    tool: rpc.tool,
+    resource_uri: rpc.resourceUri,
+    input: summarizeForMcpLog(rpc.input),
+    user_agent: headerValue(request, "user-agent"),
+    content_type: headerValue(request, "content-type"),
+  };
+}
+
+function statusDetails(response: ServerResponse) {
+  return {
+    status_code: response.statusCode,
+    response_content_type: response.getHeader("content-type") ?? null,
+    response_ended: response.writableEnded,
+  };
+}
+
 export class McpGateway {
   private readonly handlers: ReadonlyArray<readonly [string, McpHandler]>;
   private readonly routes: ReadonlyMap<
@@ -63,6 +156,7 @@ export class McpGateway {
   >;
   private readonly validateHost: ReturnType<typeof hostHeaderValidation>;
   private readonly validateOrigin: ReturnType<typeof originValidation>;
+  private readonly logger: McpStructuredLogger;
 
   constructor(
     database: Queryable,
@@ -134,6 +228,7 @@ export class McpGateway {
     this.routes = new Map(
       this.handlers.map(([path, handler]) => [path, toNodeHandler(handler)]),
     );
+    this.logger = options.logger ?? new McpStructuredLogger();
 
     const allowedHosts = options.allowedHosts ?? [
       "localhost",
@@ -154,33 +249,111 @@ export class McpGateway {
       return false;
     }
 
-    if (
-      !this.validateHost(request, response) ||
-      !this.validateOrigin(request, response)
-    ) {
-      return true;
-    }
+    const startedAt = process.hrtime.bigint();
+    const requestId = headerValue(request, "x-request-id") ?? newMcpRequestId();
+    const correlationId = headerValue(request, "x-correlation-id") ?? requestId;
+    const sessionId = headerValue(request, "mcp-session-id");
+    const bodyChunks: Buffer[] = [];
+    let bodyBytes = 0;
+    request.on("data", (chunk: Buffer | string) => {
+      if (bodyBytes >= 64_000) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      const remaining = 64_000 - bodyBytes;
+      bodyChunks.push(buffer.subarray(0, remaining));
+      bodyBytes += Math.min(buffer.length, remaining);
+    });
 
-    if (path === "/mcp") {
-      writeJson(response, 200, {
-        name: "Ondaluz API",
-        restBasePath: "/api",
-        mcpBasePath: "/mcp",
-        transport: "Streamable HTTP",
-        authentication: "disabled-for-prototype",
-        endpoints: MCP_ENDPOINTS,
-      });
-      return true;
-    }
+    const baseContext: McpRequestLogContext = {
+      requestId,
+      correlationId,
+      sessionId,
+      route: path,
+      httpMethod: request.method ?? "UNKNOWN",
+      rpcMethod: null,
+      rpcId: null,
+      tool: null,
+      resourceUri: null,
+      startedAt,
+      logger: this.logger,
+    };
+    request.on("end", () => {
+      const rpc = rpcDetails(Buffer.concat(bodyChunks).toString("utf8"));
+      baseContext.rpcMethod = rpc.method;
+      baseContext.rpcId = rpc.id;
+      baseContext.tool = rpc.tool;
+      baseContext.resourceUri = rpc.resourceUri;
+    });
+    const logContext = () => {
+      const details = requestDetails(
+        request,
+        Buffer.concat(bodyChunks).toString("utf8"),
+      );
+      return {
+        request_id: requestId,
+        correlation_id: correlationId,
+        session_id: sessionId,
+        ...details,
+        ...statusDetails(response),
+        duration_ms: Number(elapsedMilliseconds(startedAt).toFixed(3)),
+        body_bytes: bodyBytes,
+        body_truncated: bodyBytes >= 64_000,
+      };
+    };
 
-    const route = this.routes.get(path);
-    if (!route) {
-      writeJson(response, 404, { error: "Endpoint MCP não encontrado." });
-      return true;
-    }
+    this.logger.info("mcp.request.received", {
+      request_id: requestId,
+      correlation_id: correlationId,
+      session_id: sessionId,
+      ...requestDetails(request, ""),
+    });
 
-    await route(request, response);
-    return true;
+    return mcpRequestContext.run(baseContext, async () => {
+      if (
+        !this.validateHost(request, response) ||
+        !this.validateOrigin(request, response)
+      ) {
+        this.logger.warn("mcp.request.rejected", {
+          ...logContext(),
+          reason: "host_or_origin_validation",
+        });
+        return true;
+      }
+
+      if (path === "/mcp") {
+        writeJson(response, 200, {
+          name: "Ondaluz API",
+          restBasePath: "/api",
+          mcpBasePath: "/mcp",
+          transport: "Streamable HTTP",
+          authentication: "disabled-for-prototype",
+          endpoints: MCP_ENDPOINTS,
+        });
+        this.logger.info("mcp.request.completed", logContext());
+        return true;
+      }
+
+      const route = this.routes.get(path);
+      if (!route) {
+        writeJson(response, 404, { error: "Endpoint MCP não encontrado." });
+        this.logger.warn("mcp.request.rejected", {
+          ...logContext(),
+          reason: "route_not_found",
+        });
+        return true;
+      }
+
+      try {
+        await route(request, response);
+        this.logger.info("mcp.request.completed", logContext());
+        return true;
+      } catch (error) {
+        this.logger.error("mcp.request.failed", {
+          ...logContext(),
+          error: this.logger.errorDetails(error),
+        });
+        throw error;
+      }
+    });
   }
 
   async close(): Promise<void> {

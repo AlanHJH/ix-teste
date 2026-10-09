@@ -1,5 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
+import {
+  currentMcpRequestContext,
+  elapsedMilliseconds,
+  summarizeForMcpLog,
+} from "../infrastructure/mcp-logger.js";
 
 export const pageInput = {
   page: z
@@ -42,8 +47,27 @@ function toJsonValue(value: unknown): Record<string, unknown> {
   return { data: normalized };
 }
 
-export function mcpJson(value: unknown) {
+export function mcpJson(
+  value: unknown,
+  options: { outcome?: "success" | "error" } = {},
+) {
   const normalized = toJsonValue(value);
+  const context = currentMcpRequestContext();
+  if (context) {
+    context.logger.info("mcp.tool.result", {
+      request_id: context.requestId,
+      correlation_id: context.correlationId,
+      session_id: context.sessionId,
+      route: context.route,
+      rpc_method: context.rpcMethod,
+      rpc_id: context.rpcId,
+      tool: context.tool,
+      resource_uri: context.resourceUri,
+      outcome: options.outcome ?? "success",
+      duration_ms: Number(elapsedMilliseconds(context.startedAt).toFixed(3)),
+      result: summarizeForMcpLog(normalized),
+    });
+  }
   return {
     content: [
       {
