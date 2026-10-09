@@ -1,5 +1,6 @@
 import type {
   CreateIncidentInput,
+  IncidentStatus,
   IncidentOptionsInput,
   ProposedIncidentScope,
   ResolvedIncidentScope,
@@ -16,6 +17,10 @@ export interface IncidentsRepository {
     scopeType?: string,
   ): Promise<unknown>;
   create(input: CreateIncidentInput): Promise<unknown>;
+  updateStatus(
+    incidentId: string,
+    status: Exclude<IncidentStatus, "resolved">,
+  ): Promise<unknown>;
   close(incidentId: string, status: "resolved"): Promise<unknown>;
   resolveProposedScope(
     scope: ProposedIncidentScope,

@@ -5,6 +5,7 @@ import {
 } from "./application/incident-repository";
 import type {
   CreateIncidentInput,
+  IncidentStatus,
   IncidentOptionType,
   IncidentOptionsInput,
   ProposedIncidentScope,
@@ -38,6 +39,13 @@ export class IncidentsService {
 
   create(input: CreateIncidentInput) {
     return this.repository.create(input);
+  }
+
+  updateStatus(incidentId: string, status: IncidentStatus) {
+    if (status === "resolved") {
+      return this.repository.close(incidentId, status);
+    }
+    return this.repository.updateStatus(incidentId, status);
   }
 
   close(incidentId: string, status: "resolved") {

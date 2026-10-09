@@ -284,7 +284,7 @@ export class PostgresTicketsRepository implements TicketsRepository {
         `
           SELECT
             count(*)::int AS total,
-            count(*) FILTER (WHERE t.category IN ('Lentidão', 'Sem conexão', 'Wi-Fi'))::int AS technical,
+            count(*) FILTER (WHERE t.category IN ('Lentidão', 'Sem conexão', 'Wi-Fi', 'Medição óptica em campo'))::int AS technical,
             count(*) FILTER (WHERE t.resolution = 'Escalado para NOC')::int AS escalated,
             count(*) FILTER (WHERE t.resolution = 'Visita técnica agendada')::int AS visits,
             round(avg(extract(epoch FROM (t.closed_at - t.opened_at)) / 60)::numeric, 1) AS avg_handling_minutes

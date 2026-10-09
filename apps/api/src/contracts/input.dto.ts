@@ -92,6 +92,16 @@ export class ResolvedStatusDto {
   status!: "resolved";
 }
 
+export class IncidentStatusDto {
+  @ApiProperty({
+    enum: ["open", "mitigating", "monitoring", "resolved"],
+    example: "mitigating",
+  })
+  @IsDefined()
+  @IsIn(["open", "mitigating", "monitoring", "resolved"])
+  status!: "open" | "mitigating" | "monitoring" | "resolved";
+}
+
 export class CreateIncidentDto {
   @ApiProperty({ minLength: 2, maxLength: 100, example: "noc-alan" })
   @IsDefined()
@@ -193,7 +203,10 @@ export class CreateTicketDto {
   @Length(1, 100)
   openedBy!: string;
 
-  @ApiProperty({ example: "Sem conexão" })
+  @ApiProperty({
+    enum: ["Lentidão", "Sem conexão", "Wi-Fi", "Medição óptica em campo"],
+    example: "Sem conexão",
+  })
   @IsDefined()
   @IsString()
   @Length(1, 120)

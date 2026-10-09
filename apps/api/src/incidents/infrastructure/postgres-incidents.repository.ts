@@ -359,6 +359,32 @@ export class PostgresIncidentsRepository {
     return result.rows[0];
   }
 
+  async updateStatus(
+    incidentId: string,
+    status: "open" | "mitigating" | "monitoring",
+  ) {
+    const normalizedIncidentId = incidentId.trim().toUpperCase();
+    const result = await this.database.query<{
+      incident_id: string;
+      status: "open" | "mitigating" | "monitoring";
+    }>(
+      `UPDATE operational_incidents
+       SET status=$2
+       WHERE incident_id=$1
+         AND status IN ('open', 'mitigating', 'monitoring')
+       RETURNING incident_id, status`,
+      [normalizedIncidentId, status],
+    );
+
+    if (!result.rows[0]) {
+      throw new NotFoundException(
+        "Agrupamento não encontrado ou já encerrado.",
+      );
+    }
+
+    return result.rows[0];
+  }
+
   async resolveProposedScope(scope: ProposedIncidentScope) {
     const scopeType: ScopeType =
       scope.type === "network"

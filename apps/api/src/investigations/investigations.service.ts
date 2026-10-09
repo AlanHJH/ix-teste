@@ -389,6 +389,33 @@ export class InvestigationsService {
     return result.rows[0];
   }
 
+  async reEvaluate(investigationId: string) {
+    this.assertConfigured();
+    const source = await this.database.query<InvestigationRow>(
+      `SELECT * FROM agent_investigations
+       WHERE investigation_id=$1
+         AND status IN ('no_problem', 'inconclusive', 'pending_review', 'approved', 'rejected')`,
+      [investigationId],
+    );
+    const previous = source.rows[0];
+    if (!previous) {
+      throw new NotFoundException(
+        "Investigação não encontrada ou ainda está em processamento.",
+      );
+    }
+
+    return this.enqueue({
+      triggerType: "manual",
+      triggerLabel: `Reavaliação · ${previous.trigger_label}`,
+      objective: `Reavalie a investigação ${investigationId}. Valide novamente o achado anterior (${previous.trigger_label}) com telemetria, inventário, topologia, diagnósticos e chamados. Diferencie o que permanece confirmado, o que mudou e quais evidências ainda faltam. Não execute mudanças e mantenha a exigência de revisão humana. Objetivo original: ${previous.objective}`,
+      scope: {
+        ...previous.scope,
+        reEvaluationOf: investigationId,
+      },
+      dedupKey: `manual-re-evaluation:${investigationId}:${randomUUID()}`,
+    });
+  }
+
   async review(
     investigationId: string,
     decision: "approve" | "reject",

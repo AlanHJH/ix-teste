@@ -8,6 +8,7 @@ import { PostgresTicketsRepository } from "./infrastructure/postgres-tickets.rep
 import { TicketTriageAgent } from "./ticket-triage-agent";
 import { TicketTriageSchedulerService } from "./ticket-triage-scheduler.service";
 import { TicketTriageService } from "./ticket-triage.service";
+import { TicketMcpContextService } from "./ticket-mcp-context.service";
 
 /**
  * Bounded context piloto: Atendimento/Tickets.
@@ -30,6 +31,7 @@ import { TicketTriageService } from "./ticket-triage.service";
     TicketTriageAgent,
     TicketTriageService,
     TicketTriageSchedulerService,
+    TicketMcpContextService,
   ],
   exports: [TicketsService, TicketTriageService],
 })

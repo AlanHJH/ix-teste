@@ -365,10 +365,12 @@ export class CustomersService {
     pageSize: number,
     sort: string,
     status: "active" | "cancelled" | "all",
+    filters: InventoryFilter[] = [],
   ) {
     const q = query.trim();
     const search = q ? `%${q}%` : "";
     const selectedStatus = status === "all" ? "" : status;
+    const params: unknown[] = [search, selectedStatus];
     const orderBy: Record<string, string> = {
       customer_id_asc: "customer_id ASC",
       customer_id_desc: "customer_id DESC",
@@ -376,14 +378,46 @@ export class CustomersService {
       plan_mbps_desc: "plan_mbps DESC, customer_id ASC",
       plan_mbps_asc: "plan_mbps ASC, customer_id ASC",
     };
-    const where = `($1='' OR customer_id ILIKE $1 OR serial ILIKE $1
-        OR city ILIKE $1 OR neighborhood ILIKE $1)
-      AND ($2='' OR customer_status=$2)`;
+    const conditions = [
+      `($1='' OR customer_id ILIKE $1 OR serial ILIKE $1
+        OR city ILIKE $1 OR neighborhood ILIKE $1)`,
+      `($2='' OR customer_status=$2)`,
+    ];
+    const columns: Record<InventoryFilter["kind"], string> = {
+      customer: "customer_id",
+      serial: "serial",
+      vendor: "vendor",
+      model: "model",
+      firmware: "software_version",
+      plan: "plan_mbps::text",
+      olt: "olt",
+      cto: "cto",
+      city: "city",
+      neighborhood: "neighborhood",
+    };
+    const filtersByKind = new Map<InventoryFilter["kind"], InventoryFilter[]>();
+    for (const filter of filters) {
+      const current = filtersByKind.get(filter.kind) ?? [];
+      filtersByKind.set(filter.kind, [...current, filter]);
+    }
+    for (const [kind, kindFilters] of filtersByKind) {
+      const column = columns[kind];
+      const alternatives = kindFilters.map((filter) => {
+        params.push(filter.value);
+        return `${column} = $${params.length}`;
+      });
+      if (alternatives.length > 0) {
+        conditions.push(`(${alternatives.join(" OR ")})`);
+      }
+    }
+    const where = conditions.join(" AND ");
+    const limitPosition = params.length + 1;
+    const offsetPosition = params.length + 2;
     const [countResult, result] = await Promise.all([
       this.database.query<{ total: number }>(
         `SELECT count(DISTINCT customer_id)::int AS total
          FROM inventory WHERE ${where}`,
-        [search, selectedStatus],
+        params,
       ),
       this.database.query<Record<string, unknown>>(
         `SELECT * FROM (
@@ -397,8 +431,8 @@ export class CustomersService {
            ORDER BY customer_id, status='active' DESC, installed_at DESC
          ) customers
          ORDER BY ${orderBy[sort] ?? orderBy.customer_id_asc}
-         LIMIT $3 OFFSET $4`,
-        [search, selectedStatus, pageSize, (page - 1) * pageSize],
+         LIMIT $${limitPosition} OFFSET $${offsetPosition}`,
+        [...params, pageSize, (page - 1) * pageSize],
       ),
     ]);
     return paginate(

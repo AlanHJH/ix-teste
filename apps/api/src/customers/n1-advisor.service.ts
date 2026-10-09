@@ -188,6 +188,131 @@ function normalize(value: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+export function isUrgentHealthReport(message: string): boolean {
+  const normalized = normalize(message);
+  const medicine =
+    /\b(remedio|medicamento|comprimido|capsula|dose|dosagem)\b/.test(
+      normalized,
+    );
+  const ingestion = /\b(tomei|ingeri|bebi|usei|consumi|misturei)\b/.test(
+    normalized,
+  );
+  const excess =
+    /\b(muito|muita|demais|excesso|overdose|superdosagem|varios|varias)\b/.test(
+      normalized,
+    );
+  const symptoms =
+    /\b(passando mal|vomitei|vomito|desmaiei|desmaio|convuls|falta de ar|confus|sonolent|mal estar)\b/.test(
+      normalized,
+    );
+  const explicitEmergency =
+    /\b(intoxicacao|intoxicado|envenenamento|overdose|superdosagem)\b/.test(
+      normalized,
+    );
+  const selfHarm = /\b(suicid|me matar|me machucar|tirar minha vida)\b/.test(
+    normalized,
+  );
+
+  return (
+    explicitEmergency ||
+    selfHarm ||
+    (medicine && ingestion && (excess || symptoms)) ||
+    (medicine && excess)
+  );
+}
+
+function urgentHealthReply(
+  profile: SupportProfile,
+  message: string,
+): N1AdvisorReply {
+  return {
+    assistantMessage:
+      "Esse relato foge do atendimento de internet e pode indicar uma urgência de saúde. Interrompa a triagem técnica. Se houver risco imediato, inconsciência, falta de ar, convulsão ou piora, oriente a ligação para o SAMU 192. Para orientação sobre possível intoxicação, o Disque-Intoxicação atende pelo 0800 722 6001.",
+    nextSteps: [
+      "Interromper os testes de rede e não registrar o caso como falha técnica confirmada.",
+      "Se houver risco imediato ou piora, orientar o SAMU pelo 192.",
+      "Para orientação toxicológica, indicar o Disque-Intoxicação: 0800 722 6001.",
+    ],
+    options: [
+      {
+        id: "medical_emergency",
+        label: "Orientar atendimento médico",
+        description:
+          "Retirar o relato do fluxo técnico e priorizar um serviço de emergência.",
+      },
+      {
+        id: "poison_center",
+        label: "Orientar Disque-Intoxicação",
+        description:
+          "Indicar o canal toxicológico para receber orientação profissional.",
+      },
+    ],
+    documentation: `Relato fora do escopo técnico com possível urgência de saúde: ${message.trim().slice(0, 260)}. Não concluir causa de rede; orientar atendimento médico adequado.`,
+    disposition: "continue",
+    deepAnalysis: {
+      headline: "Relato fora do escopo técnico — atenção médica imediata",
+      summary:
+        "O relato menciona possível uso excessivo ou intoxicação por medicamento. A aplicação não consegue avaliar substância, quantidade, horário ou gravidade e não deve converter isso em diagnóstico de conectividade.",
+      causes: [
+        {
+          title: "Possível intoxicação ou reação medicamentosa",
+          likelihood: "alta",
+          evidence: [
+            "O relato contém sinais de ingestão excessiva, mistura de medicamentos ou possível intoxicação.",
+            "A situação exige avaliação de um serviço de saúde, não uma investigação de rede.",
+          ],
+          counterEvidence: [
+            "A aplicação não confirma a substância, a quantidade ingerida nem a gravidade dos sintomas.",
+          ],
+        },
+      ],
+      path: [
+        {
+          step: 1,
+          title: "Interromper a triagem técnica",
+          action:
+            "Não pedir reboot, testes de conexão, visita técnica ou qualquer intervenção na CPE.",
+          why: "O relato não pode ser explicado com os dados de rede do cliente.",
+          decision:
+            "Retirar a conversa do fluxo N1/NOC enquanto a possível urgência é atendida.",
+        },
+        {
+          step: 2,
+          title: "Acionar emergência se necessário",
+          action:
+            "Se houver risco imediato, inconsciência, falta de ar, convulsão ou piora, orientar o SAMU 192.",
+          why: "Possível intoxicação pode exigir avaliação e atendimento rápidos.",
+          decision:
+            "Não esperar a conclusão do atendimento de internet para buscar ajuda.",
+        },
+        {
+          step: 3,
+          title: "Buscar orientação toxicológica",
+          action:
+            "Indicar o Disque-Intoxicação 0800 722 6001 para orientação profissional sobre a suspeita.",
+          why: "O serviço pode orientar o encaminhamento adequado para intoxicações.",
+          decision:
+            "Registrar apenas o encaminhamento de segurança, sem inventar diagnóstico ou conduta clínica.",
+        },
+      ],
+      confirmed: [
+        "O relato recebido não é suficiente para concluir uma causa de conectividade.",
+        `O contexto técnico do cliente ${profile.customer.id} permanece separado desta ocorrência de saúde.`,
+      ],
+      unknowns: [
+        "Substância, quantidade, horário e sintomas não foram informados ou validados.",
+        "Não há avaliação clínica disponível neste atendimento técnico.",
+      ],
+      customerScript:
+        "Esse relato pode indicar uma emergência de saúde, não um problema de internet. Vamos interromper o atendimento técnico e buscar ajuda adequada agora. Se houver risco imediato, ligue para o SAMU 192; para orientação sobre intoxicação, ligue para o Disque-Intoxicação 0800 722 6001.",
+      escalation:
+        "Fora do fluxo N1/NOC: priorizar atendimento de saúde e não classificar o relato como falha de rede.",
+      model: "fallback",
+    },
+    model: "fallback",
+  };
+}
+
 function buildDeepAnalysis(
   profile: SupportProfile,
   message: string,
@@ -650,6 +775,10 @@ export class N1AdvisorService {
     const profile = await this.customers.getSupportProfile(customerId);
     const cleanedMessage = message.trim().slice(0, 600);
     if (!cleanedMessage) return fallbackReply(profile, "");
+
+    if (isUrgentHealthReport(cleanedMessage)) {
+      return urgentHealthReply(profile, cleanedMessage);
+    }
 
     if (this.apiKey) {
       try {

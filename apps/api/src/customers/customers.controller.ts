@@ -897,6 +897,17 @@ export class CustomersController {
       default: "all",
     },
   })
+  @ApiQuery({
+    name: "filter",
+    required: false,
+    isArray: true,
+    description: "Filtros repetíveis campo:valor para código ou localidade.",
+    schema: {
+      type: "array",
+      items: { type: "string" },
+      example: ["customer:C100129", "city:Santa Brisa"],
+    },
+  })
   @ApiInvalidRequest("Filtro, paginação ou ordenação inválida.")
   @Get("search")
   search(@Query() params: CustomersSearchQueryDto) {
@@ -927,6 +938,7 @@ export class CustomersController {
       pagination.pageSize,
       pagination.sort,
       selectedStatus,
+      parseInventoryFilters(params.filter),
     );
   }
 

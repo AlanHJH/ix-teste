@@ -1,5 +1,17 @@
-export const ticketCategories = ["Lentidão", "Sem conexão", "Wi-Fi"] as const;
+export const ticketCategories = [
+  "Lentidão",
+  "Sem conexão",
+  "Wi-Fi",
+  "Medição óptica em campo",
+] as const;
 export type TicketCategory = (typeof ticketCategories)[number];
+
+export const customerIssueCategories = [
+  "Lentidão",
+  "Sem conexão",
+  "Wi-Fi",
+] as const;
+export type CustomerIssueCategory = (typeof customerIssueCategories)[number];
 
 export const ticketOutcomes = [
   "resolver_telefone",

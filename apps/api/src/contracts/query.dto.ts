@@ -54,6 +54,13 @@ export class CustomersSearchQueryDto extends QueryBase {
   @IsString()
   status = "all";
 
+  @ApiPropertyOptional({
+    description: "Filtros repetíveis no formato campo:valor.",
+  })
+  @IsOptional()
+  @IsString({ each: true })
+  filter?: string | string[];
+
   constructor() {
     super();
     this.pageSize = "8";

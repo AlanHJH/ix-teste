@@ -54,6 +54,52 @@ describe("TicketsService.create", () => {
     });
   });
 
+  it("registra medição óptica em campo com a camada e o técnico", async () => {
+    const queries: Array<{ text: string; params: unknown[] }> = [];
+    const database = {
+      async query(text: string, params: unknown[]) {
+        queries.push({ text, params });
+        if (text.includes("FROM inventory")) {
+          return { rows: [{ customer_id: "C545968" }] };
+        }
+        return {
+          rows: [
+            {
+              ticket_id: "TN1-CAMPO123",
+              resolution: "Visita técnica agendada",
+              category: "Medição óptica em campo",
+            },
+          ],
+        };
+      },
+    } as unknown as DatabaseService;
+    const sourcePayload = {
+      field_work: {
+        technician: "Alan Jahnel",
+        layer: "poste_trecho",
+        measurements: ["Potência óptica na CTO e no splitter"],
+      },
+    };
+
+    const result = await new TicketsService(
+      new PostgresTicketsRepository(database),
+    ).create({
+      customerId: "C545968",
+      openedBy: "Alan Jahnel",
+      category: "Medição óptica em campo",
+      description:
+        "Equipe deve medir a potência no splitter e verificar o trecho compartilhado.",
+      outcome: "agendar_visita",
+      relatedProblemId: null,
+      sourcePayload,
+    });
+
+    assert.equal(result.category, "Medição óptica em campo");
+    assert.equal(queries.length, 2);
+    assert.equal(queries[1].params[2], "Medição óptica em campo");
+    assert.deepEqual(queries[1].params[8], sourcePayload);
+  });
+
   it("rejeita vínculo desconhecido antes de gravar", async () => {
     const database = {
       async query() {

@@ -511,6 +511,28 @@ export class InvestigationsController {
   }
 
   @ApiWrite({
+    summary: "Solicitar nova avaliação de uma investigação",
+    description:
+      "Preserva o registro anterior e enfileira uma nova análise manual com o mesmo escopo operacional. Pode ser usada para reavaliar achados concluídos após novos dados chegarem.",
+    responseDescription: "Nova investigação enfileirada.",
+    schema: investigationSchema,
+    created: true,
+  })
+  @ApiParam({
+    name: "investigationId",
+    description: "Identificador da investigação que será reavaliada.",
+    example: "INV-5D2F24A1",
+  })
+  @ApiNotFoundResponse({
+    description: "Investigação inexistente ou ainda em processamento.",
+    schema: apiErrorSchema,
+  })
+  @Post(":investigationId/re-evaluate")
+  reEvaluate(@Param() params: InvestigationIdParamDto) {
+    return this.investigations.reEvaluate(params.investigationId);
+  }
+
+  @ApiWrite({
     summary: "Revisar achado de uma investigação",
     description:
       "Aprova ou rejeita uma proposta pending_review. Aprovar cria um incidente operacional com escopo recalculado; rejeitar preserva o registro auditável sem ação operacional.",

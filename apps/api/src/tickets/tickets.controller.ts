@@ -21,6 +21,7 @@ import {
   type TicketFilterKind,
 } from "./tickets.service";
 import { TicketTriageService } from "./ticket-triage.service";
+import { TicketMcpContextService } from "./ticket-mcp-context.service";
 import { parsePageQuery } from "../pagination";
 import {
   ApiInvalidRequest,
@@ -46,6 +47,7 @@ import {
   TicketTriageRetryDto,
 } from "../contracts/input.dto";
 import { TicketIdParamDto } from "../contracts/params.dto";
+import { ticketCategories } from "./domain/ticket";
 
 const ticketFilterKinds = new Set<TicketFilterKind>([
   "ticket",
@@ -86,7 +88,10 @@ const ticketSchema = {
     opened_at: apiDateTime("Data e hora de abertura."),
     customer_id: apiString("Código do cliente.", "C169781"),
     channel: apiString("Canal de entrada.", "Telefone"),
-    category: apiString("Categoria.", "Sem conexão"),
+    category: {
+      ...apiString("Categoria.", "Sem conexão"),
+      enum: [...ticketCategories],
+    },
     description: apiString("Relato registrado."),
     resolution: apiString("Desfecho registrado.", "Escalado para NOC"),
     closed_at: { ...apiDateTime("Data de encerramento."), nullable: true },
@@ -130,9 +135,9 @@ const ticketSchema = {
       description: "Indica se a revisão humana continua necessária.",
     },
     ai_triage_at: { ...apiDateTime("Data da última triagem."), nullable: true },
-    olt: apiString("OLT atual do cliente.", "OLT-2"),
-    pon: apiString("PON atual.", "1/7"),
-    cto: apiString("CTO atual.", "CTO-2-17-03"),
+    olt: { ...apiString("OLT atual do cliente.", "OLT-2"), nullable: true },
+    pon: { ...apiString("PON atual.", "1/7"), nullable: true },
+    cto: { ...apiString("CTO atual.", "CTO-2-17-03"), nullable: true },
   },
   required: [
     "ticket_id",
@@ -201,6 +206,7 @@ export class TicketsController {
   constructor(
     private readonly tickets: TicketsService,
     private readonly triage: TicketTriageService,
+    private readonly mcpContextService: TicketMcpContextService,
   ) {}
 
   @ApiRead({
@@ -488,6 +494,29 @@ export class TicketsController {
   @Get(":ticketId/triage")
   triageRuns(@Param() params: TicketIdParamDto) {
     return this.triage.listRuns(params.ticketId);
+  }
+
+  @ApiRead({
+    summary: "Coletar contexto técnico do ticket via MCP",
+    description:
+      "Consulta os domínios MCP de clientes, inventário, topologia, telemetria, diagnósticos, tickets e operações para montar a ficha técnica do chamado.",
+    responseDescription:
+      "Contexto técnico consolidado com as fontes consultadas.",
+    schema: { type: "object", additionalProperties: true },
+    dashboardResource: true,
+  })
+  @ApiParam({
+    name: "ticketId",
+    description: "Identificador do chamado.",
+    example: "T000123",
+  })
+  @ApiNotFoundResponse({
+    description: "Chamado não encontrado.",
+    schema: apiErrorSchema,
+  })
+  @Get(":ticketId/mcp-context")
+  mcpContext(@Param() params: TicketIdParamDto) {
+    return this.mcpContextService.collect(params.ticketId);
   }
 
   @ApiRead({

@@ -28,7 +28,7 @@ import {
   apiString,
 } from "../openapi";
 import { parsePageQuery } from "../pagination";
-import { CreateIncidentDto, ResolvedStatusDto } from "../contracts/input.dto";
+import { CreateIncidentDto, IncidentStatusDto } from "../contracts/input.dto";
 import { IncidentIdParamDto } from "../contracts/params.dto";
 import {
   IncidentsListQueryDto,
@@ -359,17 +359,20 @@ export class IncidentsController {
   }
 
   @ApiWrite({
-    summary: "Resolver incidente operacional",
+    summary: "Atualizar estado do incidente operacional",
     description:
-      "Encerra um incidente que esteja aberto, em mitigação ou em monitoramento. Incidentes já resolvidos não são alterados novamente.",
-    responseDescription: "Identificador e estado final do incidente.",
+      "Move um incidente para acompanhamento, mitigação ou monitoramento. O estado resolved encerra o incidente e os chamados N1 vinculados.",
+    responseDescription: "Identificador e estado atualizado do incidente.",
     schema: {
       type: "object",
       properties: {
-        incident_id: apiString("Incidente encerrado."),
-        status: { type: "string", enum: ["resolved"] },
+        incident_id: apiString("Incidente atualizado."),
+        status: {
+          type: "string",
+          enum: ["open", "mitigating", "monitoring", "resolved"],
+        },
         closed_tickets: apiInteger(
-          "Chamados N1 encerrados junto com o agrupamento.",
+          "Chamados N1 encerrados junto com o agrupamento, quando resolvido.",
         ),
       },
     },
@@ -380,20 +383,25 @@ export class IncidentsController {
     example: "INC-82F1D19A",
   })
   @ApiBody({
-    description: "Novo estado permitido.",
+    description: "Novo estado operacional.",
     schema: {
       type: "object",
       required: ["status"],
-      properties: { status: { type: "string", enum: ["resolved"] } },
+      properties: {
+        status: {
+          type: "string",
+          enum: ["open", "mitigating", "monitoring", "resolved"],
+        },
+      },
     },
   })
-  @ApiInvalidRequest("Somente o estado resolved é aceito.")
+  @ApiInvalidRequest("Estado operacional inválido.")
   @ApiNotFoundResponse({
     description: "Incidente não encontrado ou já encerrado.",
     schema: apiErrorSchema,
   })
   @Patch(":incidentId/status")
-  close(@Param() params: IncidentIdParamDto, @Body() body: ResolvedStatusDto) {
-    return this.incidents.close(params.incidentId, body.status);
+  status(@Param() params: IncidentIdParamDto, @Body() body: IncidentStatusDto) {
+    return this.incidents.updateStatus(params.incidentId, body.status);
   }
 }

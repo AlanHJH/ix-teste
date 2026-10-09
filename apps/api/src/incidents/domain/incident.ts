@@ -8,6 +8,8 @@ export type ScopeType =
   | "equipment"
   | "region";
 
+export type IncidentStatus = "open" | "mitigating" | "monitoring" | "resolved";
+
 export type IncidentOptionType = Exclude<ScopeType, "park">;
 
 export type IncidentOptionsInput = {
