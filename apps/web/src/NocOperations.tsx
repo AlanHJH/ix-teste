@@ -442,7 +442,7 @@ export function NocOperations({
 }: {
   nocTicketCount: number;
   onOpenNocTickets: () => void;
-  onOpenAssistant: (context: IrisContext) => void;
+  onOpenAssistant?: (context: IrisContext) => void;
 }) {
   const agentPolicy = useAgentPolicy();
   const showGroupingAgent = groupingAgentEnabled(agentPolicy);
@@ -978,18 +978,20 @@ export function NocOperations({
                 mantendo o histórico para auditoria.
               </p>
               <div>
-                <OpenIrisChatButton
-                  compact
-                  label="Conversar sobre este problema"
-                  onClick={() =>
-                    onOpenAssistant({
-                      view: "Visão NOC",
-                      entity: "problem",
-                      selection: `${selectedGroupingData.id} · ${selectedGroupingData.title} · escopo ${selectedGroupingData.location}`,
-                      problemId: selectedGroupingData.id,
-                    })
-                  }
-                />
+                {onOpenAssistant && (
+                  <OpenIrisChatButton
+                    compact
+                    label="Conversar sobre este problema"
+                    onClick={() =>
+                      onOpenAssistant({
+                        view: "Visão NOC",
+                        entity: "problem",
+                        selection: `${selectedGroupingData.id} · ${selectedGroupingData.title} · escopo ${selectedGroupingData.location}`,
+                        problemId: selectedGroupingData.id,
+                      })
+                    }
+                  />
+                )}
                 <button
                   type="button"
                   className="grouping-topology-open"

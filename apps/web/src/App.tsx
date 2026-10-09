@@ -179,17 +179,21 @@ function ExecutiveDashboard({ overview }: { overview: Overview }) {
               >
                 <defs>
                   <linearGradient id="tickets" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#ff8a55" stopOpacity={0.35} />
+                    <stop
+                      offset="0%"
+                      stopColor="var(--ixc-accent)"
+                      stopOpacity={0.35}
+                    />
                     <stop
                       offset="100%"
-                      stopColor="#ff8a55"
+                      stopColor="var(--ixc-accent)"
                       stopOpacity={0.02}
                     />
                   </linearGradient>
                 </defs>
                 <CartesianGrid
                   vertical={false}
-                  stroke="#dbe5e8"
+                  stroke="var(--ixc-grid)"
                   strokeDasharray="4 4"
                 />
                 <XAxis dataKey="week" tickLine={false} axisLine={false} />
@@ -198,7 +202,7 @@ function ExecutiveDashboard({ overview }: { overview: Overview }) {
                   contentStyle={{
                     border: "0",
                     borderRadius: 12,
-                    boxShadow: "0 10px 30px rgba(7,29,43,.15)",
+                    boxShadow: "0 18px 42px rgba(0,0,0,.28)",
                   }}
                   labelFormatter={(label) => `Semana de ${label}`}
                 />
@@ -206,10 +210,10 @@ function ExecutiveDashboard({ overview }: { overview: Overview }) {
                   type="monotone"
                   dataKey="total"
                   name="Chamados"
-                  stroke="#d85d2d"
+                  stroke="var(--ixc-accent)"
                   strokeWidth={3}
                   fill="url(#tickets)"
-                  dot={{ r: 3, fill: "#fff", strokeWidth: 2 }}
+                  dot={{ r: 3, fill: "var(--ixc-surface-1)", strokeWidth: 2 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -227,7 +231,7 @@ function NocDashboard({
 }: {
   nocTicketCount: number;
   onOpenNocTickets: () => void;
-  onOpenAssistant: (context: IrisContext) => void;
+  onOpenAssistant?: (context: IrisContext) => void;
 }) {
   return (
     <NocOperations
@@ -879,13 +883,13 @@ function LoginScreen({
     <main className="login-page">
       <section className="login-shell" aria-labelledby="login-title">
         <div className="login-intro">
-          <a className="login-brand" href="#" aria-label="Ondaluz Ops">
+          <a className="login-brand" href="#" aria-label="IXC ACS">
             <span className="brand-mark">
               <RadioTower size={21} />
             </span>
             <span>
-              <strong>Ondaluz</strong>
-              <small>Operations intelligence</small>
+              <strong>IXC ACS</strong>
+              <small>Network operations</small>
             </span>
           </a>
           <div className="login-intro-copy">
@@ -1078,8 +1082,8 @@ function OperationsApp({
             <RadioTower size={20} />
           </span>
           <span>
-            <strong>Ondaluz</strong>
-            <small>Operations intelligence</small>
+            <strong>IXC ACS</strong>
+            <small>Network operations</small>
           </span>
         </a>
         <nav aria-label="Áreas da aplicação">
@@ -1266,7 +1270,9 @@ function OperationsApp({
                 canOpenAssistant={showGlobalAssistant}
                 onBack={() => setTicketWorkspace(null)}
                 onOpenTicket={setTicketWorkspace}
-                onOpenAssistant={openAssistant}
+                onOpenAssistant={
+                  showGlobalAssistant ? openAssistant : undefined
+                }
                 onNocQueueChanged={refreshNocTicketCount}
               />
             ) : (
@@ -1274,7 +1280,9 @@ function OperationsApp({
                 preset={ticketPreset}
                 canOpenAssistant={showGlobalAssistant}
                 onOpenTicket={setTicketWorkspace}
-                onOpenAssistant={openAssistant}
+                onOpenAssistant={
+                  showGlobalAssistant ? openAssistant : undefined
+                }
                 onOpenSupport={(customerId) => {
                   setSupportCustomer(customerId);
                   navigate("support");
@@ -1329,13 +1337,13 @@ function OperationsApp({
             <NocDashboard
               nocTicketCount={nocTicketCount}
               onOpenNocTickets={openNocTickets}
-              onOpenAssistant={openAssistant}
+              onOpenAssistant={showGlobalAssistant ? openAssistant : undefined}
             />
           )}
         </main>
         {view !== "topology" && (
           <footer className="app-footer">
-            <span>Ondaluz Ops · protótipo de decisão operacional</span>
+            <span>IXC ACS · protótipo de decisão operacional</span>
             <span>
               As recomendações mostram evidência e confiança — a ação continua
               humana.
@@ -1343,11 +1351,13 @@ function OperationsApp({
           </footer>
         )}
       </div>
-      <IrisAssistant
-        view={view}
-        context={assistantContext}
-        requestKey={assistantRequestKey}
-      />
+      {showGlobalAssistant && (
+        <IrisAssistant
+          view={view}
+          context={assistantContext}
+          requestKey={assistantRequestKey}
+        />
+      )}
     </div>
   );
 }

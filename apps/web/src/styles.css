@@ -9109,6 +9109,713 @@ h3 {
   }
 }
 
+/*
+ * IXC ACS visual model
+ *
+ * The operational UI keeps its existing information architecture and
+ * interactions, but adopts the reference product's visual language:
+ * midnight blue canvas, layered glassy surfaces, cyan actions and magenta AI
+ * signals. This layer intentionally lives at the end so the theme can be
+ * audited and tuned without disturbing the feature-specific styles above.
+ */
+:root {
+  font-family:
+    "Plus Jakarta Sans",
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: #f3f7fb;
+  background: #061725;
+  --ixc-canvas: #191e29;
+  --ixc-surface-0: #061725;
+  --ixc-surface-1: #0b2033;
+  --ixc-surface-2: #102b43;
+  --ixc-surface-3: #163853;
+  --ixc-accent: #5ec0ed;
+  --ixc-accent-strong: #36a5d6;
+  --ixc-accent-soft: rgba(94, 192, 237, 0.14);
+  --ixc-ai: #c84fb7;
+  --ixc-ai-soft: rgba(200, 79, 183, 0.14);
+  --ixc-text: #f3f7fb;
+  --ixc-muted: #9aaabd;
+  --ixc-subtle: #71849a;
+  --ixc-grid: rgba(157, 190, 214, 0.18);
+  --ink: var(--ixc-text);
+  --teal: var(--ixc-accent);
+  --teal-dark: var(--ixc-accent-strong);
+  --orange: #ef7c6f;
+  --muted: var(--ixc-muted);
+  --line: rgba(157, 190, 214, 0.16);
+}
+
+html,
+body {
+  min-height: 100%;
+  background: var(--ixc-canvas);
+}
+
+body {
+  color: var(--ixc-text);
+  background:
+    radial-gradient(
+      circle at 78% -8%,
+      rgba(58, 150, 205, 0.16),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 14% 100%,
+      rgba(200, 79, 183, 0.08),
+      transparent 28%
+    ),
+    var(--ixc-canvas);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button {
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+h1,
+h2,
+h3,
+h4,
+strong {
+  color: var(--ixc-text);
+}
+
+.app-content {
+  min-height: 100vh;
+  background:
+    radial-gradient(
+      circle at 78% 0%,
+      rgba(94, 192, 237, 0.08),
+      transparent 34%
+    ),
+    linear-gradient(180deg, rgba(25, 30, 41, 0.98), #151b26 100%);
+}
+
+.sidebar {
+  padding: 24px 18px 20px;
+  color: var(--ixc-text);
+  background:
+    radial-gradient(
+      circle at 80% 0%,
+      rgba(94, 192, 237, 0.12),
+      transparent 35%
+    ),
+    var(--ixc-surface-0);
+  border-right: 1px solid rgba(94, 192, 237, 0.14);
+  box-shadow: 20px 0 70px rgba(0, 0, 0, 0.13);
+}
+
+.brand,
+.login-brand {
+  color: var(--ixc-text);
+}
+
+.brand {
+  padding-bottom: 22px;
+  border-bottom-color: rgba(157, 190, 214, 0.14);
+}
+
+.brand-mark {
+  color: #d9f5ff;
+  background: linear-gradient(
+    145deg,
+    rgba(94, 192, 237, 0.36),
+    rgba(28, 89, 126, 0.62)
+  );
+  box-shadow:
+    0 0 0 1px rgba(94, 192, 237, 0.18),
+    0 8px 24px rgba(29, 136, 188, 0.18);
+}
+
+.brand strong,
+.login-brand strong {
+  letter-spacing: 0.04em;
+}
+
+.brand small,
+.login-brand small {
+  color: #8da2b8;
+  letter-spacing: 0.12em;
+}
+
+.sidebar-section-label {
+  color: #6d8ba4;
+}
+
+.sidebar nav button {
+  color: #9eb1c4;
+  border: 1px solid transparent;
+}
+
+.sidebar nav button:hover {
+  color: #f4fbff;
+  border-color: rgba(94, 192, 237, 0.12);
+  background: rgba(94, 192, 237, 0.08);
+}
+
+.sidebar nav button.active {
+  color: #e0f7ff;
+  border-color: rgba(94, 192, 237, 0.22);
+  background: linear-gradient(
+    90deg,
+    rgba(94, 192, 237, 0.25),
+    rgba(94, 192, 237, 0.08)
+  );
+  box-shadow:
+    inset 3px 0 var(--ixc-accent),
+    0 9px 24px rgba(0, 0, 0, 0.12);
+}
+
+.sidebar nav button.active svg,
+.section-label,
+.dashboard-hero > svg,
+.panel-heading > svg,
+.topology-hero-mark svg {
+  color: var(--ixc-accent);
+}
+
+.data-state,
+.sidebar-user {
+  border-color: rgba(157, 190, 214, 0.16);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.data-state > span {
+  background: #5ee1bd;
+  box-shadow:
+    0 0 0 4px rgba(94, 225, 189, 0.13),
+    0 0 20px rgba(94, 225, 189, 0.35);
+}
+
+.data-state strong,
+.sidebar-user-copy strong {
+  color: #e5f2fb;
+}
+
+.data-state small,
+.sidebar-user-copy small {
+  color: #8ca2b7;
+}
+
+.sidebar-user > button {
+  color: #8ba4b9;
+}
+
+.sidebar-user > button:hover,
+.sidebar-user > button:focus-visible {
+  color: #f4fbff;
+  background: rgba(94, 192, 237, 0.12);
+}
+
+main {
+  max-width: 1440px;
+  padding: 38px 34px 70px;
+}
+
+.topology-main {
+  padding: 24px 30px;
+}
+
+.hero-copy p,
+.support-hero > p,
+.topology-hero p,
+.dashboard-hero p,
+.chart-note,
+.section-heading > span,
+.metric-card small {
+  color: var(--ixc-muted);
+}
+
+.status-chip {
+  color: #c9f0ff;
+  border-color: rgba(94, 192, 237, 0.24);
+  background: rgba(94, 192, 237, 0.09);
+}
+
+.live-dot {
+  background: #5ee1bd;
+  box-shadow:
+    0 0 0 4px rgba(94, 225, 189, 0.13),
+    0 0 18px rgba(94, 225, 189, 0.34);
+}
+
+.dashboard-hero,
+.panel,
+.metric-card,
+.offline-alert-panel,
+.offline-alert-card,
+.offline-diagnosis-summary,
+.offline-diagnosis-context-card,
+.offline-diagnosis-incidents,
+.offline-ai-scope,
+.offline-manual-next-step,
+.ai-dashboard-filters,
+.ai-composer-modal,
+.agent-settings-card,
+.agent-settings-runtime-card,
+.customers-summary,
+.customers-table,
+.diagnostics-table,
+.ticket-workspace,
+.support-form,
+.support-hero,
+.topology-hero-mark {
+  color: var(--ixc-text);
+  border-color: var(--line);
+  background: linear-gradient(
+    145deg,
+    rgba(16, 43, 67, 0.94),
+    rgba(9, 29, 47, 0.96)
+  );
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.18),
+    inset 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.dashboard-hero {
+  border-radius: 20px;
+  background:
+    radial-gradient(
+      circle at 92% 20%,
+      rgba(94, 192, 237, 0.18),
+      transparent 28%
+    ),
+    linear-gradient(145deg, #102d47, #0b1f32);
+}
+
+.metric-card {
+  border-radius: 17px;
+}
+
+.metric-icon,
+.offline-alert-card-icon,
+.offline-diagnosis-hero-icon,
+.ai-widget-icon,
+.agent-settings-policy-icon {
+  color: var(--ixc-accent);
+  background: var(--ixc-accent-soft);
+}
+
+.metric-card.danger .metric-icon {
+  color: #ef7c6f;
+  background: rgba(239, 124, 111, 0.14);
+}
+
+.metric-card.warning .metric-icon {
+  color: #eac46c;
+  background: rgba(234, 196, 108, 0.14);
+}
+
+.metric-card.money .metric-icon {
+  color: #5ee1bd;
+  background: rgba(94, 225, 189, 0.14);
+}
+
+.metric-card span,
+.offline-alert-total,
+.offline-diagnosis-dl dt,
+.offline-diagnosis-decision span,
+.offline-diagnosis-decision small {
+  color: var(--ixc-subtle);
+}
+
+.panel-heading h2,
+.offline-alert-header h2,
+.offline-diagnosis-context-card h2,
+.offline-diagnosis-incidents h2,
+.offline-ai-scope h2,
+.offline-manual-next-step h2 {
+  color: var(--ixc-text);
+}
+
+.recharts-text {
+  fill: #8fa3b7;
+}
+
+.ticket-table > div,
+.offline-alert-card,
+.offline-diagnosis-advice,
+.offline-diagnosis-incident,
+.entity-history-entry,
+.customers-table > div,
+.diagnostics-table > div {
+  border-color: rgba(157, 190, 214, 0.13);
+}
+
+.offline-alert-card,
+.offline-diagnosis-incident {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.offline-alert-card-title strong,
+.offline-diagnosis-dl dd,
+.ticket-table p,
+.ticket-table strong {
+  color: #dcecf7;
+}
+
+.offline-alert-card-copy p,
+.offline-alert-card-copy small,
+.offline-diagnosis-checks,
+.offline-diagnosis-advice,
+.offline-diagnosis-summary p,
+.offline-ai-scope p,
+.offline-diagnosis-documentation p,
+.offline-manual-next-step p {
+  color: var(--ixc-muted);
+}
+
+.offline-alert-status,
+.offline-alert-status.open {
+  color: #f0cd7e;
+  background: rgba(234, 196, 108, 0.14);
+}
+
+.offline-alert-status.in_noc {
+  color: #ffaaa1;
+  background: rgba(239, 124, 111, 0.14);
+}
+
+.offline-diagnosis-summary {
+  background: linear-gradient(
+    120deg,
+    rgba(25, 77, 105, 0.86),
+    rgba(86, 42, 78, 0.58)
+  );
+}
+
+.offline-diagnosis-decision {
+  border-color: rgba(157, 190, 214, 0.18);
+}
+
+.offline-diagnosis-decision strong,
+.offline-ai-scope h2 svg {
+  color: var(--ixc-accent);
+}
+
+.offline-ai-scope {
+  border-color: rgba(200, 79, 183, 0.28);
+  background: linear-gradient(
+    100deg,
+    rgba(200, 79, 183, 0.12),
+    rgba(94, 192, 237, 0.08)
+  );
+}
+
+.offline-diagnosis-support,
+.login-submit,
+.ai-composer-submit,
+.agent-settings-save,
+.customer-open-action,
+.inventory-customer-action,
+.diagnostic-equipment-action {
+  color: #061725;
+  border-color: var(--ixc-accent);
+  background: var(--ixc-accent);
+  box-shadow: 0 10px 28px rgba(94, 192, 237, 0.16);
+}
+
+.offline-diagnosis-support:hover,
+.login-submit:hover:not(:disabled),
+.login-submit:focus-visible:not(:disabled),
+.ai-composer-submit:hover:not(:disabled),
+.agent-settings-save:hover:not(:disabled),
+.customer-open-action:hover,
+.inventory-customer-action:hover,
+.diagnostic-equipment-action:hover {
+  color: #04131f;
+  background: #86d9fb;
+  box-shadow: 0 14px 34px rgba(94, 192, 237, 0.24);
+}
+
+.app-content button:not(.sidebar-toggle),
+.app-content select,
+.app-content input,
+.app-content textarea {
+  border-color: rgba(157, 190, 214, 0.2);
+  color: #dcecf7;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.app-content button:not(.sidebar-toggle):hover,
+.app-content button:not(.sidebar-toggle):focus-visible {
+  border-color: rgba(94, 192, 237, 0.55);
+  color: #f3fbff;
+  background: rgba(94, 192, 237, 0.13);
+}
+
+.app-content input::placeholder,
+.app-content textarea::placeholder {
+  color: #71849a;
+}
+
+.app-content input:focus,
+.app-content select:focus,
+.app-content textarea:focus {
+  border-color: var(--ixc-accent);
+  outline: 3px solid rgba(94, 192, 237, 0.15);
+}
+
+.ai-plan-source,
+.ai-edit-mode-notice {
+  color: #bfeeff;
+  border-color: rgba(94, 192, 237, 0.25);
+  background: var(--ixc-accent-soft);
+}
+
+.ai-plan-source.fallback {
+  color: #f1c878;
+  background: rgba(234, 196, 108, 0.14);
+}
+
+.ai-dashboard-actions .ai-personalize-button,
+.ai-dashboard-toolbar > div:first-child,
+.ai-dashboard-selector label,
+.ai-dashboard-filters label,
+.ai-dashboard-filter-group,
+.ai-composer-note {
+  color: var(--ixc-muted);
+}
+
+.ai-dashboard-data-warning,
+.ai-dashboard-provenance,
+.ai-dashboard-loading,
+.ai-dashboard-error,
+.ai-widget-empty,
+.ai-map-note {
+  color: var(--ixc-muted);
+  border-color: rgba(157, 190, 214, 0.14);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.ai-narrative-mark,
+.ai-alert-dot {
+  color: #f2a6e4;
+  background: var(--ixc-ai-soft);
+}
+
+.ai-composer-backdrop,
+.entity-modal-backdrop,
+.grouping-topology-backdrop,
+.investigation-modal-backdrop {
+  background: rgba(1, 10, 18, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.ai-composer-modal,
+.entity-modal,
+.grouping-detail-drawer,
+.investigation-drawer,
+.side-drawer {
+  color: var(--ixc-text);
+  border-color: var(--line);
+  background: linear-gradient(145deg, #102d47, #091d30);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
+}
+
+.ai-composer-modal > header,
+.entity-modal-header,
+.grouping-detail-header,
+.investigation-modal-header {
+  border-color: rgba(157, 190, 214, 0.14);
+}
+
+.ai-composer-modal h2,
+.entity-modal h2,
+.grouping-detail-drawer h2,
+.investigation-drawer h2 {
+  color: var(--ixc-text);
+}
+
+.app-footer {
+  color: #71849a;
+  border-top-color: rgba(157, 190, 214, 0.14);
+}
+
+.login-page {
+  padding: 32px;
+  background:
+    radial-gradient(
+      circle at 12% 8%,
+      rgba(94, 192, 237, 0.18),
+      transparent 27%
+    ),
+    radial-gradient(
+      circle at 88% 92%,
+      rgba(200, 79, 183, 0.12),
+      transparent 25%
+    ),
+    var(--ixc-canvas);
+}
+
+.login-shell {
+  border-color: rgba(157, 190, 214, 0.18);
+  background: var(--ixc-surface-1);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.38);
+}
+
+.login-intro {
+  background:
+    radial-gradient(
+      circle at 76% 28%,
+      rgba(94, 192, 237, 0.24),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 20% 110%,
+      rgba(200, 79, 183, 0.18),
+      transparent 34%
+    ),
+    linear-gradient(145deg, #061725 0%, #0b2941 62%, #123b58 140%);
+}
+
+.login-eyebrow {
+  color: #c8f0ff;
+  border-color: rgba(94, 192, 237, 0.35);
+  background: rgba(94, 192, 237, 0.12);
+}
+
+.login-intro h1,
+.login-heading h2 {
+  color: #f3f7fb;
+}
+
+.login-intro-copy p,
+.login-heading p,
+.login-disclaimer {
+  color: #9aafc1;
+}
+
+.login-intro-note {
+  color: #bfeeff;
+  border-color: rgba(157, 190, 214, 0.18);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.login-intro-note strong {
+  color: #f1faff;
+}
+
+.login-intro-note small {
+  color: #91a7ba;
+}
+
+.login-user-card {
+  color: var(--ixc-text);
+  border-color: rgba(157, 190, 214, 0.18);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.login-user-card:hover,
+.login-user-card:focus-visible,
+.login-user-card.selected {
+  border-color: rgba(94, 192, 237, 0.62);
+  background: rgba(94, 192, 237, 0.1);
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.2),
+    0 0 0 3px rgba(94, 192, 237, 0.1);
+}
+
+.login-avatar {
+  color: #d7f5ff;
+  background: rgba(94, 192, 237, 0.17);
+}
+
+.login-user-card.n1 .login-avatar,
+.sidebar-avatar.n1 {
+  color: #cfe0ff;
+  background: rgba(109, 145, 230, 0.2);
+}
+
+.login-user-card.noc .login-avatar,
+.sidebar-avatar.noc {
+  color: #ffd3ca;
+  background: rgba(239, 124, 111, 0.18);
+}
+
+.login-role,
+.login-user-card.n1 .login-role,
+.login-user-card.noc .login-role {
+  color: var(--ixc-accent);
+}
+
+.login-user-copy > small {
+  color: #8fa4b6;
+}
+
+.login-enter {
+  color: #9bb0c2;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.login-user-card:hover .login-enter,
+.login-user-card:focus-visible .login-enter {
+  color: #061725;
+  background: var(--ixc-accent);
+}
+
+.login-form label {
+  color: #b4c6d4;
+}
+
+.login-form input {
+  color: var(--ixc-text);
+  border-color: rgba(157, 190, 214, 0.22);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.login-form input:focus {
+  border-color: var(--ixc-accent);
+  outline: 3px solid rgba(94, 192, 237, 0.14);
+}
+
+.login-submit {
+  min-height: 46px;
+}
+
+.loading,
+.fatal-error {
+  color: var(--ixc-muted);
+}
+
+.loading span {
+  border-color: rgba(157, 190, 214, 0.2);
+  border-top-color: var(--ixc-accent);
+}
+
+@media (max-width: 860px) {
+  .app-content main {
+    padding: 30px 22px 58px;
+  }
+}
+
+@media (max-width: 520px) {
+  .login-page {
+    padding: 0;
+  }
+
+  .app-content main {
+    padding: 24px 15px 48px;
+  }
+}
+
 .n1-preflight {
   display: grid;
   gap: 16px;
@@ -11241,4 +11948,539 @@ h3 {
     width: 100%;
     white-space: normal;
   }
+}
+
+/* The legacy login block is declared after the feature styles above. Keep the
+ * reference theme as the final authority for this standalone surface too. */
+.login-page {
+  background:
+    radial-gradient(
+      circle at 12% 8%,
+      rgba(94, 192, 237, 0.18),
+      transparent 27%
+    ),
+    radial-gradient(
+      circle at 88% 92%,
+      rgba(200, 79, 183, 0.12),
+      transparent 25%
+    ),
+    var(--ixc-canvas) !important;
+}
+
+.login-shell {
+  border-color: rgba(157, 190, 214, 0.18) !important;
+  background: var(--ixc-surface-1) !important;
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.38) !important;
+}
+
+.login-intro {
+  background:
+    radial-gradient(
+      circle at 76% 28%,
+      rgba(94, 192, 237, 0.24),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 20% 110%,
+      rgba(200, 79, 183, 0.18),
+      transparent 34%
+    ),
+    linear-gradient(145deg, #061725 0%, #0b2941 62%, #123b58 140%) !important;
+}
+
+.login-panel {
+  background: var(--ixc-surface-1) !important;
+}
+
+.login-brand,
+.login-heading h2,
+.login-user-card,
+.login-user-copy > strong {
+  color: var(--ixc-text) !important;
+}
+
+.login-brand small,
+.login-intro-copy p,
+.login-heading p,
+.login-disclaimer,
+.login-user-copy > small {
+  color: #9aafc1 !important;
+}
+
+.login-eyebrow {
+  color: #c8f0ff !important;
+  border-color: rgba(94, 192, 237, 0.35) !important;
+  background: rgba(94, 192, 237, 0.12) !important;
+}
+
+.login-intro h1 {
+  color: #f3f7fb !important;
+}
+
+.login-intro-note {
+  color: #bfeeff !important;
+  border-color: rgba(157, 190, 214, 0.18) !important;
+  background: rgba(255, 255, 255, 0.055) !important;
+}
+
+.login-intro-note strong {
+  color: #f1faff !important;
+}
+
+.login-intro-note small {
+  color: #91a7ba !important;
+}
+
+.login-user-card {
+  border-color: rgba(157, 190, 214, 0.18) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+}
+
+.login-user-card:hover,
+.login-user-card:focus-visible,
+.login-user-card.selected {
+  border-color: rgba(94, 192, 237, 0.62) !important;
+  background: rgba(94, 192, 237, 0.1) !important;
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.2),
+    0 0 0 3px rgba(94, 192, 237, 0.1) !important;
+}
+
+.login-avatar {
+  color: #d7f5ff !important;
+  background: rgba(94, 192, 237, 0.17) !important;
+}
+
+.login-user-card.n1 .login-avatar,
+.sidebar-avatar.n1 {
+  color: #cfe0ff !important;
+  background: rgba(109, 145, 230, 0.2) !important;
+}
+
+.login-user-card.noc .login-avatar,
+.sidebar-avatar.noc {
+  color: #ffd3ca !important;
+  background: rgba(239, 124, 111, 0.18) !important;
+}
+
+.login-role,
+.login-user-card.n1 .login-role,
+.login-user-card.noc .login-role {
+  color: var(--ixc-accent) !important;
+}
+
+.login-enter {
+  color: #9bb0c2 !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.login-user-card:hover .login-enter,
+.login-user-card:focus-visible .login-enter {
+  color: #061725 !important;
+  background: var(--ixc-accent) !important;
+}
+
+.login-form label {
+  color: #b4c6d4 !important;
+}
+
+.login-form input {
+  color: var(--ixc-text) !important;
+  border-color: rgba(157, 190, 214, 0.22) !important;
+  background: rgba(255, 255, 255, 0.055) !important;
+}
+
+.login-form input:focus {
+  border-color: var(--ixc-accent) !important;
+  outline: 3px solid rgba(94, 192, 237, 0.14) !important;
+}
+
+.login-submit {
+  color: #061725 !important;
+  border-color: var(--ixc-accent) !important;
+  background: var(--ixc-accent) !important;
+}
+
+.login-submit:hover:not(:disabled),
+.login-submit:focus-visible:not(:disabled) {
+  color: #04131f !important;
+  background: #86d9fb !important;
+}
+
+/* High-density operational cards keep the same dark layered surface as the
+ * shell; these selectors cover the NOC and review grids that predate the
+ * visual system and still carry light legacy backgrounds. */
+.noc-operations,
+.noc-kanban-column,
+.noc-escalation-queue,
+.noc-incident-modal,
+.review-queue,
+.investigations-hero,
+.agent-config,
+.incident-card,
+.investigation-card,
+.active-grouping-card,
+.investigation-modal,
+.grouping-detail-modal {
+  color: var(--ixc-text) !important;
+  border-color: var(--line) !important;
+  background: linear-gradient(
+    145deg,
+    rgba(16, 43, 67, 0.96),
+    rgba(9, 29, 47, 0.98)
+  ) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18) !important;
+}
+
+.noc-operations-heading p,
+.investigations-hero p,
+.queue-summary,
+.agent-config span,
+.noc-kanban-column > header small,
+.noc-kanban-note,
+.operational-incident-title,
+.grouping-card-metadata,
+.investigation-card-copy small,
+.investigation-confidence span,
+.noc-incident-form > header p {
+  color: var(--ixc-muted) !important;
+}
+
+.noc-operations-heading h2,
+.investigations-hero h1,
+.noc-escalation-queue h3,
+.noc-incident-form h3,
+.noc-kanban-column > header strong,
+.incident-card h3,
+.investigation-card-copy h3,
+.active-grouping-card h3,
+.investigation-confidence strong {
+  color: var(--ixc-text) !important;
+}
+
+.noc-kanban-column > header > div > span,
+.noc-kanban-column > header > b {
+  color: #f0cd7e !important;
+  background: rgba(234, 196, 108, 0.14) !important;
+}
+
+.noc-kanban-column.in-progress > header > div > span,
+.noc-kanban-column.in-progress > header > b {
+  color: #7ce7ca !important;
+  background: rgba(94, 225, 189, 0.14) !important;
+}
+
+.noc-ticket-counter,
+.queue-summary button,
+.noc-refresh,
+.noc-open-incident,
+.noc-escalated-action,
+.noc-ticket-actions .close-ticket,
+.close-grouping {
+  color: #c8edff !important;
+  border-color: rgba(94, 192, 237, 0.3) !important;
+  background: rgba(94, 192, 237, 0.08) !important;
+}
+
+.noc-ticket-counter strong {
+  color: #e3f7ff !important;
+}
+
+.queue-summary strong,
+.agent-config.ready {
+  color: var(--ixc-accent) !important;
+}
+
+.agent-config.missing {
+  color: #ffaaa1 !important;
+}
+
+.noc-ticket-counter > span {
+  background: #ef7c6f !important;
+  box-shadow: 0 0 0 4px rgba(239, 124, 111, 0.14) !important;
+}
+
+.noc-open-incident,
+.noc-create-incident {
+  color: #061725 !important;
+  border-color: var(--ixc-accent) !important;
+  background: var(--ixc-accent) !important;
+}
+
+.noc-column-empty {
+  color: var(--ixc-muted) !important;
+  border-color: rgba(157, 190, 214, 0.24) !important;
+  background: rgba(255, 255, 255, 0.035) !important;
+}
+
+.noc-column-empty strong {
+  color: #d8edf8 !important;
+}
+
+.investigation-card.pending_review,
+.active-grouping-card.high {
+  border-left-color: #eac46c !important;
+}
+
+.investigation-card.approved,
+.active-grouping-card.low {
+  border-left-color: #5ee1bd !important;
+}
+
+.investigation-card.failed,
+.investigation-card.rejected,
+.active-grouping-card.critical {
+  border-left-color: #ef7c6f !important;
+}
+
+.investigation-card-preview,
+.incident-stats,
+.grouping-detail-overview,
+.grouping-detail-analysis,
+.grouping-detail-evidence {
+  color: var(--ixc-text) !important;
+  border-color: rgba(157, 190, 214, 0.14) !important;
+  background: rgba(255, 255, 255, 0.055) !important;
+}
+
+.investigation-card-preview > div > span,
+.investigation-card-preview > div > strong,
+.investigation-card-preview p,
+.investigation-card-objective,
+.incident-stats span,
+.grouping-detail-scope-value,
+.grouping-detail-owner-value {
+  color: var(--ixc-muted) !important;
+}
+
+.investigation-card-preview > div > strong,
+.grouping-detail-scope-value,
+.grouping-detail-owner-value {
+  color: #e3f4fc !important;
+}
+
+.investigation-card-preview p {
+  border-top-color: rgba(157, 190, 214, 0.14) !important;
+}
+
+.investigation-tags > span,
+.investigation-status,
+.active-grouping-severity {
+  color: #c9e7f4 !important;
+  background: rgba(94, 192, 237, 0.12) !important;
+}
+
+.investigation-status.pending_review,
+.active-grouping-severity.high,
+.active-grouping-severity.medium {
+  color: #f2d28b !important;
+  background: rgba(234, 196, 108, 0.14) !important;
+}
+
+.investigation-status.approved,
+.active-grouping-severity.low {
+  color: #91efd4 !important;
+  background: rgba(94, 225, 189, 0.14) !important;
+}
+
+.investigation-status.failed,
+.investigation-status.rejected,
+.active-grouping-severity.critical {
+  color: #ffb4aa !important;
+  background: rgba(239, 124, 111, 0.14) !important;
+}
+
+.scope-icon {
+  color: var(--ixc-accent) !important;
+  background: var(--ixc-accent-soft) !important;
+}
+
+.grouping-scope-segment {
+  color: #cfeaf6 !important;
+  background: rgba(94, 192, 237, 0.12) !important;
+}
+
+.grouping-scope-separator {
+  color: #7891a6 !important;
+}
+
+.investigation-card-open > footer,
+.active-grouping-card-open > footer {
+  color: var(--ixc-accent) !important;
+}
+
+/* Directories and tables are the second major visual family in the product. */
+.tickets-directory,
+.diagnostics-directory,
+.inventory-panel,
+.inventory-olts,
+.customers-directory,
+.customers-hero,
+.diagnostics-hero,
+.support-result,
+.support-layout,
+.customer-strip,
+.diagnosis-card,
+.signals-panel {
+  color: var(--ixc-text) !important;
+  border-color: var(--line) !important;
+  background: linear-gradient(
+    145deg,
+    rgba(16, 43, 67, 0.96),
+    rgba(9, 29, 47, 0.98)
+  ) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18) !important;
+}
+
+.inventory-olt-card {
+  color: var(--ixc-text) !important;
+  border-color: var(--line) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+}
+
+.tickets-directory-heading h2,
+.diagnostics-directory-heading h2,
+.inventory-olts-heading h2,
+.customers-hero h1,
+.diagnostics-hero h1,
+.customers-directory h2,
+.diagnostics-directory h2 {
+  color: var(--ixc-text) !important;
+}
+
+.tickets-directory-heading > span,
+.diagnostics-directory-heading > span,
+.customers-hero p,
+.diagnostics-hero p,
+.customers-source-note,
+.customers-status,
+.inventory-olts-note,
+.inventory-status,
+.column-filter-field,
+.ticket-channel,
+.tickets-table small,
+.tickets-pagination,
+.diagnostics-pagination,
+.customers-pagination {
+  color: var(--ixc-muted) !important;
+}
+
+.tickets-search,
+.diagnostics-search,
+.inventory-search,
+.customers-search,
+.inventory-filter-input-row,
+.directory-advanced-controls,
+.column-filter-grid,
+.inventory-toolbar,
+.customers-toolbar {
+  color: var(--ixc-text);
+}
+
+.tickets-table-wrap,
+.diagnostics-table-wrap,
+.inventory-table-wrap,
+.customers-table-wrap,
+.tickets-pagination,
+.diagnostics-pagination,
+.customers-pagination {
+  border-color: rgba(157, 190, 214, 0.14) !important;
+}
+
+.inventory-filter-input-row {
+  border-color: rgba(157, 190, 214, 0.2) !important;
+  background: rgba(255, 255, 255, 0.055) !important;
+}
+
+.inventory-filter-combobox input {
+  color: #dcecf7 !important;
+}
+
+.app-content table th {
+  color: #8fa9bc !important;
+  border-color: rgba(157, 190, 214, 0.12) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+}
+
+.app-content table td {
+  color: #cfe0eb !important;
+  border-color: rgba(157, 190, 214, 0.12) !important;
+}
+
+.app-content table td > strong,
+.app-content table td > p,
+.app-content table td > span,
+.ticket-id-action > strong,
+.ticket-customer,
+.inventory-code,
+.customer-location-cell,
+.customer-name-cell strong {
+  color: #e0f0f8 !important;
+}
+
+.app-content table td > small,
+.tickets-table p,
+.ticket-channel,
+.inventory-table small,
+.customers-table small {
+  color: var(--ixc-muted) !important;
+}
+
+.app-content table tbody tr:hover td,
+.ticket-row-noc:hover td {
+  background: rgba(94, 192, 237, 0.06) !important;
+}
+
+.ticket-category,
+.ticket-source-n1,
+.ticket-noc-badge,
+.ticket-incident-link,
+.inventory-status-chip,
+.customer-status,
+.diagnostic-status {
+  border-color: transparent !important;
+  color: #c9edfa !important;
+  background: rgba(94, 192, 237, 0.13) !important;
+}
+
+.ticket-noc-badge {
+  color: #ffb4aa !important;
+  background: rgba(239, 124, 111, 0.14) !important;
+}
+
+.ticket-row-noc td:first-child {
+  border-left-color: #ef7c6f !important;
+}
+
+.date-range-trigger,
+.date-range-popover,
+.inventory-filter-options,
+.customers-status,
+.inventory-status {
+  color: #dcecf7 !important;
+  border-color: rgba(157, 190, 214, 0.2) !important;
+  background: var(--ixc-surface-2) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28) !important;
+}
+
+.date-range-shortcuts,
+.date-range-calendar,
+.date-range-days button,
+.date-range-calendar header button {
+  color: #cfe0eb !important;
+  background: transparent !important;
+}
+
+.date-range-shortcuts {
+  border-color: rgba(157, 190, 214, 0.14) !important;
+}
+
+.date-range-shortcuts button:hover,
+.date-range-shortcuts button:focus-visible,
+.date-range-calendar header button:hover,
+.date-range-calendar header button:focus-visible,
+.date-range-days button:hover,
+.date-range-days button:focus-visible {
+  color: #e8f8ff !important;
+  background: rgba(94, 192, 237, 0.14) !important;
 }

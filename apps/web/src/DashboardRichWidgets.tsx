@@ -26,7 +26,13 @@ import { DateRangeFilter, type DateRange } from "./DateRangeFilter";
 import { SortableHeader } from "./SortableHeader";
 
 const number = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
-const colors = ["#087f78", "#e0a33b", "#d85d2d", "#547d93", "#7f6bb2"];
+const colors = [
+  "var(--ixc-accent)",
+  "#c84fb7",
+  "#ef7c6f",
+  "#7fadd1",
+  "#8e7be0",
+];
 
 type Drilldown = (drilldown: DashboardDrilldown) => void;
 
@@ -160,7 +166,7 @@ export function BarWidget({
           <BarChart data={values} margin={{ top: 10, right: 8, left: -24 }}>
             <CartesianGrid
               vertical={false}
-              stroke="#dbe5e8"
+              stroke="var(--ixc-grid)"
               strokeDasharray="4 4"
             />
             <XAxis dataKey="name" tickLine={false} axisLine={false} />
@@ -169,7 +175,7 @@ export function BarWidget({
             <Bar
               dataKey="value"
               name="Quantidade"
-              fill="#087f78"
+              fill="var(--ixc-accent)"
               radius={[7, 7, 0, 0]}
             />
           </BarChart>
@@ -270,7 +276,7 @@ export function MultiSeriesWidget({
           >
             <CartesianGrid
               vertical={false}
-              stroke="#dbe5e8"
+              stroke="var(--ixc-grid)"
               strokeDasharray="4 4"
             />
             <XAxis dataKey="week" tickLine={false} axisLine={false} />

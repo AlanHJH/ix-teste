@@ -375,13 +375,21 @@ function TimeseriesWidget({
                 x2="0"
                 y2="1"
               >
-                <stop offset="0%" stopColor="#0d9488" stopOpacity={0.32} />
-                <stop offset="100%" stopColor="#0d9488" stopOpacity={0.02} />
+                <stop
+                  offset="0%"
+                  stopColor="var(--ixc-accent)"
+                  stopOpacity={0.32}
+                />
+                <stop
+                  offset="100%"
+                  stopColor="var(--ixc-accent)"
+                  stopOpacity={0.02}
+                />
               </linearGradient>
             </defs>
             <CartesianGrid
               vertical={false}
-              stroke="#dbe5e8"
+              stroke="var(--ixc-grid)"
               strokeDasharray="4 4"
             />
             <XAxis dataKey="week" tickLine={false} axisLine={false} />
@@ -390,7 +398,7 @@ function TimeseriesWidget({
               contentStyle={{
                 border: "0",
                 borderRadius: 12,
-                boxShadow: "0 10px 30px rgba(7,29,43,.15)",
+                boxShadow: "0 18px 42px rgba(0,0,0,.28)",
               }}
               labelFormatter={(label) => `Semana de ${label}`}
             />
@@ -398,10 +406,10 @@ function TimeseriesWidget({
               type="monotone"
               dataKey="total"
               name="Chamados"
-              stroke="#087f78"
+              stroke="var(--ixc-accent)"
               strokeWidth={3}
               fill={`url(#ai-${widget.id})`}
-              dot={{ r: 3, fill: "#fff", strokeWidth: 2 }}
+              dot={{ r: 3, fill: "var(--ixc-surface-1)", strokeWidth: 2 }}
             />
           </AreaChart>
         </ResponsiveContainer>
