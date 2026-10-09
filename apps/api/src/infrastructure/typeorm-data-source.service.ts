@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import { DataSource } from "typeorm";
+import { DashboardDefinitionEntity } from "../dashboard/infrastructure/typeorm/dashboard-definition.entity";
 import { DashboardPreferenceEntity } from "../dashboard/infrastructure/typeorm/dashboard-preference.entity";
 
 const defaultDatabaseUrl =
@@ -18,7 +19,7 @@ export class TypeOrmDataSourceService implements OnModuleDestroy {
   private readonly dataSource = new DataSource({
     type: "postgres",
     url: process.env.DATABASE_URL ?? defaultDatabaseUrl,
-    entities: [DashboardPreferenceEntity],
+    entities: [DashboardPreferenceEntity, DashboardDefinitionEntity],
     synchronize: false,
     logging: false,
     extra: {

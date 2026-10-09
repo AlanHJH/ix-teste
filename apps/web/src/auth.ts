@@ -4,10 +4,12 @@ export type AppView =
   | "dashboard"
   | "noc"
   | "support"
+  | "offline-diagnosis"
   | "tickets"
   | "diagnostics"
   | "topology"
   | "inventory"
+  | "customers"
   | "agent-config";
 
 export type DemoUser = {
@@ -51,14 +53,32 @@ const viewsByRole: Record<UserRole, readonly AppView[]> = {
     "dashboard",
     "noc",
     "support",
+    "offline-diagnosis",
     "agent-config",
     "tickets",
     "diagnostics",
     "topology",
     "inventory",
+    "customers",
   ],
-  n1: ["support", "tickets", "diagnostics", "inventory"],
-  noc: ["dashboard", "noc", "tickets", "diagnostics", "topology", "inventory"],
+  n1: [
+    "support",
+    "offline-diagnosis",
+    "tickets",
+    "diagnostics",
+    "inventory",
+    "customers",
+  ],
+  noc: [
+    "dashboard",
+    "noc",
+    "offline-diagnosis",
+    "tickets",
+    "diagnostics",
+    "topology",
+    "inventory",
+    "customers",
+  ],
 };
 
 const defaultViewByRole: Record<UserRole, AppView> = {

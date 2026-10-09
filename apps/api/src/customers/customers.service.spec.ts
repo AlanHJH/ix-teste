@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { incidentMatchesEquipment } from "./customers.service";
+import {
+  incidentMatchesEquipment,
+  CustomersService,
+} from "./customers.service";
 
 const equipment = {
   serial: "KSTL-001",
@@ -113,5 +116,62 @@ describe("incidentMatchesEquipment", () => {
         `o escopo ${scope.type} deveria alcançar o cliente`,
       );
     }
+  });
+});
+
+describe("CustomersService.offlineAlerts", () => {
+  it("prioriza o último sinal e preserva o contexto para o diagnóstico", async () => {
+    const service = new CustomersService({
+      query: async (sql: string) => {
+        if (sql.includes("count(*)")) return { rows: [{ total: 1 }] } as never;
+        return {
+          rows: [
+            {
+              customer_id: "C198410",
+              serial: "TUIM03210A02",
+              vendor: "Tuim",
+              model: "TW-AC12",
+              city: "Serra Alta",
+              neighborhood: "Jardim Aurora",
+              olt: "OLT-2",
+              pon_port: "1/8",
+              cto: "CTO-2-18-03",
+              ticket_id: "TN1-F3187553",
+              opened_at: "2026-10-07T01:05:34.000Z",
+              description: "Cliente sem acesso.",
+              resolution: "Escalado para NOC",
+              closed_at: "2026-10-07T01:05:34.000Z",
+              noc_status: "closed",
+              alert_status: "in_noc",
+            },
+          ],
+        } as never;
+      },
+    });
+
+    const response = await service.offlineAlerts(1, 8, "alert_desc");
+    assert.deepEqual(response, {
+      data: [
+        {
+          customer_id: "C198410",
+          serial: "TUIM03210A02",
+          vendor: "Tuim",
+          model: "TW-AC12",
+          city: "Serra Alta",
+          neighborhood: "Jardim Aurora",
+          network: "OLT-2 · PON 1/8 · CTO-2-18-03",
+          ticket_id: "TN1-F3187553",
+          reported_at: "2026-10-07T01:05:34.000Z",
+          description: "Cliente sem acesso.",
+          resolution: "Escalado para NOC",
+          alert_status: "in_noc",
+          confirmed_offline: false,
+        },
+      ],
+      page: 1,
+      pageSize: 8,
+      totalItems: 1,
+      totalPages: 1,
+    });
   });
 });

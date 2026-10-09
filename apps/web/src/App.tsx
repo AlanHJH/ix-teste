@@ -39,11 +39,14 @@ import { providerGlossary, TechnicalText } from "./ProviderGlossary";
 import { InventoryDirectory } from "./InventoryDirectory";
 import { TopologyMap } from "./TopologyMap";
 import { SupportTickets } from "./SupportTickets";
+import { TicketWorkspacePage } from "./TicketWorkspacePage";
 import { DiagnosticsDirectory } from "./DiagnosticsDirectory";
 import { NocOperations } from "./NocOperations";
 import { AgentConfiguration } from "./AgentConfiguration";
 import { N1AdvisorChat } from "./N1AdvisorChat";
 import { DynamicDashboard } from "./DynamicDashboard";
+import { OfflineDiagnosis } from "./OfflineDiagnosis";
+import { CustomersDirectory } from "./CustomersDirectory";
 import { n1GuidanceEnabled, useAgentPolicy } from "./agentPolicy";
 import {
   canAccessView,
@@ -54,7 +57,12 @@ import {
   saveSession,
 } from "./auth";
 import type { AppView, DemoUser } from "./auth";
-import type { Overview, SupportProfile, TicketFilter } from "./types";
+import type {
+  Overview,
+  SupportProfile,
+  SupportTicket,
+  TicketFilter,
+} from "./types";
 
 const number = new Intl.NumberFormat("pt-BR");
 const money = new Intl.NumberFormat("pt-BR", {
@@ -271,6 +279,17 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
     return "Lentidão";
   }
 
+  function historyStatusLabel(
+    status: SupportProfile["problemHistory"][number]["status"],
+  ) {
+    return {
+      open: "Aberto",
+      mitigating: "Em mitigação",
+      monitoring: "Em observação",
+      resolved: "Resolvido",
+    }[status];
+  }
+
   async function load(customerId: string) {
     setLoading(true);
     setError("");
@@ -421,6 +440,99 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
               </small>
             </div>
           </div>
+          <section
+            className="n1-preflight"
+            aria-labelledby="n1-preflight-title"
+          >
+            <header className="n1-preflight-header">
+              <div>
+                <span className="section-label">Análise antes do chamado</span>
+                <h2 id="n1-preflight-title">Contexto de rede verificado</h2>
+                <p>
+                  A orientação combina o caminho da infraestrutura, as medições
+                  recentes e o histórico de problemas alcançáveis pelo cliente.
+                </p>
+              </div>
+              <span className="n1-preflight-ready">
+                <CheckCircle2 size={15} /> Análise pronta
+              </span>
+            </header>
+            <div className="n1-preflight-checks">
+              <article>
+                <span>Infraestrutura</span>
+                <strong>Conferida</strong>
+                <small>{profile.equipment.network}</small>
+              </article>
+              <article>
+                <span>Histórico do NOC</span>
+                <strong>
+                  {profile.preflight.relatedHistoryFound
+                    ? `${profile.problemHistory.length} problema(s) relacionado(s)`
+                    : "Nenhum relacionado"}
+                </strong>
+                <small>
+                  {profile.activeIncidents.length > 0
+                    ? `${profile.activeIncidents.length} ativo(s) alcançam este cliente`
+                    : "Consulta concluída no histórico operacional"}
+                </small>
+              </article>
+              <article>
+                <span>Medições</span>
+                <strong>
+                  {profile.preflight.measurementStatus === "related_history"
+                    ? "Compatíveis com histórico"
+                    : profile.preflight.measurementStatus === "new_signal"
+                      ? "Novo sinal identificado"
+                      : "Sem sinal conclusivo"}
+                </strong>
+                <small>
+                  <TechnicalText text={profile.decision.issue} />
+                </small>
+              </article>
+            </div>
+            <div className="n1-preflight-guidance">
+              <div className="n1-preflight-advice">
+                <span>Principal dica para o cliente</span>
+                <p>“{profile.preflight.mainAdvice}”</p>
+              </div>
+              <div className="n1-preflight-escalation">
+                <span>Próximo destino</span>
+                <strong>
+                  {profile.preflight.escalation.required
+                    ? "Encaminhar para o NOC"
+                    : "Acompanhar no N1"}
+                </strong>
+                <small>{profile.preflight.escalation.reason}</small>
+              </div>
+            </div>
+            {profile.preflight.measurementStatus === "new_signal" &&
+              !profile.preflight.relatedHistoryFound && (
+                <p className="n1-preflight-new-signal">
+                  Nenhum problema relacionado foi encontrado no histórico. As
+                  medições geraram um novo sinal para ser enviado ao NOC junto
+                  com este chamado, caso o atendente mantenha o escalonamento.
+                </p>
+              )}
+            {profile.problemHistory.length > 0 && (
+              <div className="n1-preflight-history">
+                <span>Problemas relacionados encontrados</span>
+                <div>
+                  {profile.problemHistory.slice(0, 3).map((problem) => (
+                    <article key={problem.incidentId}>
+                      <strong>{problem.incidentId}</strong>
+                      <span>
+                        <TechnicalText text={problem.title} />
+                      </span>
+                      <small>
+                        {historyStatusLabel(problem.status)} ·{" "}
+                        {new Date(problem.openedAt).toLocaleDateString("pt-BR")}
+                      </small>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
           <div className="support-layout">
             <article className={`diagnosis-card ${profile.decision.action}`}>
               <header>
@@ -769,12 +881,16 @@ function OperationsApp({
   const [view, setView] = useState<View>(() => defaultViewFor(user.role));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [supportCustomer, setSupportCustomer] = useState<string>();
+  const [offlineCustomer, setOfflineCustomer] = useState<string>();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [nocTicketCount, setNocTicketCount] = useState(0);
   const [ticketPreset, setTicketPreset] = useState<{
     key: number;
     filters: TicketFilter[];
   } | null>(null);
+  const [ticketWorkspace, setTicketWorkspace] = useState<SupportTicket | null>(
+    null,
+  );
   const [error, setError] = useState("");
   useEffect(() => {
     api
@@ -826,6 +942,7 @@ function OperationsApp({
   }
   function navigate(nextView: View) {
     if (!canAccessView(user.role, nextView)) return;
+    setTicketWorkspace(null);
     setView(nextView);
     setSidebarOpen(false);
   }
@@ -949,6 +1066,16 @@ function OperationsApp({
               Equipamentos
             </button>
           )}
+          {canAccessView(user.role, "customers") && (
+            <button
+              className={view === "customers" ? "active" : ""}
+              aria-current={view === "customers" ? "page" : undefined}
+              onClick={() => navigate("customers")}
+            >
+              <Users size={17} />
+              Clientes
+            </button>
+          )}
         </nav>
         <div className="sidebar-user">
           <span className={`sidebar-avatar ${user.role}`}>{user.initials}</span>
@@ -1006,24 +1133,61 @@ function OperationsApp({
                 navigate("support");
               }}
             />
-          ) : view === "agent-config" ? (
-            <AgentConfiguration />
-          ) : view === "topology" ? (
-            <TopologyMap />
-          ) : view === "tickets" ? (
-            <SupportTickets
-              canManageNoc={canAccessView(user.role, "noc")}
-              preset={ticketPreset}
-              onNocQueueChanged={refreshNocTicketCount}
+          ) : view === "customers" ? (
+            <CustomersDirectory
+              canOpenSupport={canAccessView(user.role, "support")}
               onOpenSupport={(customerId) => {
                 setSupportCustomer(customerId);
                 navigate("support");
               }}
             />
+          ) : view === "agent-config" ? (
+            <AgentConfiguration />
+          ) : view === "topology" ? (
+            <TopologyMap />
+          ) : view === "tickets" ? (
+            ticketWorkspace ? (
+              <TicketWorkspacePage
+                ticket={ticketWorkspace}
+                canManageNoc={canAccessView(user.role, "noc")}
+                onBack={() => setTicketWorkspace(null)}
+                onOpenTicket={setTicketWorkspace}
+                onNocQueueChanged={refreshNocTicketCount}
+              />
+            ) : (
+              <SupportTickets
+                preset={ticketPreset}
+                onOpenTicket={setTicketWorkspace}
+                onOpenSupport={(customerId) => {
+                  setSupportCustomer(customerId);
+                  navigate("support");
+                }}
+              />
+            )
           ) : view === "diagnostics" ? (
             <DiagnosticsDirectory />
           ) : view === "support" ? (
             <SupportDesk initialCustomer={supportCustomer} />
+          ) : view === "offline-diagnosis" ? (
+            <OfflineDiagnosis
+              customerId={offlineCustomer}
+              backLabel={
+                canAccessView(user.role, "dashboard")
+                  ? "Voltar ao dashboard"
+                  : "Voltar ao atendimento N1"
+              }
+              onBack={() =>
+                navigate(
+                  canAccessView(user.role, "dashboard")
+                    ? "dashboard"
+                    : defaultViewFor(user.role),
+                )
+              }
+              onOpenSupport={(customerId) => {
+                setSupportCustomer(customerId);
+                navigate("support");
+              }}
+            />
           ) : error ? (
             <div className="fatal-error">
               <AlertTriangle />
@@ -1038,6 +1202,10 @@ function OperationsApp({
             <DynamicDashboard
               initialOverview={overview}
               userId={user.id}
+              onOpenOfflineDiagnosis={(customerId) => {
+                setOfflineCustomer(customerId);
+                navigate("offline-diagnosis");
+              }}
               fallback={<ExecutiveDashboard overview={overview} />}
             />
           ) : (

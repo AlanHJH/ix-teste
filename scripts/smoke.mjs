@@ -102,6 +102,19 @@ const inventory = await getJson(
 expectPage(inventory, "inventário");
 expect(inventory.data.length > 0, "inventário vazio");
 
+const offlineAlerts = await getJson(
+  "/api/customers/offline-alerts?page=1&pageSize=2&sort=alert_desc",
+);
+expectPage(offlineAlerts, "alertas de sem conexão");
+if (offlineAlerts.data.length > 0) {
+  expect(
+    typeof offlineAlerts.data[0].customer_id === "string" &&
+      typeof offlineAlerts.data[0].network === "string" &&
+      offlineAlerts.data[0].confirmed_offline === false,
+    "alertas de sem conexão sem o contrato de sinal não confirmado",
+  );
+}
+
 const dailyMetrics = await getJson(
   "/api/telemetry/daily-metrics?page=1&pageSize=2&sort=day_desc",
 );
@@ -122,6 +135,14 @@ expect(
   catalog.mcp?.endpoints?.length === 8 &&
     catalog.mcp.endpoints.some((endpoint) => endpoint.path === "/mcp/openapi"),
   "catálogo MCP não contém os oito domínios e o bridge OpenAPI",
+);
+
+const dashboardLibrary = await getJson("/api/dashboard/dashboards/smoke-user");
+expect(
+  Array.isArray(dashboardLibrary.data) &&
+    (dashboardLibrary.defaultDashboardId === null ||
+      typeof dashboardLibrary.defaultDashboardId === "string"),
+  "catálogo de dashboards sem contrato válido",
 );
 
 console.log(

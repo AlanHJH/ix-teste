@@ -1,8 +1,15 @@
-import { BadRequestException, Inject, Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import OpenAI from "openai";
 import { OpenApiCatalogService } from "../openapi-catalog.service";
 import {
   DASHBOARD_REPOSITORY,
+  DashboardDefinitionInput,
   DashboardRepository,
 } from "./application/dashboard-repository";
 import { PostgresDashboardRepository } from "./infrastructure/postgres-dashboard.repository";
@@ -66,6 +73,13 @@ type ComposeInput = {
   targetWidgetId?: unknown;
 };
 
+type DashboardDefinitionInputValue = {
+  name?: unknown;
+  description?: unknown;
+  composition?: unknown;
+  isDefault?: unknown;
+};
+
 @Injectable()
 export class DashboardService {
   private readonly apiKey = process.env.OPENAI_API_KEY?.trim();
@@ -117,6 +131,81 @@ export class DashboardService {
       composition,
       updatedAt: new Date(result.updated_at).toISOString(),
     };
+  }
+
+  async listDashboards(userId: string) {
+    const normalizedUserId = this.validateUserId(userId);
+    const rows = await this.repository.listDashboards(normalizedUserId);
+    const dashboards = rows.map((row) => {
+      const { composition: _composition, ...summary } =
+        this.presentDefinition(row);
+      return summary;
+    });
+    return {
+      data: dashboards,
+      defaultDashboardId:
+        dashboards.find((dashboard) => dashboard.isDefault)?.dashboardId ??
+        dashboards[0]?.dashboardId ??
+        null,
+    };
+  }
+
+  async getDashboard(userId: string, dashboardId: string) {
+    const normalizedUserId = this.validateUserId(userId);
+    const normalizedDashboardId = this.validateDashboardId(dashboardId);
+    const row = await this.repository.getDashboard(
+      normalizedUserId,
+      normalizedDashboardId,
+    );
+    if (!row) throw new NotFoundException("Dashboard não encontrado.");
+    return this.presentDefinition(row);
+  }
+
+  async createDashboard(userId: string, value: unknown) {
+    const normalizedUserId = this.validateUserId(userId);
+    const input = this.validateDefinitionInput(value);
+    const existing = await this.repository.listDashboards(normalizedUserId);
+    const row = await this.repository.createDashboard(normalizedUserId, {
+      ...input,
+      name: this.uniqueName(input.name, existing),
+      dashboard_id: `dash-${randomUUID()}`,
+      is_default: input.is_default ?? existing.length === 0,
+    });
+    return this.presentDefinition(row);
+  }
+
+  async saveDashboard(userId: string, dashboardId: string, value: unknown) {
+    const normalizedUserId = this.validateUserId(userId);
+    const normalizedDashboardId = this.validateDashboardId(dashboardId);
+    const input = this.validateDefinitionInput(value);
+    const existing = await this.repository.getDashboard(
+      normalizedUserId,
+      normalizedDashboardId,
+    );
+    if (!existing) throw new NotFoundException("Dashboard não encontrado.");
+    const siblings = await this.repository.listDashboards(normalizedUserId);
+    const row = await this.repository.saveDashboard(
+      normalizedUserId,
+      normalizedDashboardId,
+      {
+        ...input,
+        name: this.uniqueName(input.name, siblings, normalizedDashboardId),
+        is_default: input.is_default ?? existing.is_default,
+      },
+    );
+    if (!row) throw new NotFoundException("Dashboard não encontrado.");
+    return this.presentDefinition(row);
+  }
+
+  async setDefaultDashboard(userId: string, dashboardId: string) {
+    const normalizedUserId = this.validateUserId(userId);
+    const normalizedDashboardId = this.validateDashboardId(dashboardId);
+    const row = await this.repository.setDefaultDashboard(
+      normalizedUserId,
+      normalizedDashboardId,
+    );
+    if (!row) throw new NotFoundException("Dashboard não encontrado.");
+    return this.presentDefinition(row);
   }
 
   async compose(input: ComposeInput): Promise<DashboardComposition> {
@@ -247,6 +336,94 @@ export class DashboardService {
       throw new BadRequestException("Usuário inválido para o dashboard.");
     }
     return normalized;
+  }
+
+  private validateDashboardId(dashboardId: string) {
+    const normalized = dashboardId.trim().toLocaleLowerCase("pt-BR");
+    if (!/^[a-z0-9][a-z0-9-]{1,127}$/.test(normalized)) {
+      throw new BadRequestException("Dashboard inválido.");
+    }
+    return normalized;
+  }
+
+  private validateDefinitionInput(value: unknown): DashboardDefinitionInput {
+    const input = (value ?? {}) as DashboardDefinitionInputValue;
+    const name = typeof input.name === "string" ? input.name.trim() : "";
+    const description =
+      typeof input.description === "string" ? input.description.trim() : "";
+    if (name.length < 2 || name.length > 100) {
+      throw new BadRequestException(
+        "O nome do dashboard deve ter entre 2 e 100 caracteres.",
+      );
+    }
+    if (description.length > 240) {
+      throw new BadRequestException(
+        "A descrição do dashboard deve ter no máximo 240 caracteres.",
+      );
+    }
+    let composition: DashboardComposition;
+    try {
+      composition = this.withCurrentDiscovery(
+        validateDashboardComposition(input.composition),
+      );
+    } catch {
+      throw new BadRequestException(
+        "A configuração enviada para o dashboard é inválida.",
+      );
+    }
+    if (input.isDefault !== undefined && typeof input.isDefault !== "boolean") {
+      throw new BadRequestException(
+        "O indicador de dashboard padrão é inválido.",
+      );
+    }
+    return {
+      name,
+      description,
+      composition,
+      ...(input.isDefault !== undefined ? { is_default: input.isDefault } : {}),
+    };
+  }
+
+  private uniqueName(
+    name: string,
+    existing: Array<{ dashboard_id: string; name: string }>,
+    currentDashboardId?: string,
+  ) {
+    const taken = new Set(
+      existing
+        .filter((row) => row.dashboard_id !== currentDashboardId)
+        .map((row) => row.name.toLocaleLowerCase("pt-BR")),
+    );
+    if (!taken.has(name.toLocaleLowerCase("pt-BR"))) return name;
+    for (let suffix = 2; suffix < 100; suffix += 1) {
+      const candidate = `${name.slice(0, 96 - String(suffix).length)} (${suffix})`;
+      if (!taken.has(candidate.toLocaleLowerCase("pt-BR"))) return candidate;
+    }
+    return `${name.slice(0, 91)} (novo)`;
+  }
+
+  private presentDefinition(row: {
+    dashboard_id: string;
+    user_id: string;
+    name: string;
+    description: string;
+    is_default: boolean;
+    composition: unknown;
+    created_at: Date | string;
+    updated_at: Date | string;
+  }) {
+    return {
+      dashboardId: row.dashboard_id,
+      userId: row.user_id,
+      name: row.name,
+      description: row.description,
+      isDefault: row.is_default,
+      composition: this.withCurrentDiscovery(
+        validateDashboardComposition(row.composition),
+      ),
+      createdAt: new Date(row.created_at).toISOString(),
+      updatedAt: new Date(row.updated_at).toISOString(),
+    };
   }
 
   private withCurrentDiscovery(

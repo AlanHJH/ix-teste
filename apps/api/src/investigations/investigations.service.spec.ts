@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { DatabaseService } from "../database";
 import { IncidentsService } from "../incidents/incidents.service";
-import { InvestigationsService } from "./investigations.service";
+import {
+  automaticGroupingMinConfidence,
+  InvestigationsService,
+  shouldAutomaticallyCreateGrouping,
+} from "./investigations.service";
 import { OpenAIInvestigationAgent } from "./openai-investigation-agent";
 
 const finding = {
@@ -89,5 +93,103 @@ describe("InvestigationsService.review", () => {
     });
     assert.equal(queries[1].params[5], 62);
     assert.match(queries[1].text, /finding->>'confidence'/);
+  });
+});
+
+describe("modo de autoagrupamento", () => {
+  it("só libera o disparo de métricas acima do limiar configurado", () => {
+    assert.equal(
+      shouldAutomaticallyCreateGrouping("metric", finding, {
+        AGENT_AUTO_APPROVE_GROUPINGS: "true",
+        AGENT_AUTO_APPROVE_MIN_CONFIDENCE: "0.9",
+      }),
+      true,
+    );
+    assert.equal(
+      shouldAutomaticallyCreateGrouping(
+        "metric",
+        { ...finding, confidence: 0.89 },
+        {
+          AGENT_AUTO_APPROVE_GROUPINGS: "true",
+          AGENT_AUTO_APPROVE_MIN_CONFIDENCE: "0.9",
+        },
+      ),
+      false,
+    );
+    assert.equal(
+      shouldAutomaticallyCreateGrouping("schedule", finding, {
+        AGENT_AUTO_APPROVE_GROUPINGS: "true",
+        AGENT_AUTO_APPROVE_MIN_CONFIDENCE: "0.9",
+      }),
+      false,
+    );
+  });
+
+  it("mantém o limiar padrão e limita valores inválidos", () => {
+    assert.equal(automaticGroupingMinConfidence({}), 0.9);
+    assert.equal(
+      automaticGroupingMinConfidence({
+        AGENT_AUTO_APPROVE_MIN_CONFIDENCE: "1.4",
+      }),
+      1,
+    );
+    assert.equal(
+      automaticGroupingMinConfidence({
+        AGENT_AUTO_APPROVE_MIN_CONFIDENCE: "-0.2",
+      }),
+      0,
+    );
+  });
+});
+
+describe("InvestigationsService.triggerIncident", () => {
+  it("reutiliza a investigação já vinculada ao problema", async () => {
+    const queries: Array<{ text: string; params: unknown[] }> = [];
+    const database = {
+      async query(text: string, params: unknown[] = []) {
+        queries.push({ text, params });
+        if (text.includes("FROM operational_incidents")) {
+          return {
+            rows: [
+              {
+                incident_id: "INC-FEC-001",
+                investigation_id: "INV-FEC-001",
+                category: "optical_degradation",
+                severity: "high",
+                title: "Erros FEC elevados na CTO-2-18-03",
+                scope: { type: "cto", identifier: "CTO-2-18-03" },
+                affected_cpes: 11,
+                probable_cause: "Possível degradação óptica.",
+                recommended_action: "Validar o trecho compartilhado.",
+              },
+            ],
+          };
+        }
+        return {
+          rows: [
+            {
+              investigation_id: "INV-FEC-001",
+              status: "pending_review",
+              incident_id: "INC-FEC-001",
+              finding,
+            },
+          ],
+        };
+      },
+    } as unknown as DatabaseService;
+    const service = new InvestigationsService(
+      database,
+      {} as IncidentsService,
+      {} as OpenAIInvestigationAgent,
+    );
+
+    const result = await service.triggerIncident("INC-FEC-001");
+
+    assert.equal(result.investigation_id, "INV-FEC-001");
+    assert.equal(result.status, "pending_review");
+    assert.deepEqual(
+      queries.map(({ params }) => params),
+      [["INC-FEC-001"], ["INV-FEC-001"]],
+    );
   });
 });

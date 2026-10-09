@@ -169,6 +169,10 @@ function formatCharacters(value: number) {
   return new Intl.NumberFormat("pt-BR").format(value);
 }
 
+function formatConfidence(value: number) {
+  return `${Math.round(value * 100)}%`;
+}
+
 export function AgentConfiguration() {
   const [capabilities, setCapabilities] = useState(defaultCapabilities);
   const [resources, setResources] = useState(defaultResources);
@@ -282,8 +286,8 @@ export function AgentConfiguration() {
           <span>
             <strong>Somente leitura</strong>
             <small>
-              {snapshot?.runtime.humanApprovalRequired === false
-                ? "Revisar política de aprovação"
+              {snapshot?.runtime.autoGroupingEnabled
+                ? `Autoagrupamento ≥ ${formatConfidence(snapshot.runtime.autoGroupingMinConfidence)}`
                 : "Aprovação humana obrigatória"}
             </small>
           </span>
@@ -300,9 +304,9 @@ export function AgentConfiguration() {
         <div>
           <strong>Proteções ativas hoje</strong>
           <p>
-            O agente pode consultar evidências e preparar recomendações, mas não
-            cria, encerra ou altera chamados, agrupamentos, CPEs ou
-            configurações. Toda proposta passa pela validação de uma pessoa.
+            {snapshot?.runtime.autoGroupingEnabled
+              ? `O modelo continua sem ferramentas de escrita. O backend pode ativar automaticamente apenas propostas do detector de métricas com confiança igual ou superior a ${formatConfidence(snapshot.runtime.autoGroupingMinConfidence)}; os demais achados continuam aguardando uma pessoa.`
+              : "O agente pode consultar evidências e preparar recomendações, mas não cria, encerra ou altera chamados, agrupamentos, CPEs ou configurações. Toda proposta passa pela validação de uma pessoa."}
           </p>
         </div>
         <HelpTooltip
@@ -402,6 +406,13 @@ export function AgentConfiguration() {
                     {snapshot.runtime.toolCallBudgets.manual} manual
                   </dd>
                 </div>
+                <div>
+                  <dt>Tempo máximo OpenAI</dt>
+                  <dd>
+                    {Math.round(snapshot.runtime.openaiTimeoutMs / 1000)}s por
+                    chamada
+                  </dd>
+                </div>
               </dl>
               <div className="agent-settings-runtime-flags">
                 <span>
@@ -416,6 +427,14 @@ export function AgentConfiguration() {
                   Agenda automática:{" "}
                   <strong>
                     {snapshot.runtime.scheduleEnabled ? "ativa" : "inativa"}
+                  </strong>
+                </span>
+                <span>
+                  Autoagrupamento:{" "}
+                  <strong>
+                    {snapshot.runtime.autoGroupingEnabled
+                      ? `ativo ≥ ${formatConfidence(snapshot.runtime.autoGroupingMinConfidence)}`
+                      : "inativo"}
                   </strong>
                 </span>
                 <span>
@@ -624,9 +643,10 @@ export function AgentConfiguration() {
           <h3>Consultas e decisões permanecem auditáveis</h3>
           <p>
             A fila de aprovação do NOC registra modelo, ferramentas MCP
-            consultadas, argumentos, evidências, resultado, revisor e decisão. O
-            agente não recebe ferramentas de escrita; ações operacionais
-            continuam fora do fluxo autônomo.
+            consultadas, argumentos, evidências, resultado, revisor e decisão.
+            {snapshot?.runtime.autoGroupingEnabled
+              ? " O agente não recebe ferramentas de escrita; o backend registra e limita o autoagrupamento pelo limiar configurado."
+              : " O agente não recebe ferramentas de escrita; ações operacionais continuam fora do fluxo autônomo."}
           </p>
         </div>
       </section>

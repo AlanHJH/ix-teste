@@ -9,9 +9,10 @@ O agente é uma camada opcional sobre os detectores determinísticos. Sua funç�
 3. O orquestrador elimina candidatos já cobertos por agrupamento ativo, deduplica investigações e limita concorrência, ferramentas, contexto e tamanho das respostas.
 4. O agente começa por `operations_list_grouping_candidates` e confirma a hipótese nos domínios MCP de inventário, telemetria, diagnósticos, chamados, clientes e operação.
 5. A conclusão contém categoria, severidade, alcance, confiança, causa provável, evidências favoráveis e contrárias, um roteiro simples para o N1 e a próxima atuação técnica do NOC. O N1 não recebe tarefas de inspeção de métricas ou diagnóstico avançado.
-6. O backend valida o schema e as fontes. A proposta fica em **Aguardando humano** na própria seção **Onde agir primeiro**.
+6. O backend valida o schema e as fontes. Por padrão, a proposta fica em **Aguardando humano** na própria seção **Onde agir primeiro**.
 7. Ao aprovar, o backend consulta novamente o inventário, normaliza o escopo e recalcula a quantidade de CPEs. Só então cria o agrupamento ativo. Ao rejeitar, mantém o resultado apenas como histórico auditável.
-8. O N1 passa a ver o agrupamento quando consulta um cliente que pertence ao alcance aprovado.
+8. Se `AGENT_AUTO_APPROVE_GROUPINGS=true`, somente investigações disparadas por métricas com `confidence` igual ou superior a `AGENT_AUTO_APPROVE_MIN_CONFIDENCE` (padrão `0.9`) passam pela mesma validação de inventário e são criadas automaticamente. Investigações agendadas ou manuais nunca usam esse atalho; o registro identifica `agente-automatico` para auditoria.
+9. O N1 passa a ver o agrupamento quando consulta um cliente que pertence ao alcance aprovado.
 
 ## Copiloto conversacional do N1
 
@@ -32,11 +33,11 @@ O endpoint `POST /api/customers/:customerId/n1-chat` usa o contexto do cliente e
 
 O agente deve escolher o menor alcance que ainda explique a evidência. Problemas diferentes não são unidos apenas porque ocorreram no mesmo período.
 
-O modelo não recebe ferramentas de escrita. Ele não cria o agrupamento diretamente e não executa reboot, rollback, configuração, visita ou ordem de serviço. A única escrita ocorre pela API REST depois da aprovação do NOC.
+O modelo não recebe ferramentas de escrita. Ele não cria o agrupamento diretamente e não executa reboot, rollback, configuração, visita ou ordem de serviço. Mesmo no modo automático, a criação é uma decisão do backend, com limiar explícito e escopo recalculado no inventário; o modelo apenas devolve a proposta estruturada.
 
 ## Configuração local
 
-Copie `.env.example` para `.env`, informe `OPENAI_API_KEY` e reinicie o Compose. As variáveis `AGENT_*` controlam concorrência, raciocínio, número máximo de ferramentas, paginação e contexto. `AGENT_GROUPING_MAX_CANDIDATES` limita quantos candidatos cada varredura pode encaminhar ao agente. Sem a chave, o atendimento N1 usa a orientação determinística e a fila do NOC não simula uma proposta do modelo. O detector consulta apenas as tabelas já carregadas no banco; não há busca externa de dados operacionais.
+Copie `.env.example` para `.env`, informe `OPENAI_API_KEY` e reinicie o Compose. As variáveis `AGENT_*` controlam concorrência, raciocínio, número máximo de ferramentas, paginação, contexto e o tempo máximo de cada chamada externa (`AGENT_OPENAI_TIMEOUT_MS`, padrão de 90 segundos). `AGENT_GROUPING_MAX_CANDIDATES` limita quantos candidatos cada varredura pode encaminhar ao agente. `AGENT_AUTO_APPROVE_GROUPINGS` permanece `false` por padrão; quando explicitamente habilitada, `AGENT_AUTO_APPROVE_MIN_CONFIDENCE` controla o limiar. Sem a chave, o atendimento N1 usa a orientação determinística e a fila do NOC não simula uma proposta do modelo. O detector consulta apenas as tabelas já carregadas no banco; não há busca externa de dados operacionais.
 
 ## Limites para produção
 

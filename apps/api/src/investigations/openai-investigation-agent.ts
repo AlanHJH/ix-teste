@@ -52,6 +52,7 @@ const TOOL_CALL_BUDGET_ENV: Record<InvestigationTrigger, string> = {
 const DEFAULT_MAX_CONTEXT_CHARACTERS = 60_000;
 const MAX_RATE_LIMIT_RETRIES = 2;
 const MAX_RETRY_DELAY_MS = 30_000;
+const DEFAULT_OPENAI_TIMEOUT_MS = 90_000;
 const NON_RETRYABLE_RATE_LIMIT_CODES = new Set([
   "credit_balance_exhausted",
   "organization_spend_limit_exceeded",
@@ -99,6 +100,17 @@ export function configuredReasoningEffort(
   environment: NodeJS.ProcessEnv = process.env,
 ): "none" | "low" {
   return environment.AGENT_REASONING_EFFORT === "low" ? "low" : "none";
+}
+
+export function openAiTimeoutMilliseconds(
+  environment: NodeJS.ProcessEnv = process.env,
+): number {
+  return boundedInteger(
+    environment.AGENT_OPENAI_TIMEOUT_MS,
+    DEFAULT_OPENAI_TIMEOUT_MS,
+    5_000,
+    180_000,
+  );
 }
 
 function sortForFingerprint(value: unknown): unknown {
@@ -186,6 +198,7 @@ export class OpenAIInvestigationAgent {
   runtimeConfig() {
     return {
       reasoningEffort: configuredReasoningEffort(),
+      openaiTimeoutMs: openAiTimeoutMilliseconds(),
       maxContextCharacters: maximumContextCharacters(),
       toolCallBudgets: {
         metric: toolCallBudget("metric"),
@@ -202,7 +215,11 @@ export class OpenAIInvestigationAgent {
       );
     }
 
-    const openai = new OpenAI({ apiKey: this.apiKey, maxRetries: 0 });
+    const openai = new OpenAI({
+      apiKey: this.apiKey,
+      maxRetries: 0,
+      timeout: openAiTimeoutMilliseconds(),
+    });
     const registry = new McpToolRegistry();
     const toolTrace: ToolTrace[] = [];
     const maxToolCalls = toolCallBudget(request.triggerType);

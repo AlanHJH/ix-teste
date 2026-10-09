@@ -33,7 +33,10 @@ import {
   ManualInvestigationDto,
   ReviewInvestigationDto,
 } from "../contracts/input.dto";
-import { InvestigationIdParamDto } from "../contracts/params.dto";
+import {
+  IncidentIdParamDto,
+  InvestigationIdParamDto,
+} from "../contracts/params.dto";
 import { InvestigationsListQueryDto } from "../contracts/query.dto";
 
 const investigationSchema = {
@@ -300,7 +303,21 @@ export class InvestigationsController {
         ),
         maxConcurrency: apiInteger("Máximo de investigações simultâneas."),
         groupingMaxCandidates: apiInteger("Máximo de candidatos por ciclo."),
+        autoGroupingEnabled: {
+          type: "boolean",
+          description:
+            "Indica se o backend pode ativar automaticamente propostas do detector de métricas acima do limiar configurado.",
+        },
+        autoGroupingMinConfidence: {
+          type: "number",
+          minimum: 0,
+          maximum: 1,
+          description: "Confiança mínima para autoativação de um agrupamento.",
+        },
         reasoningEffort: apiString("Esforço de raciocínio configurado."),
+        openaiTimeoutMs: apiInteger(
+          "Tempo máximo de uma chamada à OpenAI em milissegundos.",
+        ),
         maxContextCharacters: apiInteger("Limite de caracteres do contexto."),
         toolCallBudgets: {
           type: "object",
@@ -350,10 +367,56 @@ export class InvestigationsController {
     return this.investigations.config();
   }
 
+  @ApiRead({
+    summary: "Obter uma investigação do agente",
+    description:
+      "Consulta o estado e o resultado estruturado de uma investigação específica para acompanhamento da análise sob demanda.",
+    responseDescription: "Investigação auditável.",
+    schema: investigationSchema,
+  })
+  @ApiParam({
+    name: "investigationId",
+    description: "Identificador da investigação.",
+    example: "INV-5D2F24A1",
+  })
+  @ApiNotFoundResponse({
+    description: "Investigação não encontrada.",
+    schema: apiErrorSchema,
+  })
+  @Get(":investigationId")
+  get(@Param() params: InvestigationIdParamDto) {
+    return this.investigations.get(params.investigationId);
+  }
+
+  @ApiWrite({
+    summary: "Analisar um problema de infraestrutura sob demanda",
+    description:
+      "Ao abrir um problema operacional, reutiliza a análise IA vinculada ou enfileira uma nova investigação focada em possibilidades de solução. A análise é somente leitura e exige revisão humana.",
+    responseDescription: "Investigação vinculada ao problema.",
+    schema: investigationSchema,
+    created: true,
+  })
+  @ApiParam({
+    name: "incidentId",
+    description: "Identificador do problema de infraestrutura.",
+    example: "INC-74F1FD96",
+  })
+  @ApiNotFoundResponse({
+    description: "Problema de infraestrutura não encontrado.",
+    schema: apiErrorSchema,
+  })
+  @ApiInvalidRequest(
+    "O agente não está configurado para executar investigações.",
+  )
+  @Post("trigger/incident/:incidentId")
+  triggerIncident(@Param() params: IncidentIdParamDto) {
+    return this.investigations.triggerIncident(params.incidentId);
+  }
+
   @ApiWrite({
     summary: "Disparar investigações por métricas",
     description:
-      "Executa o detector de candidatos, ignora escopos já cobertos, deduplica investigações ativas e enfileira análises somente quando o agente está configurado.",
+      "Executa o detector de candidatos, ignora escopos já cobertos, deduplica investigações ativas e enfileira análises somente quando o agente está configurado. Se a autoativação estiver habilitada, o backend materializa apenas propostas de métricas que superem o limiar de confiança.",
     responseDescription: "Resumo dos candidatos e investigações enfileiradas.",
     schema: triggerSummarySchema,
     created: true,

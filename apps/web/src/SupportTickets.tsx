@@ -18,7 +18,6 @@ import {
   type InventoryContext,
 } from "./InventoryContextModal";
 import { providerGlossary } from "./ProviderGlossary";
-import { TicketDetailModal } from "./TicketDetailModal";
 import { TicketFilterSelect } from "./TicketFilterSelect";
 import { SortableHeader } from "./SortableHeader";
 import type {
@@ -74,26 +73,20 @@ function Metric({
 
 export function SupportTickets({
   onOpenSupport,
-  canManageNoc = false,
+  onOpenTicket,
   preset,
-  onNocQueueChanged,
 }: {
   onOpenSupport: (customerId: string) => void;
-  canManageNoc?: boolean;
+  onOpenTicket: (ticket: SupportTicket) => void;
   preset?: { key: number; filters: TicketFilter[] } | null;
-  onNocQueueChanged?: () => void | Promise<void>;
 }) {
   const [filters, setFilters] = useState<TicketFilter[]>([]);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<TicketSort>("opened_at_desc");
   const [range, setRange] = useState<DateRange>({ from: "", to: "" });
-  const [reloadVersion, setReloadVersion] = useState(0);
   const [result, setResult] = useState<TicketPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(
-    null,
-  );
   const [customerModal, setCustomerModal] = useState<InventoryContext | null>(
     null,
   );
@@ -125,7 +118,7 @@ export function SupportTickets({
     return () => {
       canceled = true;
     };
-  }, [page, filters, sort, range, reloadVersion]);
+  }, [page, filters, sort, range]);
 
   useEffect(() => {
     if (!preset) {
@@ -338,8 +331,8 @@ export function SupportTickets({
                     <button
                       type="button"
                       className="ticket-id-action"
-                      onClick={() => setSelectedTicket(ticket)}
-                      title={`Ver todos os detalhes do ticket ${ticket.ticket_id}`}
+                      onClick={() => onOpenTicket(ticket)}
+                      title={`Abrir a ficha completa do ticket ${ticket.ticket_id}`}
                     >
                       <strong>{ticket.ticket_id}</strong>
                       <small>{formatOpenedAt(ticket.opened_at)}</small>
@@ -444,17 +437,6 @@ export function SupportTickets({
         )}
       </section>
 
-      {selectedTicket && (
-        <TicketDetailModal
-          ticket={selectedTicket}
-          canManageNoc={canManageNoc}
-          onNocStatusChanged={async () => {
-            setReloadVersion((current) => current + 1);
-            await onNocQueueChanged?.();
-          }}
-          onClose={() => setSelectedTicket(null)}
-        />
-      )}
       {customerModal && (
         <InventoryContextModal
           context={customerModal}

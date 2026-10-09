@@ -111,6 +111,97 @@ export type DashboardComposition = {
   };
 };
 
+export type DashboardSummary = {
+  dashboardId: string;
+  userId: string;
+  name: string;
+  description: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DashboardDetail = DashboardSummary & {
+  composition: DashboardComposition;
+};
+
+export type DashboardLibrary = {
+  data: DashboardSummary[];
+  defaultDashboardId: string | null;
+};
+
+export type OfflineAlert = {
+  customer_id: string;
+  serial: string;
+  vendor: string;
+  model: string;
+  city: string;
+  neighborhood: string;
+  network: string;
+  ticket_id: string;
+  reported_at: string;
+  description: string;
+  resolution: string;
+  alert_status: "in_noc" | "open" | "recent";
+  confirmed_offline: false;
+};
+
+export type OfflineAlertPage = {
+  data: OfflineAlert[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+};
+
+export type CustomerSummary = {
+  customer_id: string;
+  customer_status: "active" | "cancelled" | string;
+  customer_since: string;
+  cancelled_at: string | null;
+  active_serial: string | null;
+  city: string;
+  neighborhood: string;
+  plan_mbps: number;
+};
+
+export type CustomerSummaryPage = {
+  data: CustomerSummary[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+};
+
+export type CustomerDetailEquipment = {
+  serial: string;
+  vendor: string;
+  model: string;
+  hw_revision: string;
+  software_version: string;
+  plan_mbps: number;
+  previous_plan_mbps: number | null;
+  plan_since: string;
+  olt: string;
+  pon_port: string;
+  cto: string;
+  city: string;
+  neighborhood: string;
+  installed_at: string;
+  status: "active" | "removed";
+  removed_at: string | null;
+};
+
+export type CustomerDetail = {
+  customer: {
+    customer_id: string;
+    customer_status: "active" | "cancelled" | string;
+    customer_since: string;
+    cancelled_at: string | null;
+  };
+  equipment_history: CustomerDetailEquipment[];
+};
+
 export type SupportProfile = {
   customer: { id: string; city: string; neighborhood: string };
   equipment: {
@@ -152,6 +243,41 @@ export type SupportProfile = {
     relatedProblemTitle: string | null;
     relatedProblemKind: "incident" | "signal" | null;
   };
+  preflight: {
+    infrastructureChecked: boolean;
+    measurementsChecked: boolean;
+    nocHistoryChecked: boolean;
+    relatedHistoryFound: boolean;
+    measurementStatus: "related_history" | "new_signal" | "no_signal";
+    mainAdvice: string;
+    escalation: {
+      required: boolean;
+      target: "NOC" | null;
+      reason: string;
+    };
+  };
+  problemHistory: Array<{
+    incidentId: string;
+    title: string;
+    status: "open" | "mitigating" | "monitoring" | "resolved";
+    severity: "critical" | "high" | "medium" | "low";
+    category: string;
+    scope: {
+      type?: string;
+      identifier?: string;
+      olt?: string | null;
+      pon?: string | null;
+      cto?: string | null;
+    };
+    affectedCpes: number;
+    confidence: number;
+    probableCause: string;
+    recommendedAction: string;
+    openedAt: string;
+    openedBy: string;
+    source: "agent" | "manual";
+    originTicketId: string | null;
+  }>;
   activeIncidents: Array<{
     incidentId: string;
     title: string;
@@ -174,6 +300,13 @@ export type SupportProfile = {
     originTicketId: string | null;
   }>;
   recentTickets: Array<{
+    ticket_id: string;
+    opened_at: string;
+    category: string;
+    description: string;
+    resolution: string;
+  }>;
+  allTickets: Array<{
     ticket_id: string;
     opened_at: string;
     category: string;
@@ -213,6 +346,29 @@ export type N1ChatMessage = {
   content: string;
 };
 
+export type N1DeepAnalysis = {
+  headline: string;
+  summary: string;
+  causes: Array<{
+    title: string;
+    likelihood: "alta" | "média" | "baixa";
+    evidence: string[];
+    counterEvidence: string[];
+  }>;
+  path: Array<{
+    step: number;
+    title: string;
+    action: string;
+    why: string;
+    decision: string;
+  }>;
+  confirmed: string[];
+  unknowns: string[];
+  customerScript: string;
+  escalation: string;
+  model: "openai" | "fallback";
+};
+
 export type N1AdvisorReply = {
   assistantMessage: string;
   nextSteps: string[];
@@ -224,6 +380,7 @@ export type N1AdvisorReply = {
   documentation: string;
   disposition: "continue" | "resolve_phone" | "escalate_noc" | "schedule_visit";
   model: "openai" | "fallback";
+  deepAnalysis: N1DeepAnalysis;
 };
 
 export type EquipmentPath = {
@@ -641,7 +798,10 @@ export type AgentRuntimeConfiguration = {
   metricTriggerIntervalMs: number;
   maxConcurrency: number;
   groupingMaxCandidates: number;
+  autoGroupingEnabled: boolean;
+  autoGroupingMinConfidence: number;
   reasoningEffort: "none" | "low";
+  openaiTimeoutMs: number;
   maxContextCharacters: number;
   toolCallBudgets: {
     metric: number;

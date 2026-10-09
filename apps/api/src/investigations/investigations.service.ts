@@ -55,6 +55,33 @@ function boundedInteger(
     : fallback;
 }
 
+export function automaticGroupingEnabled(
+  environment: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return environment.AGENT_AUTO_APPROVE_GROUPINGS === "true";
+}
+
+export function automaticGroupingMinConfidence(
+  environment: NodeJS.ProcessEnv = process.env,
+): number {
+  const parsed = Number(environment.AGENT_AUTO_APPROVE_MIN_CONFIDENCE);
+  if (!Number.isFinite(parsed)) return 0.9;
+  return Math.max(0, Math.min(1, parsed));
+}
+
+export function shouldAutomaticallyCreateGrouping(
+  triggerType: InvestigationRequest["triggerType"],
+  finding: AgentFinding,
+  environment: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return (
+    automaticGroupingEnabled(environment) &&
+    triggerType === "metric" &&
+    finding.problemDetected &&
+    finding.confidence >= automaticGroupingMinConfidence(environment)
+  );
+}
+
 @Injectable()
 export class InvestigationsService {
   private readonly running = new Set<string>();
@@ -92,13 +119,96 @@ export class InvestigationsService {
         1,
         12,
       ),
+      autoGroupingEnabled: automaticGroupingEnabled(),
+      autoGroupingMinConfidence: automaticGroupingMinConfidence(),
       reasoningEffort: runtime.reasoningEffort,
+      openaiTimeoutMs: runtime.openaiTimeoutMs,
       maxContextCharacters: runtime.maxContextCharacters,
       toolCallBudgets: runtime.toolCallBudgets,
       mcpPolicy: investigationMcpPolicy(),
-      humanApprovalRequired: true,
+      humanApprovalRequired: !automaticGroupingEnabled(),
       writeToolsAvailableToAgent: false,
     };
+  }
+
+  async get(investigationId: string) {
+    const result = await this.database.query<InvestigationRow>(
+      `SELECT i.*, o.incident_id
+       FROM agent_investigations i
+       LEFT JOIN operational_incidents o USING(investigation_id)
+       WHERE i.investigation_id=$1`,
+      [investigationId],
+    );
+    if (!result.rows[0]) {
+      throw new NotFoundException("Investigação não encontrada.");
+    }
+    return result.rows[0];
+  }
+
+  async triggerIncident(incidentId: string) {
+    const incidentResult = await this.database.query<{
+      incident_id: string;
+      investigation_id: string | null;
+      category: string;
+      severity: string;
+      title: string;
+      scope: Record<string, unknown>;
+      affected_cpes: number;
+      probable_cause: string;
+      recommended_action: string;
+    }>(
+      `SELECT incident_id, investigation_id, category, severity, title, scope,
+        affected_cpes, probable_cause, recommended_action
+       FROM operational_incidents
+       WHERE incident_id=$1`,
+      [incidentId],
+    );
+    const incident = incidentResult.rows[0];
+    if (!incident) {
+      throw new NotFoundException("Problema de infraestrutura não encontrado.");
+    }
+
+    if (incident.investigation_id) {
+      const linked = await this.get(incident.investigation_id);
+      if (linked.status === "failed")
+        return this.retry(linked.investigation_id);
+      return linked;
+    }
+
+    const existing = await this.database.query<InvestigationRow>(
+      `SELECT i.*, o.incident_id
+       FROM agent_investigations i
+       LEFT JOIN operational_incidents o USING(investigation_id)
+       WHERE i.scope->>'incidentId'=$1
+       ORDER BY i.created_at DESC
+       LIMIT 1`,
+      [incidentId],
+    );
+    if (existing.rows[0]) {
+      if (existing.rows[0].status === "failed") {
+        return this.retry(existing.rows[0].investigation_id);
+      }
+      return existing.rows[0];
+    }
+
+    this.assertConfigured();
+    const scope = {
+      ...incident.scope,
+      incidentId,
+      incidentTitle: incident.title,
+      incidentCategory: incident.category,
+      incidentSeverity: incident.severity,
+      initiallyAffected: incident.affected_cpes,
+      registeredProbableCause: incident.probable_cause,
+      registeredRecommendedAction: incident.recommended_action,
+    };
+    return this.enqueue({
+      triggerType: "manual",
+      triggerLabel: `Análise sob demanda · ${incidentId}`,
+      objective: `Analise o problema de infraestrutura ${incidentId} (${incident.title}) e apresente as possibilidades de solução. Valide a causa provável registrada com telemetria, inventário, topologia, diagnósticos e chamados; diferencie ações de confirmação, mitigação e correção. Recomende o próximo passo para N1 e NOC, sem executar mudanças e sem tratar a hipótese como causa confirmada.`,
+      scope,
+      dedupKey: `incident-review:${incidentId}`,
+    });
   }
 
   async list(page: number, pageSize: number, sort: string, status = "") {
@@ -319,6 +429,20 @@ export class InvestigationsService {
         "A investigação não contém um problema confirmado para agrupar.",
       );
     }
+    return this.createApprovedGrouping(
+      investigationId,
+      finding,
+      normalizedReviewer,
+      note.trim(),
+    );
+  }
+
+  private async createApprovedGrouping(
+    investigationId: string,
+    finding: AgentFinding,
+    reviewer: string,
+    note: string,
+  ) {
     const resolvedScope = await this.incidents.resolveProposedScope(
       finding.scope,
     );
@@ -347,8 +471,8 @@ export class InvestigationsService {
        FROM approved JOIN created USING(investigation_id)`,
       [
         investigationId,
-        normalizedReviewer,
-        note.trim(),
+        reviewer,
+        note,
         incidentId,
         JSON.stringify(resolvedScope.scope),
         resolvedScope.affected,
@@ -449,6 +573,16 @@ export class InvestigationsService {
           JSON.stringify(analysis.toolTrace),
         ],
       );
+      if (
+        shouldAutomaticallyCreateGrouping(row.trigger_type, analysis.finding)
+      ) {
+        await this.createApprovedGrouping(
+          investigationId,
+          analysis.finding,
+          "agente-automatico",
+          `Criado automaticamente pelo detector de métricas com confiança de ${Math.round(analysis.finding.confidence * 100)}%, acima do limiar configurado de ${Math.round(automaticGroupingMinConfidence() * 100)}%.`,
+        );
+      }
     } catch (error) {
       const toolTrace =
         error instanceof InvestigationAgentError ? error.toolTrace : [];

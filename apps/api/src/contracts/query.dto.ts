@@ -61,6 +61,14 @@ export class CustomersSearchQueryDto extends QueryBase {
   }
 }
 
+export class OfflineAlertsQueryDto extends PageQueryDto {
+  constructor() {
+    super();
+    this.pageSize = "8";
+    this.sort = "alert_desc";
+  }
+}
+
 export class InventoryListQueryDto extends PageQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200) q = "";
   @ApiPropertyOptional({ enum: ["active", "removed", "all"], default: "all" })

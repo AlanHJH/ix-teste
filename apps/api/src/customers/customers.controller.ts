@@ -14,6 +14,7 @@ import { CustomerIdParamDto } from "../contracts/params.dto";
 import {
   CustomersFilterOptionsQueryDto,
   CustomersListQueryDto,
+  OfflineAlertsQueryDto,
   CustomersSearchQueryDto,
 } from "../contracts/query.dto";
 import {
@@ -95,6 +96,58 @@ const customerSummarySchema = {
   },
 };
 
+const customerEquipmentHistorySchema = {
+  ...equipmentSchema,
+  required: equipmentSchema.required.filter((field) => field !== "customer_id"),
+};
+
+const offlineAlertSchema = {
+  type: "object" as const,
+  description:
+    "Sinal recente de chamado sem conexão associado a uma CPE ativa. Não confirma que a conexão esteja indisponível neste momento.",
+  required: [
+    "customer_id",
+    "serial",
+    "vendor",
+    "model",
+    "city",
+    "neighborhood",
+    "network",
+    "ticket_id",
+    "reported_at",
+    "description",
+    "resolution",
+    "alert_status",
+    "confirmed_offline",
+  ],
+  properties: {
+    customer_id: apiString("Código do cliente.", "C198410"),
+    serial: apiString("Serial da CPE ativa.", "KSTLD199FB78"),
+    vendor: apiString("Fabricante da CPE.", "Kestrel"),
+    model: apiString("Modelo da CPE.", "KX-3000"),
+    city: apiString("Cidade da instalação.", "Serra Alta"),
+    neighborhood: apiString("Bairro da instalação.", "Jardim Aurora"),
+    network: apiString(
+      "Caminho de rede resumido.",
+      "OLT-2 · PON 1/7 · CTO-2-17-03",
+    ),
+    ticket_id: apiString("Chamado que originou o alerta.", "TN1-F3187553"),
+    reported_at: apiDateTime("Data e hora do relato."),
+    description: apiString("Descrição do relato do cliente."),
+    resolution: apiString("Última orientação ou resolução registrada."),
+    alert_status: {
+      type: "string",
+      enum: ["in_noc", "open", "recent"],
+      description: "Estado operacional do último relato.",
+    },
+    confirmed_offline: {
+      type: "boolean",
+      description:
+        "Sempre falso nesta fonte: o alerta precisa ser confirmado no diagnóstico.",
+    },
+  },
+};
+
 const supportProfileSchema = {
   type: "object" as const,
   description: "Contexto consolidado consumido pelo atendimento N1.",
@@ -103,8 +156,11 @@ const supportProfileSchema = {
     "equipment",
     "metrics",
     "decision",
+    "preflight",
+    "problemHistory",
     "activeIncidents",
     "recentTickets",
+    "allTickets",
   ],
   properties: {
     customer: {
@@ -250,6 +306,118 @@ const supportProfileSchema = {
         },
       },
     },
+    preflight: {
+      type: "object",
+      description:
+        "Resultado da verificação obrigatória antes da abertura do chamado.",
+      required: [
+        "infrastructureChecked",
+        "measurementsChecked",
+        "nocHistoryChecked",
+        "relatedHistoryFound",
+        "measurementStatus",
+        "mainAdvice",
+        "escalation",
+      ],
+      properties: {
+        infrastructureChecked: {
+          type: "boolean",
+          description:
+            "Indica que o caminho físico/lógico do cliente foi conferido.",
+        },
+        measurementsChecked: {
+          type: "boolean",
+          description: "Indica que as medições recentes foram avaliadas.",
+        },
+        nocHistoryChecked: {
+          type: "boolean",
+          description:
+            "Indica que o histórico de problemas do NOC foi consultado.",
+        },
+        relatedHistoryFound: {
+          type: "boolean",
+          description:
+            "Há pelo menos um problema do NOC relacionado ao caminho do cliente.",
+        },
+        measurementStatus: {
+          type: "string",
+          enum: ["related_history", "new_signal", "no_signal"],
+          description:
+            "Resultado das medições após a comparação com o histórico do NOC.",
+        },
+        mainAdvice: apiString("Principal orientação para o cliente."),
+        escalation: {
+          type: "object",
+          required: ["required", "target", "reason"],
+          properties: {
+            required: {
+              type: "boolean",
+              description:
+                "Indica se o atendimento deve ser encaminhado ao NOC.",
+            },
+            target: {
+              type: "string",
+              enum: ["NOC"],
+              nullable: true,
+              description: "Destino sugerido quando houver escalonamento.",
+            },
+            reason: apiString("Justificativa operacional do encaminhamento."),
+          },
+        },
+      },
+    },
+    problemHistory: {
+      type: "array",
+      description:
+        "Histórico de problemas do NOC cujo escopo alcança o caminho do cliente, incluindo itens resolvidos.",
+      items: {
+        type: "object",
+        required: [
+          "incidentId",
+          "title",
+          "status",
+          "severity",
+          "category",
+          "scope",
+          "affectedCpes",
+          "confidence",
+          "probableCause",
+          "recommendedAction",
+          "openedAt",
+          "openedBy",
+          "source",
+          "originTicketId",
+        ],
+        properties: {
+          incidentId: apiString("Identificador do problema no NOC."),
+          title: apiString("Título do problema."),
+          status: {
+            type: "string",
+            enum: ["open", "mitigating", "monitoring", "resolved"],
+          },
+          severity: {
+            type: "string",
+            enum: ["critical", "high", "medium", "low"],
+          },
+          category: apiString("Categoria técnica."),
+          scope: {
+            type: "object",
+            description: "Escopo persistido do problema.",
+          },
+          affectedCpes: apiInteger("CPEs afetadas no problema."),
+          confidence: apiNumber("Confiança entre 0 e 1."),
+          probableCause: apiString("Causa provável registrada."),
+          recommendedAction: apiString("Ação recomendada pelo NOC."),
+          openedAt: apiDateTime("Data e hora de abertura."),
+          openedBy: apiString("Autor do registro."),
+          source: { type: "string", enum: ["agent", "manual"] },
+          originTicketId: {
+            ...apiString("Chamado que originou o problema."),
+            nullable: true,
+          },
+        },
+      },
+    },
     activeIncidents: {
       type: "array",
       description: "Incidentes ativos cujo escopo alcança o cliente.",
@@ -314,6 +482,28 @@ const supportProfileSchema = {
         },
       },
     },
+    allTickets: {
+      type: "array",
+      description:
+        "Todos os chamados do cliente, ordenados do mais recente para o mais antigo.",
+      items: {
+        type: "object",
+        required: [
+          "ticket_id",
+          "opened_at",
+          "category",
+          "description",
+          "resolution",
+        ],
+        properties: {
+          ticket_id: apiString("Identificador do chamado."),
+          opened_at: apiDateTime("Data e hora de abertura."),
+          category: apiString("Categoria do chamado."),
+          description: apiString("Relato registrado."),
+          resolution: apiString("Desfecho registrado."),
+        },
+      },
+    },
   },
 };
 
@@ -326,6 +516,7 @@ const n1AdvisorReplySchema = {
     "options",
     "documentation",
     "disposition",
+    "deepAnalysis",
     "model",
   ],
   properties: {
@@ -350,6 +541,73 @@ const n1AdvisorReplySchema = {
     disposition: {
       type: "string",
       enum: ["continue", "resolve_phone", "escalate_noc", "schedule_visit"],
+    },
+    deepAnalysis: {
+      type: "object",
+      description:
+        "Análise consolidada por evidências e roteiro de investigação do atendimento.",
+      required: [
+        "headline",
+        "summary",
+        "causes",
+        "path",
+        "confirmed",
+        "unknowns",
+        "customerScript",
+        "escalation",
+        "model",
+      ],
+      properties: {
+        headline: apiString("Conclusão inicial em linguagem operacional."),
+        summary: apiString("Resumo da leitura cruzada do caso."),
+        causes: apiArray(
+          {
+            type: "object",
+            required: ["title", "likelihood", "evidence", "counterEvidence"],
+            properties: {
+              title: apiString("Hipótese considerada."),
+              likelihood: {
+                type: "string",
+                enum: ["alta", "média", "baixa"],
+              },
+              evidence: apiArray(
+                apiString("Evidência a favor."),
+                "Evidências a favor da hipótese.",
+              ),
+              counterEvidence: apiArray(
+                apiString("Evidência ausente ou contra."),
+                "Evidências ausentes ou contra a hipótese.",
+              ),
+            },
+          },
+          "Causas prováveis ordenadas por relevância.",
+        ),
+        path: apiArray(
+          {
+            type: "object",
+            required: ["step", "title", "action", "why", "decision"],
+            properties: {
+              step: apiInteger("Número da etapa."),
+              title: apiString("Nome da etapa."),
+              action: apiString("Ação segura para o atendente."),
+              why: apiString("Por que a etapa reduz a incerteza."),
+              decision: apiString("Como decidir depois da etapa."),
+            },
+          },
+          "Caminho das pedras ordenado para conduzir o caso.",
+        ),
+        confirmed: apiArray(
+          apiString("Fato confirmado pelo contexto."),
+          "Fatos confirmados pelo contexto.",
+        ),
+        unknowns: apiArray(
+          apiString("Lacuna que ainda precisa ser verificada."),
+          "Lacunas que ainda precisam ser verificadas.",
+        ),
+        customerScript: apiString("Fala sugerida para o cliente."),
+        escalation: apiString("Regra de encaminhamento."),
+        model: { type: "string", enum: ["openai", "fallback"] },
+      },
     },
     model: { type: "string", enum: ["openai", "fallback"] },
   },
@@ -499,6 +757,42 @@ export class CustomersController {
       selectedStatus,
       pagination.sort,
       parseInventoryFilters(params.filter),
+    );
+  }
+
+  @ApiRead({
+    summary: "Listar alertas recentes de clientes sem conexão",
+    description:
+      "Prioriza o último chamado Sem conexão de cada cliente ativo nos sete dias relativos ao período operacional. É um sinal para triagem e não uma confirmação automática de indisponibilidade.",
+    responseDescription:
+      "Página de alertas de conexão para a entrada do dashboard.",
+    schema: apiPageSchema(offlineAlertSchema, "Página de alertas recentes."),
+    dashboardResource: true,
+  })
+  @ApiPagination({
+    sorts: ["alert_desc", "opened_at_desc"],
+    defaultSort: "alert_desc",
+    defaultPageSize: 8,
+    maximumPageSize: 20,
+  })
+  @ApiInvalidRequest("Paginação ou ordenação inválida.")
+  @Get("offline-alerts")
+  offlineAlerts(@Query() params: OfflineAlertsQueryDto) {
+    const pagination = parsePageQuery(
+      params.page,
+      params.pageSize,
+      params.sort,
+      {
+        defaultPageSize: 8,
+        maximumPageSize: 20,
+        defaultSort: "alert_desc",
+        allowedSorts: ["alert_desc", "opened_at_desc"],
+      },
+    );
+    return this.customers.offlineAlerts(
+      pagination.page,
+      pagination.pageSize,
+      pagination.sort,
     );
   }
 
@@ -664,7 +958,7 @@ export class CustomersController {
           },
         },
         equipment_history: apiArray(
-          equipmentSchema,
+          customerEquipmentHistorySchema,
           "Equipamentos do mais recente para o mais antigo.",
         ),
       },

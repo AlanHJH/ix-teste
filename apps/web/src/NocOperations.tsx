@@ -2,8 +2,11 @@ import { FormEvent, useEffect, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
+  Bot,
   CheckCircle2,
   ChevronRight,
+  CircleAlert,
+  LoaderCircle,
   Network,
   Plus,
   TicketCheck,
@@ -13,10 +16,12 @@ import { api } from "./api";
 import { HelpTooltip } from "./HelpTooltip";
 import { InvestigationReview } from "./InvestigationReview";
 import { PhysicalTopology } from "./PhysicalTopology";
+import { SideDrawer } from "./SideDrawer";
 import { groupingAgentEnabled, useAgentPolicy } from "./agentPolicy";
 import { providerGlossary, TechnicalText } from "./ProviderGlossary";
 import type {
   IncidentOptionType,
+  Investigation,
   OperationalIncident,
   OperationalIncidentPage,
 } from "./types";
@@ -222,6 +227,157 @@ function GroupingScopePath({ location }: { location: string }) {
   );
 }
 
+const investigationStatusLabel: Record<Investigation["status"], string> = {
+  queued: "Análise na fila",
+  running: "IA analisando o problema",
+  no_problem: "Nenhum problema confirmado",
+  inconclusive: "Análise inconclusiva",
+  pending_review: "Aguardando revisão humana",
+  approved: "Análise aprovada anteriormente",
+  rejected: "Análise descartada",
+  failed: "Falha na análise",
+};
+
+function confidencePercent(value: number) {
+  return Math.round(value <= 1 ? value * 100 : value);
+}
+
+function InfrastructureAiAnalysis({
+  analysis,
+  loading,
+  error,
+}: {
+  analysis: Investigation | null;
+  loading: boolean;
+  error: string;
+}) {
+  const finding = analysis?.finding;
+  return (
+    <section className="grouping-ai-analysis" aria-live="polite">
+      <header>
+        <div>
+          <span className="section-label">Investigação sob demanda</span>
+          <h3>
+            <Bot size={17} /> Possibilidades de solução analisadas pela IA
+          </h3>
+          <p>
+            Ao abrir este problema, a IA consulta as fontes operacionais
+            disponíveis e compara hipóteses de confirmação, mitigação e
+            correção.
+          </p>
+        </div>
+        {analysis && (
+          <span className={`grouping-ai-status ${analysis.status}`}>
+            {investigationStatusLabel[analysis.status]}
+          </span>
+        )}
+      </header>
+
+      {loading && !finding && (
+        <div className="grouping-ai-loading" role="status">
+          <LoaderCircle size={17} className="spin" />
+          <span>
+            A análise está consultando telemetria, inventário, diagnósticos e
+            chamados…
+          </span>
+        </div>
+      )}
+
+      {error && (
+        <div className="grouping-ai-error" role="alert">
+          <CircleAlert size={16} /> {error}
+        </div>
+      )}
+
+      {analysis?.error && (
+        <div className="grouping-ai-error" role="alert">
+          <CircleAlert size={16} /> {analysis.error}
+        </div>
+      )}
+
+      {finding && (
+        <>
+          <div className="grouping-ai-conclusion">
+            <div>
+              <span>Hipótese principal</span>
+              <strong>
+                <TechnicalText text={finding.title} />
+              </strong>
+              <p>{finding.summary}</p>
+            </div>
+            <div>
+              <span>Confiança</span>
+              <strong>{confidencePercent(finding.confidence)}%</strong>
+              <small>{investigationStatusLabel[analysis.status]}</small>
+            </div>
+          </div>
+
+          <div className="grouping-ai-solution-grid">
+            <section>
+              <span>Causa provável</span>
+              <p>{finding.probableCause}</p>
+            </section>
+            <section>
+              <span>Possibilidades de solução</span>
+              <ul>
+                {recommendedActionSteps(finding.recommendedAction).map(
+                  (action) => (
+                    <li key={`${action.label}-${action.text}`}>
+                      <CheckCircle2 size={14} />
+                      <div>
+                        <strong>{action.label}</strong>
+                        <p>{action.text}</p>
+                      </div>
+                    </li>
+                  ),
+                )}
+              </ul>
+            </section>
+          </div>
+
+          <div className="grouping-ai-evidence-grid">
+            <section>
+              <span>Evidências usadas</span>
+              <ul>
+                {finding.evidence.map((item) => (
+                  <li key={`${item.source}-${item.reference}`}>
+                    <strong>
+                      {evidenceSourceLabel[item.source] ?? item.source}
+                    </strong>
+                    <p>{item.summary}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+            <section>
+              <span>Evidências contrárias</span>
+              {finding.counterEvidence.length > 0 ? (
+                <ul>
+                  {finding.counterEvidence.map((item) => (
+                    <li key={`${item.source}-${item.reference}`}>
+                      <strong>
+                        {evidenceSourceLabel[item.source] ?? item.source}
+                      </strong>
+                      <p>{item.summary}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="grouping-ai-none">Nenhuma registrada.</p>
+              )}
+            </section>
+          </div>
+          <p className="grouping-ai-note">
+            A recomendação é somente leitura e exige revisão humana. A IA não
+            executa rollback, alteração de porta, visita ou comunicação por
+            conta própria.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
 function GroupingCard({
   grouping,
   onOpen,
@@ -301,6 +457,10 @@ export function NocOperations({
   const [selectedGroupingId, setSelectedGroupingId] = useState("");
   const [topologyGrouping, setTopologyGrouping] =
     useState<OperationalIncident | null>(null);
+  const [selectedAnalysis, setSelectedAnalysis] =
+    useState<Investigation | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
   async function refresh() {
     try {
       const nextIncidents = await api.operationalIncidents();
@@ -345,6 +505,55 @@ export function NocOperations({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [closingGrouping, selectedGroupingId]);
+
+  useEffect(() => {
+    if (!selectedGroupingId || !showGroupingAgent) {
+      setSelectedAnalysis(null);
+      setAnalysisLoading(false);
+      setAnalysisError("");
+      return;
+    }
+
+    let cancelled = false;
+    setSelectedAnalysis(null);
+    setAnalysisLoading(true);
+    setAnalysisError("");
+
+    async function analyzeSelectedProblem() {
+      try {
+        let next = await api.triggerIncidentInvestigation(selectedGroupingId);
+        if (cancelled) return;
+        setSelectedAnalysis(next);
+
+        for (
+          let attempt = 0;
+          attempt < 20 && ["queued", "running"].includes(next.status);
+          attempt += 1
+        ) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1_500));
+          if (cancelled) return;
+          next = await api.investigation(next.investigation_id);
+          if (cancelled) return;
+          setSelectedAnalysis(next);
+        }
+      } catch (reason) {
+        if (!cancelled) {
+          setAnalysisError(
+            reason instanceof Error
+              ? reason.message
+              : "Não foi possível iniciar a análise deste problema.",
+          );
+        }
+      } finally {
+        if (!cancelled) setAnalysisLoading(false);
+      }
+    }
+
+    void analyzeSelectedProblem();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedGroupingId, showGroupingAgent]);
 
   useEffect(() => {
     if (!modalOpen) return;
@@ -623,187 +832,179 @@ export function NocOperations({
       </section>
 
       {selectedGrouping && selectedGroupingData && (
-        <div
-          className="entity-modal-backdrop grouping-detail-backdrop"
-          role="presentation"
-          onMouseDown={() => !closingGrouping && setSelectedGroupingId("")}
+        <SideDrawer
+          className={`grouping-detail-modal grouping-detail-drawer ${selectedGroupingData.severity}`}
+          backdropClassName="grouping-detail-backdrop"
+          labelledBy="grouping-detail-title"
+          closeLabel="Fechar detalhes do agrupamento"
+          closeDisabled={Boolean(closingGrouping)}
+          onClose={() => setSelectedGroupingId("")}
         >
-          <section
-            className={`grouping-detail-modal ${selectedGroupingData.severity}`}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="grouping-detail-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <button
-              className="entity-modal-close"
-              type="button"
-              onClick={() => setSelectedGroupingId("")}
-              aria-label="Fechar detalhes do agrupamento"
-              disabled={Boolean(closingGrouping)}
-            >
-              <X size={19} />
-            </button>
-            <header className="grouping-detail-header">
-              <div>
-                <div className="investigation-tags">
-                  <span>Agrupamento ativo</span>
-                  <span
-                    className={`active-grouping-severity ${selectedGroupingData.severity}`}
-                  >
-                    {severityLabels[selectedGroupingData.severity]}
-                  </span>
-                </div>
-                <h2 id="grouping-detail-title">
-                  <TechnicalText text={selectedGroupingData.title} />
-                </h2>
-                <small>{selectedGroupingData.id}</small>
+          <header className="grouping-detail-header">
+            <div>
+              <div className="investigation-tags">
+                <span>Agrupamento ativo</span>
+                <span
+                  className={`active-grouping-severity ${selectedGroupingData.severity}`}
+                >
+                  {severityLabels[selectedGroupingData.severity]}
+                </span>
               </div>
-              <div className="investigation-confidence">
-                <strong>{selectedGroupingData.confidence}</strong>
-                <span>confiança da correlação</span>
-                <small>
-                  Estimativa calculada a partir dos sinais que sustentam este
-                  agrupamento.
-                </small>
-              </div>
-            </header>
-
-            <div className="grouping-detail-content">
-              <div className="grouping-detail-overview">
-                <div>
-                  <span>Alcance</span>
-                  <strong className="grouping-detail-scope-value">
-                    <GroupingScopePath
-                      location={selectedGroupingData.location}
-                    />
-                  </strong>
-                  <small>Escopo comum investigado</small>
-                </div>
-                <div>
-                  <span>Impacto estimado</span>
-                  <strong>
-                    {selectedGroupingData.affected.toLocaleString("pt-BR")} CPEs
-                  </strong>
-                  <small>Potencialmente afetadas</small>
-                </div>
-                <div>
-                  <span>Responsável</span>
-                  <strong className="grouping-detail-owner-value">
-                    <TechnicalText text={selectedGroupingData.owner} />
-                  </strong>
-                  <small>{selectedGroupingData.origin}</small>
-                </div>
-                <div>
-                  <span>Chamado de origem</span>
-                  <strong>
-                    {selectedGroupingData.originTicketId ?? "Sem vínculo"}
-                  </strong>
-                  <small>Referência preservada no histórico</small>
-                </div>
-              </div>
-
-              <div className="grouping-detail-analysis">
-                <section>
-                  <span>Causa provável</span>
-                  <p>
-                    <TechnicalText text={selectedGroupingData.signal} />
-                  </p>
-                </section>
-                <section>
-                  <span>Orientação operacional</span>
-                  <ul className="grouping-action-list">
-                    {recommendedActionSteps(
-                      selectedGroupingData.recommendation,
-                    ).map((action) => (
-                      <li key={`${action.label}-${action.text}`}>
-                        <strong>{action.label}</strong>
-                        <p>
-                          <TechnicalText text={action.text} />
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              </div>
-
-              <section className="grouping-detail-evidence">
-                <div>
-                  <span>Evidências disponíveis</span>
-                  <p>
-                    Resumo dos sinais registrados para este agrupamento. As
-                    referências técnicas permanecem acessíveis sem expor dados
-                    brutos como conteúdo principal.
-                  </p>
-                </div>
-                {selectedGroupingData.evidence.length > 0 ? (
-                  <ul>
-                    {selectedGroupingData.evidence.map((item, index) => (
-                      <li key={`${selectedGroupingData.id}-${index}`}>
-                        <CheckCircle2 size={15} aria-hidden="true" />
-                        <div>
-                          <strong>
-                            {evidenceSourceLabel[item.source] ??
-                              "Evidência operacional"}
-                          </strong>
-                          <p>
-                            <TechnicalText text={item.summary} />
-                          </p>
-                          {item.reference && <small>{item.reference}</small>}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="grouping-detail-empty">
-                    Nenhuma evidência complementar foi registrada para este
-                    agrupamento.
-                  </p>
-                )}
-              </section>
-
-              <footer className="grouping-detail-actions">
-                <p>
-                  Encerrar remove o agrupamento das visões ativas do NOC e do
-                  N1, mantendo o histórico para auditoria.
-                </p>
-                <div>
-                  <button
-                    type="button"
-                    className="grouping-topology-open"
-                    onClick={() => setTopologyGrouping(selectedGrouping)}
-                  >
-                    <Network size={15} aria-hidden="true" />
-                    Ver infraestrutura afetada
-                  </button>
-                  <button
-                    type="button"
-                    className="text-button"
-                    onClick={() => setSelectedGroupingId("")}
-                    disabled={Boolean(closingGrouping)}
-                  >
-                    Fechar
-                  </button>
-                  <button
-                    type="button"
-                    className="close-grouping"
-                    onClick={() =>
-                      void closeOperationalGrouping(selectedGrouping)
-                    }
-                    disabled={closingGrouping === selectedGrouping.incident_id}
-                  >
-                    <CheckCircle2 size={15} aria-hidden="true" />
-                    <span>
-                      {closingGrouping === selectedGrouping.incident_id
-                        ? "Encerrando…"
-                        : "Encerrar agrupamento"}
-                    </span>
-                  </button>
-                </div>
-              </footer>
+              <h2 id="grouping-detail-title">
+                <TechnicalText text={selectedGroupingData.title} />
+              </h2>
+              <small>{selectedGroupingData.id}</small>
             </div>
-          </section>
-        </div>
+            <div className="investigation-confidence">
+              <strong>{selectedGroupingData.confidence}</strong>
+              <span>confiança da correlação</span>
+              <small>
+                Estimativa calculada a partir dos sinais que sustentam este
+                agrupamento.
+              </small>
+            </div>
+          </header>
+
+          <div className="grouping-detail-content">
+            <div className="grouping-detail-overview">
+              <div>
+                <span>Alcance</span>
+                <strong className="grouping-detail-scope-value">
+                  <GroupingScopePath location={selectedGroupingData.location} />
+                </strong>
+                <small>Escopo comum investigado</small>
+              </div>
+              <div>
+                <span>Impacto estimado</span>
+                <strong>
+                  {selectedGroupingData.affected.toLocaleString("pt-BR")} CPEs
+                </strong>
+                <small>Potencialmente afetadas</small>
+              </div>
+              <div>
+                <span>Responsável</span>
+                <strong className="grouping-detail-owner-value">
+                  <TechnicalText text={selectedGroupingData.owner} />
+                </strong>
+                <small>{selectedGroupingData.origin}</small>
+              </div>
+              <div>
+                <span>Chamado de origem</span>
+                <strong>
+                  {selectedGroupingData.originTicketId ?? "Sem vínculo"}
+                </strong>
+                <small>Referência preservada no histórico</small>
+              </div>
+            </div>
+
+            <div className="grouping-detail-analysis">
+              <section>
+                <span>Causa provável</span>
+                <p>
+                  <TechnicalText text={selectedGroupingData.signal} />
+                </p>
+              </section>
+              <section>
+                <span>Orientação operacional</span>
+                <ul className="grouping-action-list">
+                  {recommendedActionSteps(
+                    selectedGroupingData.recommendation,
+                  ).map((action) => (
+                    <li key={`${action.label}-${action.text}`}>
+                      <strong>{action.label}</strong>
+                      <p>
+                        <TechnicalText text={action.text} />
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </div>
+
+            <section className="grouping-detail-evidence">
+              <div>
+                <span>Evidências disponíveis</span>
+                <p>
+                  Resumo dos sinais registrados para este agrupamento. As
+                  referências técnicas permanecem acessíveis sem expor dados
+                  brutos como conteúdo principal.
+                </p>
+              </div>
+              {selectedGroupingData.evidence.length > 0 ? (
+                <ul>
+                  {selectedGroupingData.evidence.map((item, index) => (
+                    <li key={`${selectedGroupingData.id}-${index}`}>
+                      <CheckCircle2 size={15} aria-hidden="true" />
+                      <div>
+                        <strong>
+                          {evidenceSourceLabel[item.source] ??
+                            "Evidência operacional"}
+                        </strong>
+                        <p>
+                          <TechnicalText text={item.summary} />
+                        </p>
+                        {item.reference && <small>{item.reference}</small>}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="grouping-detail-empty">
+                  Nenhuma evidência complementar foi registrada para este
+                  agrupamento.
+                </p>
+              )}
+            </section>
+
+            {showGroupingAgent && (
+              <InfrastructureAiAnalysis
+                analysis={selectedAnalysis}
+                loading={analysisLoading}
+                error={analysisError}
+              />
+            )}
+
+            <footer className="grouping-detail-actions">
+              <p>
+                Encerrar remove o agrupamento das visões ativas do NOC e do N1,
+                mantendo o histórico para auditoria.
+              </p>
+              <div>
+                <button
+                  type="button"
+                  className="grouping-topology-open"
+                  onClick={() => setTopologyGrouping(selectedGrouping)}
+                >
+                  <Network size={15} aria-hidden="true" />
+                  Ver infraestrutura afetada
+                </button>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => setSelectedGroupingId("")}
+                  disabled={Boolean(closingGrouping)}
+                >
+                  Fechar
+                </button>
+                <button
+                  type="button"
+                  className="close-grouping"
+                  onClick={() =>
+                    void closeOperationalGrouping(selectedGrouping)
+                  }
+                  disabled={closingGrouping === selectedGrouping.incident_id}
+                >
+                  <CheckCircle2 size={15} aria-hidden="true" />
+                  <span>
+                    {closingGrouping === selectedGrouping.incident_id
+                      ? "Encerrando…"
+                      : "Encerrar agrupamento"}
+                  </span>
+                </button>
+              </div>
+            </footer>
+          </div>
+        </SideDrawer>
       )}
 
       {topologyGrouping && (

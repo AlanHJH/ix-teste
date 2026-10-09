@@ -27,9 +27,29 @@ type InventoryListRow = InventoryRow & {
   removed_at: string | null;
 };
 
-type ActiveIncidentRow = {
+type OfflineAlertRow = {
+  customer_id: string;
+  serial: string;
+  vendor: string;
+  model: string;
+  city: string;
+  neighborhood: string;
+  olt: string;
+  pon_port: string;
+  cto: string;
+  ticket_id: string;
+  opened_at: string;
+  description: string;
+  resolution: string;
+  closed_at: string | null;
+  noc_status: string;
+  alert_status: "in_noc" | "open" | "recent";
+};
+
+type IncidentHistoryRow = {
   incident_id: string;
   title: string;
+  status: "open" | "mitigating" | "monitoring" | "resolved";
   severity: "critical" | "high" | "medium" | "low";
   category: string;
   scope: {
@@ -50,7 +70,7 @@ type ActiveIncidentRow = {
 };
 
 export function incidentMatchesEquipment(
-  incident: ActiveIncidentRow,
+  incident: IncidentHistoryRow,
   equipment: InventoryRow,
 ): boolean {
   const scope = incident.scope ?? {};
@@ -99,6 +119,78 @@ export function incidentMatchesEquipment(
 @Injectable()
 export class CustomersService {
   constructor(@Inject(SQL_EXECUTOR) private readonly database: SqlExecutor) {}
+
+  async offlineAlerts(page: number, pageSize: number, sort: string) {
+    const offset = (page - 1) * pageSize;
+    const orderBy =
+      sort === "opened_at_desc"
+        ? "r.opened_at DESC, r.customer_id ASC"
+        : `CASE WHEN r.alert_status = 'in_noc' THEN 0
+               WHEN r.alert_status = 'open' THEN 1 ELSE 2 END,
+             r.opened_at DESC, r.customer_id ASC`;
+    const baseQuery = `
+      WITH latest_reports AS (
+        SELECT DISTINCT ON (t.customer_id)
+          t.customer_id, t.ticket_id, t.opened_at, t.description,
+          t.resolution, t.closed_at, t.noc_status
+        FROM tickets t
+        WHERE t.category = 'Sem conexão'
+        ORDER BY t.customer_id, t.opened_at DESC, t.ticket_id DESC
+      ), anchor AS (
+        SELECT max(opened_at) AS max_opened_at
+        FROM tickets
+        WHERE category = 'Sem conexão'
+      ), reports AS (
+        SELECT r.*, i.serial, i.vendor, i.model, i.city, i.neighborhood,
+          i.olt, i.pon_port, i.cto,
+          CASE
+            WHEN lower(coalesce(r.resolution, '')) LIKE '%noc%'
+              OR r.noc_status IN ('pending', 'in_progress') THEN 'in_noc'
+            WHEN r.closed_at IS NULL THEN 'open'
+            ELSE 'recent'
+          END AS alert_status
+        FROM latest_reports r
+        JOIN inventory i ON i.customer_id = r.customer_id AND i.status = 'active'
+        CROSS JOIN anchor a
+        WHERE r.opened_at >= a.max_opened_at - interval '7 days'
+      )`;
+    const [countResult, itemsResult] = await Promise.all([
+      this.database.query<{ total: number }>(
+        `${baseQuery} SELECT count(*)::int AS total FROM reports`,
+      ),
+      this.database.query<OfflineAlertRow>(
+        `${baseQuery}
+         SELECT customer_id, serial, vendor, model, city, neighborhood,
+           olt, pon_port, cto, ticket_id, opened_at::text, description,
+           resolution, closed_at::text, noc_status, alert_status
+         FROM reports r
+         ORDER BY ${orderBy}
+         LIMIT $1 OFFSET $2`,
+        [pageSize, offset],
+      ),
+    ]);
+
+    return paginate(
+      itemsResult.rows.map((row) => ({
+        customer_id: row.customer_id,
+        serial: row.serial,
+        vendor: row.vendor,
+        model: row.model,
+        city: row.city,
+        neighborhood: row.neighborhood,
+        network: `${row.olt} · PON ${row.pon_port} · ${row.cto}`,
+        ticket_id: row.ticket_id,
+        reported_at: row.opened_at,
+        description: row.description,
+        resolution: row.resolution,
+        alert_status: row.alert_status,
+        confirmed_offline: false,
+      })),
+      countResult.rows[0]?.total ?? 0,
+      page,
+      pageSize,
+    );
+  }
 
   async list(
     query: string,
@@ -413,15 +505,15 @@ export class CustomersService {
       }>(
         `
         SELECT ticket_id, opened_at::text, category, description, resolution
-        FROM tickets WHERE customer_id=$1 ORDER BY opened_at DESC LIMIT 5`,
+        FROM tickets WHERE customer_id=$1 ORDER BY opened_at DESC`,
         [customerId],
       ),
-      this.database.query<ActiveIncidentRow>(`
+      this.database.query<IncidentHistoryRow>(`
           SELECT incident_id, title, severity, category, scope,
             affected_cpes, confidence, probable_cause, recommended_action,
-            opened_at::text, opened_by, source, origin_ticket_id
+            opened_at::text, opened_by, source, origin_ticket_id, status
           FROM operational_incidents
-          WHERE status IN ('open', 'mitigating', 'monitoring')
+          WHERE status IN ('open', 'mitigating', 'monitoring', 'resolved')
           ORDER BY CASE severity
             WHEN 'critical' THEN 0 WHEN 'high' THEN 1
             WHEN 'medium' THEN 2 ELSE 3 END,
@@ -470,9 +562,13 @@ export class CustomersService {
             relatedProblemKind: null,
           }
         : rawBaseDecision;
-    const activeIncident = incidentsResult.rows.find((incident) =>
+    const relatedProblemHistory = incidentsResult.rows.filter((incident) =>
       incidentMatchesEquipment(incident, equipment),
     );
+    const activeIncidents = relatedProblemHistory.filter((incident) =>
+      ["open", "mitigating", "monitoring"].includes(incident.status),
+    );
+    const activeIncident = activeIncidents[0];
     const decision = activeIncident
       ? {
           ...baseDecision,
@@ -496,6 +592,16 @@ export class CustomersService {
         }
       : baseDecision;
 
+    const measurementStatus = activeIncident
+      ? "related_history"
+      : relatedProblemHistory.length > 0 &&
+          decision.relatedProblemKind === "signal"
+        ? "new_signal"
+        : decision.relatedProblemKind === "signal"
+          ? "new_signal"
+          : "no_signal";
+    const escalationRequired = decision.action !== "resolver_telefone";
+
     return {
       customer: {
         id: equipment.customer_id,
@@ -515,24 +621,54 @@ export class CustomersService {
       },
       metrics: { ...metrics, diagnostic },
       decision,
-      activeIncidents: incidentsResult.rows
-        .filter((incident) => incidentMatchesEquipment(incident, equipment))
-        .map((incident) => ({
-          incidentId: incident.incident_id,
-          title: incident.title,
-          severity: incident.severity,
-          category: incident.category,
-          scope: incident.scope,
-          affectedCpes: incident.affected_cpes,
-          confidence: incident.confidence,
-          probableCause: incident.probable_cause,
-          recommendedAction: incident.recommended_action,
-          openedAt: incident.opened_at,
-          openedBy: incident.opened_by,
-          source: incident.source,
-          originTicketId: incident.origin_ticket_id,
-        })),
-      recentTickets: ticketsResult.rows,
+      preflight: {
+        infrastructureChecked: true,
+        measurementsChecked: true,
+        nocHistoryChecked: true,
+        relatedHistoryFound: relatedProblemHistory.length > 0,
+        measurementStatus,
+        mainAdvice: decision.sayToCustomer,
+        escalation: {
+          required: escalationRequired,
+          target: escalationRequired ? "NOC" : null,
+          reason: escalationRequired
+            ? decision.actionLabel
+            : "Os sinais permitem orientação e acompanhamento pelo atendimento N1.",
+        },
+      },
+      problemHistory: relatedProblemHistory.map((incident) => ({
+        incidentId: incident.incident_id,
+        title: incident.title,
+        status: incident.status,
+        severity: incident.severity,
+        category: incident.category,
+        scope: incident.scope,
+        affectedCpes: incident.affected_cpes,
+        confidence: incident.confidence,
+        probableCause: incident.probable_cause,
+        recommendedAction: incident.recommended_action,
+        openedAt: incident.opened_at,
+        openedBy: incident.opened_by,
+        source: incident.source,
+        originTicketId: incident.origin_ticket_id,
+      })),
+      activeIncidents: activeIncidents.map((incident) => ({
+        incidentId: incident.incident_id,
+        title: incident.title,
+        severity: incident.severity,
+        category: incident.category,
+        scope: incident.scope,
+        affectedCpes: incident.affected_cpes,
+        confidence: incident.confidence,
+        probableCause: incident.probable_cause,
+        recommendedAction: incident.recommended_action,
+        openedAt: incident.opened_at,
+        openedBy: incident.opened_by,
+        source: incident.source,
+        originTicketId: incident.origin_ticket_id,
+      })),
+      recentTickets: ticketsResult.rows.slice(0, 5),
+      allTickets: ticketsResult.rows,
     };
   }
 }

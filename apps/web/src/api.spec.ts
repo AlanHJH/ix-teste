@@ -49,6 +49,80 @@ describe("api client", () => {
     }
   });
 
+  it("consulta e persiste dashboards do catálogo por usuário", async () => {
+    const composition = {
+      version: "1.0",
+      widgets: [],
+    } as unknown as DashboardComposition;
+    const calls: Array<{
+      path: string;
+      method?: string;
+      body?: string | null;
+    }> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (
+      path: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      calls.push({
+        path: String(path),
+        method: init?.method,
+        body: typeof init?.body === "string" ? init.body : null,
+      });
+      return {
+        ok: true,
+        json: async () => ({
+          data: [],
+          defaultDashboardId: null,
+          composition,
+          dashboardId: "dash-test",
+        }),
+      } as Response;
+    }) as typeof fetch;
+    try {
+      await api.dashboardLibrary("admin-marina");
+      await api.dashboardById("admin-marina", "dash-test");
+      await api.createDashboard("admin-marina", {
+        name: "Visão NOC",
+        description: "Fila operacional",
+        composition,
+      });
+      await api.saveDashboard("admin-marina", "dash-test", {
+        name: "Visão NOC",
+        description: "Fila operacional",
+        composition,
+      });
+      await api.setDefaultDashboard("admin-marina", "dash-test");
+      assert.deepEqual(
+        calls.map(({ path, method }) => ({ path, method })),
+        [
+          {
+            path: "/api/dashboard/dashboards/admin-marina",
+            method: undefined,
+          },
+          {
+            path: "/api/dashboard/dashboards/admin-marina/dash-test",
+            method: undefined,
+          },
+          {
+            path: "/api/dashboard/dashboards/admin-marina",
+            method: "POST",
+          },
+          {
+            path: "/api/dashboard/dashboards/admin-marina/dash-test",
+            method: "PUT",
+          },
+          {
+            path: "/api/dashboard/dashboards/admin-marina/dash-test/default",
+            method: "PATCH",
+          },
+        ],
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("envia somente o objetivo para compor o dashboard", async () => {
     const payload = { version: "1.0", widgets: [] };
     const calls: Array<{
@@ -129,6 +203,64 @@ describe("api client", () => {
     try {
       assert.deepEqual(await api.overview(), payload);
       assert.deepEqual(calls, ["/api/network/overview"]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("consulta alertas recentes de clientes sem conexão", async () => {
+    const payload = {
+      data: [],
+      page: 1,
+      pageSize: 8,
+      totalItems: 0,
+      totalPages: 0,
+    };
+    const calls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (path: string | URL | Request) => {
+      calls.push(String(path));
+      return { ok: true, json: async () => payload } as Response;
+    }) as typeof fetch;
+    try {
+      assert.deepEqual(await api.offlineAlerts(), payload);
+      assert.deepEqual(calls, [
+        "/api/customers/offline-alerts?page=1&pageSize=8&sort=alert_desc",
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("dispara e acompanha a análise IA de um problema de infraestrutura", async () => {
+    const calls: Array<{ path: string; method?: string }> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (
+      path: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      calls.push({ path: String(path), method: init?.method });
+      return {
+        ok: true,
+        json: async () => ({
+          investigation_id: "INV-FEC-001",
+          status: "pending_review",
+        }),
+      } as Response;
+    }) as typeof fetch;
+    try {
+      await api.triggerIncidentInvestigation("INC-FEC-001");
+      await api.investigation("INV-FEC-001");
+      assert.deepEqual(calls, [
+        {
+          path: "/api/investigations/trigger/incident/INC-FEC-001",
+          method: "POST",
+        },
+        {
+          path: "/api/investigations/INV-FEC-001",
+          method: undefined,
+        },
+      ]);
     } finally {
       globalThis.fetch = originalFetch;
     }

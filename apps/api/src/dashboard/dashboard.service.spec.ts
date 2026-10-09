@@ -117,4 +117,29 @@ describe("preferências do dashboard", () => {
       /Usuário inválido/,
     );
   });
+
+  it("lista o catálogo sem carregar a composição completa de cada dashboard", async () => {
+    const saved = composition();
+    const database = {
+      query: async () => ({
+        rows: [
+          {
+            dashboard_id: "dash-operacao",
+            user_id: "admin-marina",
+            name: "Operação",
+            description: "Indicadores principais",
+            is_default: true,
+            composition: saved,
+            created_at: "2026-10-06T12:00:00.000Z",
+            updated_at: "2026-10-06T12:30:00.000Z",
+          },
+        ],
+      }),
+    } as unknown as DatabaseService;
+    const service = new DashboardService(database, openApiCatalog());
+    const library = await service.listDashboards("admin-marina");
+    assert.equal(library.defaultDashboardId, "dash-operacao");
+    assert.equal(library.data[0]?.name, "Operação");
+    assert.equal("composition" in (library.data[0] ?? {}), false);
+  });
 });

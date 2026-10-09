@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Put } from "@nestjs/common";
 import { ApiBody, ApiParam, ApiTags } from "@nestjs/swagger";
 import {
   ApiInvalidRequest,
@@ -11,9 +11,10 @@ import {
 } from "../openapi";
 import {
   DashboardComposeDto,
+  DashboardDefinitionDto,
   DashboardPreferenceDto,
 } from "../contracts/input.dto";
-import { UserIdParamDto } from "../contracts/params.dto";
+import { DashboardIdParamDto, UserIdParamDto } from "../contracts/params.dto";
 import { DashboardService } from "./dashboard.service";
 
 const dashboardWidgetSchema = {
@@ -206,6 +207,64 @@ const dashboardPreferenceSchema = {
   required: ["composition", "updatedAt"],
 };
 
+const dashboardDefinitionSchema = {
+  type: "object" as const,
+  properties: {
+    dashboardId: apiString("Identificador estável do dashboard."),
+    userId: apiString("Usuário proprietário."),
+    name: apiString("Nome exibido no seletor."),
+    description: apiString("Descrição curta do dashboard."),
+    isDefault: { type: "boolean" },
+    composition: dashboardCompositionSchema,
+    createdAt: apiDateTime("Criação em ISO 8601."),
+    updatedAt: apiDateTime("Última alteração em ISO 8601."),
+  },
+  required: [
+    "dashboardId",
+    "userId",
+    "name",
+    "description",
+    "isDefault",
+    "composition",
+    "createdAt",
+    "updatedAt",
+  ],
+};
+
+const dashboardSummarySchema = {
+  type: "object" as const,
+  properties: {
+    dashboardId: apiString("Identificador estável do dashboard."),
+    userId: apiString("Usuário proprietário."),
+    name: apiString("Nome exibido no seletor."),
+    description: apiString("Descrição curta do dashboard."),
+    isDefault: { type: "boolean" },
+    createdAt: apiDateTime("Criação em ISO 8601."),
+    updatedAt: apiDateTime("Última alteração em ISO 8601."),
+  },
+  required: [
+    "dashboardId",
+    "userId",
+    "name",
+    "description",
+    "isDefault",
+    "createdAt",
+    "updatedAt",
+  ],
+};
+
+const dashboardLibrarySchema = {
+  type: "object" as const,
+  properties: {
+    data: apiArray(dashboardSummarySchema, "Dashboards disponíveis."),
+    defaultDashboardId: {
+      ...apiString("Dashboard selecionado por padrão."),
+      nullable: true,
+    },
+  },
+  required: ["data", "defaultDashboardId"],
+};
+
 @ApiTags("Dashboard dinâmico")
 @Controller("dashboard")
 export class DashboardController {
@@ -292,5 +351,130 @@ export class DashboardController {
     @Body() body: DashboardPreferenceDto,
   ) {
     return this.dashboards.savePreference(params.userId, body.composition);
+  }
+
+  @ApiRead({
+    summary: "Listar dashboards do usuário",
+    description:
+      "Retorna o catálogo de dashboards disponíveis para o seletor da aba de dashboard.",
+    responseDescription: "Dashboards e seleção padrão.",
+    schema: dashboardLibrarySchema,
+  })
+  @ApiParam({ name: "userId", example: "noc-alan" })
+  @ApiInvalidRequest("Identificador de usuário inválido.")
+  @Get("dashboards/:userId")
+  listDashboards(@Param() params: UserIdParamDto) {
+    return this.dashboards.listDashboards(params.userId);
+  }
+
+  @ApiRead({
+    summary: "Obter um dashboard do catálogo",
+    description:
+      "Recupera a composição completa de um dashboard escolhido no seletor.",
+    responseDescription: "Dashboard completo e composição validada.",
+    schema: dashboardDefinitionSchema,
+  })
+  @ApiParam({ name: "userId", example: "noc-alan" })
+  @ApiParam({
+    name: "dashboardId",
+    example: "dash-8d31f1b7-2a4a-4c9e-8dc9-0a0a67ec7d7d",
+  })
+  @ApiInvalidRequest("Identificador de usuário ou dashboard inválido.")
+  @Get("dashboards/:userId/:dashboardId")
+  getDashboard(@Param() params: DashboardIdParamDto) {
+    return this.dashboards.getDashboard(params.userId, params.dashboardId);
+  }
+
+  @ApiWrite({
+    summary: "Criar um dashboard",
+    description:
+      "Persiste uma composição validada no catálogo do usuário. O primeiro dashboard vira o padrão automaticamente.",
+    responseDescription: "Dashboard criado.",
+    schema: dashboardDefinitionSchema,
+    created: true,
+  })
+  @ApiParam({ name: "userId", example: "noc-alan" })
+  @ApiBody({
+    description: "Nome, descrição e composição do novo dashboard.",
+    schema: {
+      type: "object",
+      required: ["name", "composition"],
+      properties: {
+        name: apiString("Nome exibido no seletor."),
+        description: apiString(
+          "Descrição curta.",
+          "Fila e incidentes críticos.",
+        ),
+        composition: dashboardCompositionSchema,
+        isDefault: { type: "boolean" },
+      },
+    },
+  })
+  @ApiInvalidRequest("Nome, composição ou identificador inválido.")
+  @Post("dashboards/:userId")
+  createDashboard(
+    @Param() params: UserIdParamDto,
+    @Body() body: DashboardDefinitionDto,
+  ) {
+    return this.dashboards.createDashboard(params.userId, body);
+  }
+
+  @ApiWrite({
+    summary: "Salvar um dashboard",
+    description:
+      "Atualiza nome, descrição e composição de um dashboard existente.",
+    responseDescription: "Dashboard atualizado.",
+    schema: dashboardDefinitionSchema,
+  })
+  @ApiParam({ name: "userId", example: "noc-alan" })
+  @ApiParam({
+    name: "dashboardId",
+    example: "dash-8d31f1b7-2a4a-4c9e-8dc9-0a0a67ec7d7d",
+  })
+  @ApiBody({
+    description: "Dados completos do dashboard.",
+    schema: {
+      type: "object",
+      required: ["name", "composition"],
+      properties: {
+        name: apiString("Nome exibido no seletor."),
+        description: apiString("Descrição curta."),
+        composition: dashboardCompositionSchema,
+        isDefault: { type: "boolean" },
+      },
+    },
+  })
+  @ApiInvalidRequest("Dashboard, nome ou composição inválida.")
+  @Put("dashboards/:userId/:dashboardId")
+  saveDashboard(
+    @Param() params: DashboardIdParamDto,
+    @Body() body: DashboardDefinitionDto,
+  ) {
+    return this.dashboards.saveDashboard(
+      params.userId,
+      params.dashboardId,
+      body,
+    );
+  }
+
+  @ApiWrite({
+    summary: "Definir dashboard padrão",
+    description:
+      "Seleciona qual dashboard será aberto por padrão para o usuário.",
+    responseDescription: "Dashboard padrão atualizado.",
+    schema: dashboardDefinitionSchema,
+  })
+  @ApiParam({ name: "userId", example: "noc-alan" })
+  @ApiParam({
+    name: "dashboardId",
+    example: "dash-8d31f1b7-2a4a-4c9e-8dc9-0a0a67ec7d7d",
+  })
+  @ApiInvalidRequest("Dashboard ou identificador inválido.")
+  @Patch("dashboards/:userId/:dashboardId/default")
+  setDefaultDashboard(@Param() params: DashboardIdParamDto) {
+    return this.dashboards.setDefaultDashboard(
+      params.userId,
+      params.dashboardId,
+    );
   }
 }

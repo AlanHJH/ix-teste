@@ -8,7 +8,13 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { api } from "./api";
-import type { N1AdvisorReply, N1ChatMessage, SupportProfile } from "./types";
+import { DEEP_ANALYSIS_PROMPT, DeepAnalysisPanel } from "./DeepAnalysisPanel";
+import type {
+  N1AdvisorReply,
+  N1ChatMessage,
+  N1DeepAnalysis,
+  SupportProfile,
+} from "./types";
 import { HelpTooltip } from "./HelpTooltip";
 import { TechnicalText } from "./ProviderGlossary";
 
@@ -49,14 +55,42 @@ export function N1AdvisorChat({
   ]);
   const [input, setInput] = useState("");
   const [reply, setReply] = useState<N1AdvisorReply | null>(null);
+  const [analysis, setAnalysis] = useState<N1DeepAnalysis | null>(null);
+  const [analysisBusy, setAnalysisBusy] = useState(true);
+  const [analysisError, setAnalysisError] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     setMessages([initialMessage(profile)]);
     setReply(null);
+    setAnalysis(null);
+    setAnalysisBusy(true);
+    setAnalysisError("");
     setInput("");
     setError("");
+
+    let cancelled = false;
+    void api
+      .n1Chat(customerId, DEEP_ANALYSIS_PROMPT, [])
+      .then((nextReply) => {
+        if (!cancelled) setAnalysis(nextReply.deepAnalysis);
+      })
+      .catch((reason) => {
+        if (!cancelled) {
+          setAnalysisError(
+            reason instanceof Error
+              ? reason.message
+              : "Não foi possível montar a análise profunda.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAnalysisBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [customerId, profile]);
 
   async function sendMessage(value: string) {
@@ -73,6 +107,7 @@ export function N1AdvisorChat({
     try {
       const nextReply = await api.n1Chat(customerId, message, messages);
       setReply(nextReply);
+      setAnalysis(nextReply.deepAnalysis);
       setMessages([
         ...nextMessages,
         { role: "assistant", content: nextReply.assistantMessage },
@@ -162,6 +197,12 @@ export function N1AdvisorChat({
           ))}
         </div>
       )}
+
+      <DeepAnalysisPanel
+        analysis={analysis}
+        loading={analysisBusy}
+        error={analysisError}
+      />
 
       <div className="n1-chat-messages" aria-live="polite">
         {messages.map((message, index) => (

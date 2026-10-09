@@ -1,6 +1,9 @@
 import type {
   EquipmentPath,
   DashboardComposition,
+  DashboardDetail,
+  DashboardLibrary,
+  DashboardSummary,
   DailyMetricPage,
   DiagnosticsPage,
   DiagnosticFilter,
@@ -11,6 +14,7 @@ import type {
   InventoryFilterOption,
   InventorySort,
   Overview,
+  Investigation,
   InvestigationPage,
   IncidentOptions,
   IncidentOptionType,
@@ -19,6 +23,7 @@ import type {
   SupportProfile,
   N1AdvisorReply,
   N1ChatMessage,
+  OfflineAlertPage,
   TicketFilter,
   TicketFilterKind,
   TicketFilterOption,
@@ -29,6 +34,8 @@ import type {
   AiConfigurationSnapshot,
   PlatformCatalog,
   DiagnosticSort,
+  CustomerDetail,
+  CustomerSummaryPage,
 } from "./types";
 
 type PaginatedResponse<T> = {
@@ -72,6 +79,50 @@ async function mutate<T>(
 }
 
 export const api = {
+  dashboardLibrary: (userId: string) =>
+    request<DashboardLibrary>(
+      `/api/dashboard/dashboards/${encodeURIComponent(userId)}`,
+      "no-store",
+    ),
+  dashboardById: (userId: string, dashboardId: string) =>
+    request<DashboardDetail>(
+      `/api/dashboard/dashboards/${encodeURIComponent(userId)}/${encodeURIComponent(dashboardId)}`,
+      "no-store",
+    ),
+  createDashboard: (
+    userId: string,
+    input: {
+      name: string;
+      description: string;
+      composition: DashboardComposition;
+      isDefault?: boolean;
+    },
+  ) =>
+    mutate<DashboardDetail>(
+      `/api/dashboard/dashboards/${encodeURIComponent(userId)}`,
+      "POST",
+      input,
+    ),
+  saveDashboard: (
+    userId: string,
+    dashboardId: string,
+    input: {
+      name: string;
+      description: string;
+      composition: DashboardComposition;
+      isDefault?: boolean;
+    },
+  ) =>
+    mutate<DashboardDetail>(
+      `/api/dashboard/dashboards/${encodeURIComponent(userId)}/${encodeURIComponent(dashboardId)}`,
+      "PUT",
+      input,
+    ),
+  setDefaultDashboard: (userId: string, dashboardId: string) =>
+    mutate<DashboardDetail>(
+      `/api/dashboard/dashboards/${encodeURIComponent(userId)}/${encodeURIComponent(dashboardId)}/default`,
+      "PATCH",
+    ),
   dashboardPreference: (userId: string) =>
     request<{
       composition: DashboardComposition | null;
@@ -98,6 +149,32 @@ export const api = {
       ...(targetWidgetId ? { targetWidgetId } : {}),
     }),
   overview: () => request<Overview>("/api/network/overview"),
+  offlineAlerts: () =>
+    request<OfflineAlertPage>(
+      "/api/customers/offline-alerts?page=1&pageSize=8&sort=alert_desc",
+      "no-store",
+    ),
+  customerSearch: (
+    query = "",
+    page = 1,
+    status: "active" | "cancelled" | "all" = "active",
+  ) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: "12",
+      sort: "customer_id_asc",
+      status,
+    });
+    if (query.trim()) params.set("q", query.trim());
+    return request<CustomerSummaryPage>(
+      `/api/customers/search?${params.toString()}`,
+    );
+  },
+  customer: (customerId: string) =>
+    request<CustomerDetail>(
+      `/api/customers/${encodeURIComponent(customerId)}`,
+      "no-store",
+    ),
   dashboardInventory: (filters: InventoryFilter[] = []) => {
     const params = new URLSearchParams({
       status: "active",
@@ -390,6 +467,16 @@ export const api = {
       "/api/investigations/trigger/manual",
       "POST",
       { objective },
+    ),
+  triggerIncidentInvestigation: (incidentId: string) =>
+    mutate<Investigation>(
+      `/api/investigations/trigger/incident/${encodeURIComponent(incidentId)}`,
+      "POST",
+    ),
+  investigation: (investigationId: string) =>
+    request<Investigation>(
+      `/api/investigations/${encodeURIComponent(investigationId)}`,
+      "no-store",
     ),
   retryInvestigation: (investigationId: string) =>
     mutate<Record<string, unknown>>(

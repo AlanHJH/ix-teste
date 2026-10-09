@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "./api";
+import { SideDrawer } from "./SideDrawer";
 import type { Investigation, InvestigationPage } from "./types";
 
 const statusLabel: Record<Investigation["status"], string> = {
@@ -20,6 +21,13 @@ const statusLabel: Record<Investigation["status"], string> = {
   rejected: "Descartado",
   failed: "Falhou",
 };
+
+function investigationStatusLabel(investigation: Investigation) {
+  return investigation.status === "approved" &&
+    investigation.reviewed_by === "agente-automatico"
+    ? "Criado automaticamente"
+    : statusLabel[investigation.status];
+}
 
 const triggerLabel = {
   metric: "Detector de grupos",
@@ -154,7 +162,7 @@ function InvestigationCard({
           <div className="investigation-tags">
             <span>{triggerLabel[investigation.trigger_type]}</span>
             <span className={`investigation-status ${investigation.status}`}>
-              {statusLabel[investigation.status]}
+              {investigationStatusLabel(investigation)}
             </span>
           </div>
           {finding && (
@@ -224,140 +232,130 @@ function InvestigationDetailModal({
   const finding = investigation.finding;
   const titleId = useId();
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [onClose]);
-
   return (
-    <div
-      className="entity-modal-backdrop investigation-modal-backdrop"
-      role="presentation"
-      onMouseDown={onClose}
+    <SideDrawer
+      className={`investigation-modal investigation-drawer ${investigation.status}`}
+      backdropClassName="investigation-modal-backdrop"
+      labelledBy={titleId}
+      closeLabel="Fechar análise"
+      onClose={onClose}
     >
-      <section
-        className={`investigation-modal ${investigation.status}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <button
-          className="entity-modal-close"
-          type="button"
-          onClick={onClose}
-          aria-label="Fechar análise"
-          title="Fechar análise"
-          autoFocus
-        >
-          <X size={19} />
-        </button>
-
-        <header className="investigation-modal-header">
-          <div>
-            <div className="investigation-tags">
-              <span>{triggerLabel[investigation.trigger_type]}</span>
-              <span className={`investigation-status ${investigation.status}`}>
-                {statusLabel[investigation.status]}
-              </span>
-            </div>
-            <h2 id={titleId}>
-              {finding?.title ?? investigation.trigger_label}
-            </h2>
-            <small>
-              {investigation.investigation_id} ·{" "}
-              {formatDate(investigation.created_at)}
-            </small>
+      <header className="investigation-modal-header">
+        <div>
+          <div className="investigation-tags">
+            <span>{triggerLabel[investigation.trigger_type]}</span>
+            <span className={`investigation-status ${investigation.status}`}>
+              {investigationStatusLabel(investigation)}
+            </span>
           </div>
-          {finding && (
-            <div className="investigation-confidence">
-              <strong>{Math.round(finding.confidence * 100)}%</strong>
-              <span>Confiança estimada</span>
-              <small>{confidenceDescription(finding.confidence)}</small>
-            </div>
-          )}
-        </header>
+          <h2 id={titleId}>{finding?.title ?? investigation.trigger_label}</h2>
+          <small>
+            {investigation.investigation_id} ·{" "}
+            {formatDate(investigation.created_at)}
+          </small>
+        </div>
+        {finding && (
+          <div className="investigation-confidence">
+            <strong>{Math.round(finding.confidence * 100)}%</strong>
+            <span>Confiança estimada</span>
+            <small>{confidenceDescription(finding.confidence)}</small>
+          </div>
+        )}
+      </header>
 
-        <div className="investigation-modal-content">
-          {!finding && !investigation.error && (
-            <p className="investigation-objective">{investigation.objective}</p>
-          )}
-          {investigation.error && (
-            <div className="investigation-error">
-              <p>
-                <AlertTriangle size={15} /> {investigation.error}
-              </p>
-              {investigation.status === "failed" && (
-                <button disabled={busy} onClick={onRetry}>
-                  <RefreshCw size={14} />
-                  {busy ? "Reenfileirando…" : "Tentar novamente"}
-                </button>
-              )}
-            </div>
-          )}
+      <div className="investigation-modal-content">
+        {!finding && !investigation.error && (
+          <p className="investigation-objective">{investigation.objective}</p>
+        )}
+        {investigation.error && (
+          <div className="investigation-error">
+            <p>
+              <AlertTriangle size={15} /> {investigation.error}
+            </p>
+            {investigation.status === "failed" && (
+              <button disabled={busy} onClick={onRetry}>
+                <RefreshCw size={14} />
+                {busy ? "Reenfileirando…" : "Tentar novamente"}
+              </button>
+            )}
+          </div>
+        )}
 
-          {finding && (
-            <>
-              <div className="investigation-overview">
-                <div>
-                  <span>Escopo analisado</span>
-                  <strong>{finding.scope.identifier}</strong>
-                  <small>Menor agrupamento sustentado pelos dados</small>
-                </div>
-                <div>
-                  <span>Impacto estimado</span>
-                  <strong>{finding.affectedCpes} CPEs</strong>
-                  <small>Equipamentos possivelmente afetados</small>
-                </div>
+        {finding && (
+          <>
+            <div className="investigation-overview">
+              <div>
+                <span>Escopo analisado</span>
+                <strong>{finding.scope.identifier}</strong>
+                <small>Menor agrupamento sustentado pelos dados</small>
               </div>
-              <div className="investigation-conclusion-grid">
-                <section>
-                  <span>Hipótese levantada pela IA</span>
-                  <h3>O que pode estar acontecendo</h3>
-                  <p>{finding.probableCause}</p>
-                </section>
-                <section>
-                  <span>Orientação operacional</span>
-                  <h3>O que fazer agora</h3>
-                  <ol className="investigation-actions-list">
-                    {recommendedActionSteps(finding.recommendedAction).map(
-                      (step) => (
-                        <li key={`${step.label}-${step.text}`}>
-                          <strong>{step.label}</strong>
-                          <p>{step.text}</p>
-                        </li>
-                      ),
-                    )}
-                  </ol>
-                </section>
+              <div>
+                <span>Impacto estimado</span>
+                <strong>{finding.affectedCpes} CPEs</strong>
+                <small>Equipamentos possivelmente afetados</small>
               </div>
-              <section className="investigation-rationale">
-                <span>Explicação em linguagem simples</span>
-                <h3>Como a IA chegou a essa conclusão</h3>
-                <p className="investigation-explanation">
-                  {humanizeAnalysisSummary(finding.summary)}
-                </p>
+            </div>
+            <div className="investigation-conclusion-grid">
+              <section>
+                <span>Hipótese levantada pela IA</span>
+                <h3>O que pode estar acontecendo</h3>
+                <p>{finding.probableCause}</p>
               </section>
-              <div className="investigation-evidence">
-                <section>
-                  <span>Por que a hipótese faz sentido</span>
-                  <p className="investigation-evidence-intro">
-                    Sinais encontrados que reforçam a conclusão proposta.
-                  </p>
+              <section>
+                <span>Orientação operacional</span>
+                <h3>O que fazer agora</h3>
+                <ol className="investigation-actions-list">
+                  {recommendedActionSteps(finding.recommendedAction).map(
+                    (step) => (
+                      <li key={`${step.label}-${step.text}`}>
+                        <strong>{step.label}</strong>
+                        <p>{step.text}</p>
+                      </li>
+                    ),
+                  )}
+                </ol>
+              </section>
+            </div>
+            <section className="investigation-rationale">
+              <span>Explicação em linguagem simples</span>
+              <h3>Como a IA chegou a essa conclusão</h3>
+              <p className="investigation-explanation">
+                {humanizeAnalysisSummary(finding.summary)}
+              </p>
+            </section>
+            <div className="investigation-evidence">
+              <section>
+                <span>Por que a hipótese faz sentido</span>
+                <p className="investigation-evidence-intro">
+                  Sinais encontrados que reforçam a conclusão proposta.
+                </p>
+                <ol>
+                  {finding.evidence.map((evidence, index) => (
+                    <li key={`${evidence.source}-${evidence.reference}`}>
+                      <span className="investigation-evidence-index">
+                        {index + 1}
+                      </span>
+                      <div>
+                        <strong>
+                          {evidenceSourceLabel[evidence.source] ??
+                            "Fonte consultada"}
+                        </strong>
+                        <p>{humanizeEvidenceSummary(evidence.summary)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+              <section>
+                <span>O que ainda gera dúvida</span>
+                <p className="investigation-evidence-intro">
+                  Limitações que precisam ser consideradas antes da decisão.
+                </p>
+                {finding.counterEvidence.length ? (
                   <ol>
-                    {finding.evidence.map((evidence, index) => (
+                    {finding.counterEvidence.map((evidence, index) => (
                       <li key={`${evidence.source}-${evidence.reference}`}>
-                        <span className="investigation-evidence-index">
+                        <span className="investigation-evidence-index counter">
                           {index + 1}
                         </span>
                         <div>
@@ -370,119 +368,104 @@ function InvestigationDetailModal({
                       </li>
                     ))}
                   </ol>
-                </section>
-                <section>
-                  <span>O que ainda gera dúvida</span>
-                  <p className="investigation-evidence-intro">
-                    Limitações que precisam ser consideradas antes da decisão.
+                ) : (
+                  <p className="investigation-none">
+                    A análise não encontrou contrapontos relevantes.
                   </p>
-                  {finding.counterEvidence.length ? (
-                    <ol>
-                      {finding.counterEvidence.map((evidence, index) => (
-                        <li key={`${evidence.source}-${evidence.reference}`}>
-                          <span className="investigation-evidence-index counter">
-                            {index + 1}
-                          </span>
-                          <div>
-                            <strong>
-                              {evidenceSourceLabel[evidence.source] ??
-                                "Fonte consultada"}
-                            </strong>
-                            <p>{humanizeEvidenceSummary(evidence.summary)}</p>
-                          </div>
-                        </li>
+                )}
+              </section>
+            </div>
+            <details className="tool-trace">
+              <summary>
+                Auditoria técnica · {investigation.tool_trace.length} consultas
+                MCP (opcional)
+              </summary>
+              <p>
+                Registro das fontes e filtros usados pela IA. Esta seção não é
+                necessária para a decisão operacional.
+              </p>
+              <ol>
+                {investigation.tool_trace.map((trace, index) => (
+                  <li key={`${trace.tool}-${index}`}>
+                    <strong>{toolLabel[trace.tool] ?? trace.tool}</strong>
+                    <dl>
+                      {Object.entries(trace.arguments).map(([key, value]) => (
+                        <div key={key}>
+                          <dt>{argumentLabel[key] ?? key}</dt>
+                          <dd>{formatToolArgument(key, value)}</dd>
+                        </div>
                       ))}
-                    </ol>
-                  ) : (
-                    <p className="investigation-none">
-                      A análise não encontrou contrapontos relevantes.
-                    </p>
-                  )}
-                </section>
-              </div>
-              <details className="tool-trace">
-                <summary>
-                  Auditoria técnica · {investigation.tool_trace.length}{" "}
-                  consultas MCP (opcional)
-                </summary>
-                <p>
-                  Registro das fontes e filtros usados pela IA. Esta seção não é
-                  necessária para a decisão operacional.
-                </p>
-                <ol>
-                  {investigation.tool_trace.map((trace, index) => (
-                    <li key={`${trace.tool}-${index}`}>
-                      <strong>{toolLabel[trace.tool] ?? trace.tool}</strong>
-                      <dl>
-                        {Object.entries(trace.arguments).map(([key, value]) => (
-                          <div key={key}>
-                            <dt>{argumentLabel[key] ?? key}</dt>
-                            <dd>{formatToolArgument(key, value)}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </li>
-                  ))}
-                </ol>
-              </details>
-            </>
-          )}
+                    </dl>
+                  </li>
+                ))}
+              </ol>
+            </details>
+          </>
+        )}
 
-          {investigation.status === "pending_review" && (
-            <div className="human-review">
-              <div>
-                <ShieldCheck size={19} />
-                <p>
-                  <strong>Decisão humana obrigatória</strong>
-                  Aprovar cria o agrupamento ativo para o NOC e para o contexto
-                  do N1. Rejeitar preserva o resultado como feedback auditável.
-                </p>
-              </div>
-              <label className="investigation-modal-reviewer">
-                Responsável pela decisão
-                <input
-                  value={reviewer}
-                  onChange={(event) => onReviewer(event.target.value)}
-                  placeholder="Nome ou matrícula"
-                  maxLength={120}
-                />
-              </label>
-              <textarea
-                value={note}
-                onChange={(event) => onNote(event.target.value)}
-                placeholder="Observação da revisão (opcional)"
-                aria-label={`Observação para ${investigation.investigation_id}`}
-                maxLength={1000}
+        {investigation.status === "pending_review" && (
+          <div className="human-review">
+            <div>
+              <ShieldCheck size={19} />
+              <p>
+                <strong>Decisão humana obrigatória</strong>
+                Aprovar cria o agrupamento ativo para o NOC e para o contexto do
+                N1. Rejeitar preserva o resultado como feedback auditável.
+              </p>
+            </div>
+            <label className="investigation-modal-reviewer">
+              Responsável pela decisão
+              <input
+                value={reviewer}
+                onChange={(event) => onReviewer(event.target.value)}
+                placeholder="Nome ou matrícula"
+                maxLength={120}
               />
-              <div className="review-actions">
-                <button
-                  className="reject"
-                  disabled={busy || !reviewer.trim()}
-                  onClick={() => onReview("reject")}
-                >
-                  <X size={15} /> Descartar
-                </button>
-                <button
-                  className="approve"
-                  disabled={busy || !reviewer.trim()}
-                  onClick={() => onReview("approve")}
-                >
-                  <Check size={15} /> Aprovar e criar agrupamento
-                </button>
-              </div>
+            </label>
+            <textarea
+              value={note}
+              onChange={(event) => onNote(event.target.value)}
+              placeholder="Observação da revisão (opcional)"
+              aria-label={`Observação para ${investigation.investigation_id}`}
+              maxLength={1000}
+            />
+            <div className="review-actions">
+              <button
+                className="reject"
+                disabled={busy || !reviewer.trim()}
+                onClick={() => onReview("reject")}
+              >
+                <X size={15} /> Descartar
+              </button>
+              <button
+                className="approve"
+                disabled={busy || !reviewer.trim()}
+                onClick={() => onReview("approve")}
+              >
+                <Check size={15} /> Aprovar e criar agrupamento
+              </button>
             </div>
-          )}
+          </div>
+        )}
 
-          {investigation.reviewed_by && (
-            <div className="reviewed-by">
-              Revisado por <strong>{investigation.reviewed_by}</strong> em{" "}
-              {formatDate(investigation.reviewed_at)}
-              {investigation.incident_id && ` · ${investigation.incident_id}`}
-            </div>
-          )}
-        </div>
-      </section>
-    </div>
+        {investigation.reviewed_by && (
+          <div className="reviewed-by">
+            {investigation.reviewed_by === "agente-automatico" ? (
+              <>
+                Criado automaticamente pelo agente após superar o limiar de
+                confiança.
+              </>
+            ) : (
+              <>
+                Revisado por <strong>{investigation.reviewed_by}</strong> em{" "}
+                {formatDate(investigation.reviewed_at)}
+              </>
+            )}
+            {investigation.incident_id && ` · ${investigation.incident_id}`}
+          </div>
+        )}
+      </div>
+    </SideDrawer>
   );
 }
 

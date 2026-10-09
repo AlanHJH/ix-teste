@@ -10,7 +10,6 @@ export class InvestigationSchedulerService
   constructor(private readonly investigations: InvestigationsService) {}
 
   onModuleInit(): void {
-    void this.investigations.recoverQueued();
     if (process.env.AGENT_SCHEDULE_ENABLED === "true") {
       this.addTimer(
         Number(process.env.AGENT_SCHEDULE_INTERVAL_MS ?? 3_600_000),
@@ -23,6 +22,10 @@ export class InvestigationSchedulerService
         () => this.investigations.triggerMetricCandidates(),
       );
     }
+  }
+
+  start(): void {
+    void this.investigations.recoverQueued();
   }
 
   onModuleDestroy(): void {

@@ -14,6 +14,41 @@ CREATE TABLE IF NOT EXISTS dashboard_preferences (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Catálogo de dashboards por usuário. A preferência legada acima permanece
+-- para compatibilidade com clientes antigos e é migrada para esta coleção.
+CREATE TABLE IF NOT EXISTS dashboard_definitions (
+  dashboard_id text PRIMARY KEY,
+  user_id text NOT NULL,
+  name text NOT NULL,
+  description text NOT NULL DEFAULT '',
+  is_default boolean NOT NULL DEFAULT false,
+  composition jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS dashboard_definitions_user_updated_idx
+  ON dashboard_definitions (user_id, is_default DESC, updated_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS dashboard_definitions_user_name_idx
+  ON dashboard_definitions (user_id, lower(name));
+
+INSERT INTO dashboard_definitions(
+  dashboard_id, user_id, name, description, is_default, composition,
+  created_at, updated_at
+)
+SELECT
+  'legacy-' || user_id,
+  user_id,
+  COALESCE(NULLIF(composition->>'title', ''), 'Visão executiva'),
+  COALESCE(NULLIF(composition->>'subtitle', ''), 'Dashboard principal'),
+  true,
+  composition,
+  updated_at,
+  updated_at
+FROM dashboard_preferences
+ON CONFLICT (dashboard_id) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS inventory (
   serial text PRIMARY KEY,
   customer_id text NOT NULL,

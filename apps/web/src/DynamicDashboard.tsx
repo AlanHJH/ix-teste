@@ -5,7 +5,6 @@ import {
   ReactNode,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -48,12 +47,16 @@ import {
 import { DashboardDetailModal } from "./DashboardDetailModal";
 import type { DashboardDrilldown } from "./DashboardDetailModal";
 import { InventoryFilterSelect } from "./InventoryFilterSelect";
+import { OfflineClientsPanel } from "./OfflineClientsPanel";
 import type {
   DashboardBinding,
   DashboardComposition,
+  DashboardDetail,
+  DashboardSummary,
   DashboardRuntimeData,
   DashboardWidget,
   InventoryFilter,
+  OfflineAlertPage,
   Overview,
 } from "./types";
 
@@ -82,17 +85,23 @@ const widgetSuggestions = [
 ];
 
 type DashboardEditor =
+  | { scope: "create"; widgetId: null }
   | { scope: "dashboard"; widgetId: null }
   | { scope: "widget"; widgetId: string };
 
 type DynamicDashboardProps = {
   initialOverview: Overview;
   userId: string;
+  onOpenOfflineDiagnosis: (customerId: string) => void;
   fallback: ReactNode;
 };
 
-function storageKey(userId: string) {
-  return `ondaluz.dashboard.${userId}.v1`;
+function activeDashboardStorageKey(userId: string) {
+  return `ondaluz.dashboard.${userId}.active.v1`;
+}
+
+function storageKey(userId: string, dashboardId: string) {
+  return `ondaluz.dashboard.${userId}.${dashboardId}.v1`;
 }
 
 function defaultWidgetColumns(widget: Pick<DashboardWidget, "size">) {
@@ -133,10 +142,13 @@ function periodStart(days: string) {
   return date.toISOString().slice(0, 10);
 }
 
-function loadSavedPlan(userId: string): DashboardComposition | null {
+function loadSavedPlan(
+  userId: string,
+  dashboardId: string,
+): DashboardComposition | null {
   try {
     const parsed = JSON.parse(
-      window.localStorage.getItem(storageKey(userId)) ?? "null",
+      window.localStorage.getItem(storageKey(userId, dashboardId)) ?? "null",
     ) as DashboardComposition | null;
     return parsed?.version === "1.0" ? normalizeComposition(parsed) : null;
   } catch {
@@ -144,12 +156,124 @@ function loadSavedPlan(userId: string): DashboardComposition | null {
   }
 }
 
-function savePlan(userId: string, plan: DashboardComposition) {
+function savePlan(
+  userId: string,
+  dashboardId: string,
+  plan: DashboardComposition,
+) {
   try {
-    window.localStorage.setItem(storageKey(userId), JSON.stringify(plan));
+    window.localStorage.setItem(
+      storageKey(userId, dashboardId),
+      JSON.stringify(plan),
+    );
   } catch {
     // A composição continua disponível em memória se o navegador bloquear storage.
   }
+}
+
+function emptyRuntimeData(initialOverview: Overview): DashboardRuntimeData {
+  return {
+    overview: initialOverview,
+    activeIncidents: {
+      data: [],
+      page: 1,
+      pageSize: 100,
+      totalItems: 0,
+      totalPages: 0,
+    },
+    nocQueue: {
+      data: [],
+      page: 1,
+      pageSize: 100,
+      totalItems: 0,
+      totalPages: 0,
+      meta: { summary: { received: 0, inProgress: 0 } },
+    },
+    topology: {
+      totals: { cpes: 0, olts: 0, pons: 0, ctos: 0 },
+      olts: [],
+      pons: [],
+      ctos: [],
+      selected: { olt: null, pon: null },
+      limitations: {
+        hasCableIds: false,
+        hasDropIds: false,
+        hasLogicalDropIds: false,
+        message: "",
+      },
+    },
+    inventory: {
+      data: [],
+      page: 1,
+      pageSize: 100,
+      totalItems: 0,
+      totalPages: 0,
+    },
+    telemetry: {
+      data: [],
+      page: 1,
+      pageSize: 15,
+      totalItems: 0,
+      totalPages: 0,
+    },
+    diagnostics: {
+      data: [],
+      page: 1,
+      pageSize: 15,
+      totalItems: 0,
+      totalPages: 0,
+      meta: {
+        summary: {
+          total: 0,
+          completed: 0,
+          errors: 0,
+          avg_download_mbps: null,
+          avg_upload_mbps: null,
+        },
+        filters: { states: [], requested_by: [] },
+      },
+    },
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+function runtimeNeeds(widgets: DashboardWidget[]) {
+  const bindings = widgets.flatMap((widget) => [
+    widget.binding,
+    ...(widget.config?.formula?.operands ?? []),
+  ]);
+  const has = (prefix: string) =>
+    bindings.some((binding) => binding.startsWith(prefix));
+  return {
+    overview:
+      has("overview.") ||
+      widgets.some((widget) =>
+        ["timeseries", "bar", "pie", "multiseries", "narrative"].includes(
+          widget.kind,
+        ),
+      ),
+    activeIncidents: has("operations.activeIncidents"),
+    nocQueue: has("operations.nocQueue"),
+    topology:
+      has("network.topology") ||
+      widgets.some(
+        (widget) => widget.kind === "topology" || widget.kind === "map",
+      ),
+    inventory: has("inventory."),
+    telemetry: has("telemetry."),
+    diagnostics: has("diagnostics."),
+  };
+}
+
+function settledValue<T>(
+  result: PromiseSettledResult<T>,
+  fallback: T,
+  label: string,
+  warnings: string[],
+) {
+  if (result.status === "fulfilled") return result.value;
+  warnings.push(label);
+  return fallback;
 }
 
 function resolveMetricBinding(widget: DashboardWidget): DashboardBinding {
@@ -599,10 +723,17 @@ function Widget({
 export function DynamicDashboard({
   initialOverview,
   userId,
+  onOpenOfflineDiagnosis,
   fallback,
 }: DynamicDashboardProps) {
-  const cached = useMemo(() => loadSavedPlan(userId), [userId]);
-  const [plan, setPlan] = useState<DashboardComposition | null>(cached);
+  const [dashboards, setDashboards] = useState<DashboardSummary[]>([]);
+  const [activeDashboardId, setActiveDashboardId] = useState<string | null>(
+    null,
+  );
+  const [loadingDashboardId, setLoadingDashboardId] = useState<string | null>(
+    null,
+  );
+  const [plan, setPlan] = useState<DashboardComposition | null>(null);
   const [data, setData] = useState<DashboardRuntimeData | null>(null);
   const [editInstruction, setEditInstruction] = useState("");
   const [composing, setComposing] = useState(false);
@@ -613,58 +744,211 @@ export function DynamicDashboard({
   const [filters, setFilters] = useState<InventoryFilter[]>([]);
   const [filterQuery, setFilterQuery] = useState("");
   const [draggedWidgetId, setDraggedWidgetId] = useState<string | null>(null);
-  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const [libraryLoaded, setLibraryLoaded] = useState(false);
+  const [planDirty, setPlanDirty] = useState(false);
   const [saveState, setSaveState] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
   const [drilldown, setDrilldown] = useState<DashboardDrilldown | null>(null);
+  const [runtimeWarnings, setRuntimeWarnings] = useState<string[]>([]);
+  const [offlineAlerts, setOfflineAlerts] = useState<OfflineAlertPage | null>(
+    null,
+  );
+  const [offlineAlertsLoading, setOfflineAlertsLoading] = useState(true);
+  const [offlineAlertsError, setOfflineAlertsError] = useState("");
   const [error, setError] = useState("");
   const initialized = useRef(false);
-  const periodInitialized = useRef(false);
   const saveRevision = useRef(0);
+  const runtimeRevision = useRef(0);
+  const activeDashboardRef = useRef<string | null>(null);
+  const activePlanRef = useRef<DashboardComposition | null>(null);
+  const runtimeDataRef = useRef<DashboardRuntimeData | null>(null);
 
-  const loadRuntimeData = useCallback(async () => {
-    setRefreshing(true);
+  const loadOfflineAlerts = useCallback(async () => {
+    setOfflineAlertsLoading(true);
     try {
-      const from = periodStart(period);
-      const [
-        overview,
-        activeIncidents,
-        nocQueue,
-        topology,
-        inventory,
-        telemetry,
-        diagnostics,
-      ] = await Promise.all([
-        api.overview(),
-        api.operationalIncidents(),
-        api.nocQueue(),
-        api.topology(),
-        api.dashboardInventory(filters),
-        api.dashboardTelemetry(from),
-        api.dashboardDiagnostics(from),
-      ]);
-      setData({
-        overview,
-        activeIncidents,
-        nocQueue,
-        topology,
-        inventory,
-        telemetry,
-        diagnostics,
-        fetchedAt: new Date().toISOString(),
-      });
-      setError("");
+      setOfflineAlerts(await api.offlineAlerts());
+      setOfflineAlertsError("");
     } catch (reason) {
-      setError(
+      setOfflineAlertsError(
         reason instanceof Error
           ? reason.message
-          : "Não foi possível atualizar os dados REST.",
+          : "Não foi possível verificar os relatos recentes.",
       );
     } finally {
-      setRefreshing(false);
+      setOfflineAlertsLoading(false);
     }
-  }, [filters, period]);
+  }, []);
+
+  useEffect(() => {
+    void loadOfflineAlerts();
+    const timer = window.setInterval(() => void loadOfflineAlerts(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [loadOfflineAlerts]);
+
+  const loadRuntimeData = useCallback(
+    async (dashboardId: string) => {
+      const revision = ++runtimeRevision.current;
+      setRefreshing(true);
+      const previous =
+        runtimeDataRef.current ?? emptyRuntimeData(initialOverview);
+      const needs = runtimeNeeds(activePlanRef.current?.widgets ?? []);
+      try {
+        const from = periodStart(period);
+        const results = await Promise.allSettled([
+          needs.overview ? api.overview() : Promise.resolve(previous.overview),
+          needs.activeIncidents
+            ? api.operationalIncidents()
+            : Promise.resolve(previous.activeIncidents),
+          needs.nocQueue ? api.nocQueue() : Promise.resolve(previous.nocQueue),
+          needs.topology ? api.topology() : Promise.resolve(previous.topology),
+          needs.inventory
+            ? api.dashboardInventory(filters)
+            : Promise.resolve(previous.inventory),
+          needs.telemetry
+            ? api.dashboardTelemetry(from)
+            : Promise.resolve(previous.telemetry),
+          needs.diagnostics
+            ? api.dashboardDiagnostics(from)
+            : Promise.resolve(previous.diagnostics),
+        ]);
+        const warnings: string[] = [];
+        const nextData = {
+          overview: settledValue(
+            results[0],
+            previous.overview,
+            "visão geral",
+            warnings,
+          ),
+          activeIncidents: settledValue(
+            results[1],
+            previous.activeIncidents,
+            "incidentes operacionais",
+            warnings,
+          ),
+          nocQueue: settledValue(
+            results[2],
+            previous.nocQueue,
+            "fila do NOC",
+            warnings,
+          ),
+          topology: settledValue(
+            results[3],
+            previous.topology,
+            "topologia",
+            warnings,
+          ),
+          inventory: settledValue(
+            results[4],
+            previous.inventory,
+            "inventário",
+            warnings,
+          ),
+          telemetry: settledValue(
+            results[5],
+            previous.telemetry,
+            "telemetria",
+            warnings,
+          ),
+          diagnostics: settledValue(
+            results[6],
+            previous.diagnostics,
+            "diagnósticos",
+            warnings,
+          ),
+          fetchedAt: new Date().toISOString(),
+        };
+        if (
+          activeDashboardRef.current !== dashboardId ||
+          runtimeRevision.current !== revision
+        ) {
+          return;
+        }
+        runtimeDataRef.current = nextData;
+        setData(nextData);
+        setRuntimeWarnings(warnings);
+        setError("");
+      } catch (reason) {
+        if (
+          activeDashboardRef.current !== dashboardId ||
+          runtimeRevision.current !== revision
+        ) {
+          return;
+        }
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "Não foi possível atualizar os dados REST.",
+        );
+      } finally {
+        if (runtimeRevision.current === revision) setRefreshing(false);
+      }
+    },
+    [filters, initialOverview, period],
+  );
+
+  const activateDashboard = useCallback(
+    async (dashboardId: string, knownDashboard?: DashboardDetail) => {
+      activeDashboardRef.current = dashboardId;
+      activePlanRef.current = null;
+      setActiveDashboardId(dashboardId);
+      setLoadingDashboardId(dashboardId);
+      setData(null);
+      runtimeDataRef.current = null;
+      setPlan(null);
+      setPlanDirty(false);
+      setSaveState("idle");
+      setRuntimeWarnings([]);
+      const cachedPlan = loadSavedPlan(userId, dashboardId);
+      try {
+        const dashboard =
+          knownDashboard ?? (await api.dashboardById(userId, dashboardId));
+        if (activeDashboardRef.current !== dashboardId) return;
+        const nextPlan = normalizeComposition(dashboard.composition);
+        setDashboards((current) =>
+          current.some((item) => item.dashboardId === dashboard.dashboardId)
+            ? current.map((item) =>
+                item.dashboardId === dashboard.dashboardId ? dashboard : item,
+              )
+            : [...current, dashboard],
+        );
+        savePlan(userId, dashboardId, nextPlan);
+        try {
+          window.localStorage.setItem(
+            activeDashboardStorageKey(userId),
+            dashboardId,
+          );
+        } catch {
+          // O dashboard segue ativo em memória se o storage estiver bloqueado.
+        }
+        activePlanRef.current = nextPlan;
+        setPlan(nextPlan);
+        await loadRuntimeData(dashboardId);
+        if (activeDashboardRef.current === dashboardId) {
+          setLoadingDashboardId(null);
+        }
+      } catch (reason) {
+        if (cachedPlan && activeDashboardRef.current === dashboardId) {
+          activePlanRef.current = cachedPlan;
+          setPlan(cachedPlan);
+          setLoadingDashboardId(null);
+          setError(
+            "A API está indisponível. Exibindo a última composição salva neste navegador.",
+          );
+          return;
+        }
+        if (activeDashboardRef.current === dashboardId) {
+          setLoadingDashboardId(null);
+        }
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "Não foi possível carregar este dashboard.",
+        );
+      }
+    },
+    [loadRuntimeData, userId],
+  );
 
   const compose = useCallback(
     async (
@@ -675,11 +959,16 @@ export function DynamicDashboard({
       setComposing(true);
       setError("");
       try {
-        const [nextPlan] = await Promise.all([
-          api.composeDashboard(nextObjective, currentPlan, targetWidgetId),
-          loadRuntimeData(),
-        ]);
-        setPlan(normalizeComposition(nextPlan));
+        const nextPlan = normalizeComposition(
+          await api.composeDashboard(
+            nextObjective,
+            currentPlan,
+            targetWidgetId,
+          ),
+        );
+        activePlanRef.current = nextPlan;
+        setPlan(nextPlan);
+        setPlanDirty(true);
         setEditor(null);
         setEditInstruction("");
       } catch (reason) {
@@ -692,7 +981,41 @@ export function DynamicDashboard({
         setComposing(false);
       }
     },
-    [loadRuntimeData],
+    [],
+  );
+
+  const createDashboardFromInstruction = useCallback(
+    async (objective: string) => {
+      setComposing(true);
+      setError("");
+      try {
+        const nextPlan = normalizeComposition(
+          await api.composeDashboard(objective),
+        );
+        const created = await api.createDashboard(userId, {
+          name: nextPlan.title,
+          description: nextPlan.subtitle,
+          composition: nextPlan,
+          isDefault: dashboards.length === 0,
+        });
+        setDashboards((current) => [
+          created,
+          ...current.filter((item) => item.dashboardId !== created.dashboardId),
+        ]);
+        await activateDashboard(created.dashboardId, created);
+        setEditor(null);
+        setEditInstruction("");
+      } catch (reason) {
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "Não foi possível criar o dashboard.",
+        );
+      } finally {
+        setComposing(false);
+      }
+    },
+    [activateDashboard, dashboards.length, userId],
   );
 
   useEffect(() => {
@@ -700,64 +1023,92 @@ export function DynamicDashboard({
     initialized.current = true;
     let cancelled = false;
     void (async () => {
-      let initialPlan = cached;
       try {
-        const preference = await api.dashboardPreference(userId);
-        if (preference.composition) {
-          initialPlan = normalizeComposition(preference.composition);
-          savePlan(userId, initialPlan);
+        const library = await api.dashboardLibrary(userId);
+        if (cancelled) return;
+        setDashboards(library.data);
+        setLibraryLoaded(true);
+        if (library.data.length > 0) {
+          let savedDashboardId = "";
+          try {
+            savedDashboardId =
+              window.localStorage.getItem(activeDashboardStorageKey(userId)) ??
+              "";
+          } catch {
+            // O servidor continua sendo a fonte de seleção quando não há storage.
+          }
+          const selected =
+            library.data.find(
+              (item) => item.dashboardId === savedDashboardId,
+            ) ??
+            library.data.find(
+              (item) => item.dashboardId === library.defaultDashboardId,
+            ) ??
+            library.data[0];
+          await activateDashboard(selected.dashboardId);
+        } else {
+          await createDashboardFromInstruction(defaultObjective);
         }
-      } catch {
-        // O cache local mantém o dashboard disponível quando a API está offline.
-      }
-      if (cancelled) return;
-      setPreferencesLoaded(true);
-      if (initialPlan) {
-        setPlan(initialPlan);
-        void loadRuntimeData();
-      } else {
-        void compose(defaultObjective);
+      } catch (reason) {
+        setLibraryLoaded(true);
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "Não foi possível carregar os dashboards.",
+        );
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [cached, compose, loadRuntimeData, userId]);
+  }, [activateDashboard, createDashboardFromInstruction, userId]);
 
   useEffect(() => {
-    if (!preferencesLoaded || !plan) return;
-    savePlan(userId, plan);
+    if (!libraryLoaded || !plan || !activeDashboardId || !planDirty) return;
+    savePlan(userId, activeDashboardId, plan);
     const revision = ++saveRevision.current;
     setSaveState("saving");
     const timer = window.setTimeout(() => {
       void api
-        .saveDashboardPreference(userId, plan)
-        .then(() => {
-          if (saveRevision.current === revision) setSaveState("saved");
+        .saveDashboard(userId, activeDashboardId, {
+          name: plan.title,
+          description: plan.subtitle,
+          composition: plan,
+          isDefault:
+            dashboards.find((item) => item.dashboardId === activeDashboardId)
+              ?.isDefault ?? false,
+        })
+        .then((saved) => {
+          if (saveRevision.current !== revision) return;
+          setDashboards((current) =>
+            current.map((item) =>
+              item.dashboardId === saved.dashboardId ? saved : item,
+            ),
+          );
+          setPlanDirty(false);
+          setSaveState("saved");
         })
         .catch(() => {
           if (saveRevision.current === revision) setSaveState("error");
         });
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [plan, preferencesLoaded, userId]);
+  }, [activeDashboardId, dashboards, libraryLoaded, plan, planDirty, userId]);
 
   useEffect(() => {
-    if (!periodInitialized.current) {
-      periodInitialized.current = true;
-      return;
+    if (activeDashboardId && activePlanRef.current) {
+      void loadRuntimeData(activeDashboardId);
     }
-    void loadRuntimeData();
-  }, [loadRuntimeData, period]);
+  }, [activeDashboardId, filters, loadRuntimeData, period]);
 
   useEffect(() => {
-    if (!plan) return;
+    if (!plan || !activeDashboardId) return;
     const timer = window.setInterval(
-      () => void loadRuntimeData(),
+      () => void loadRuntimeData(activeDashboardId),
       plan.refreshSeconds * 1_000,
     );
     return () => window.clearInterval(timer);
-  }, [loadRuntimeData, plan]);
+  }, [activeDashboardId, loadRuntimeData, plan]);
 
   useEffect(() => {
     if (!editor) return;
@@ -771,7 +1122,10 @@ export function DynamicDashboard({
   function submit(event: FormEvent) {
     event.preventDefault();
     const value = editInstruction.trim();
-    if (value.length >= 8 && editor && plan) {
+    if (value.length < 8 || !editor) return;
+    if (editor.scope === "create") {
+      void createDashboardFromInstruction(value);
+    } else if (plan) {
       void compose(
         value,
         plan,
@@ -788,6 +1142,11 @@ export function DynamicDashboard({
   function openDashboardEditor() {
     setEditInstruction("");
     setEditor({ scope: "dashboard", widgetId: null });
+  }
+
+  function openCreateEditor() {
+    setEditInstruction("");
+    setEditor({ scope: "create", widgetId: null });
   }
 
   function openWidgetEditor(widget: DashboardWidget) {
@@ -811,86 +1170,41 @@ export function DynamicDashboard({
       widgets,
       generatedAt: new Date().toISOString(),
     };
+    activePlanRef.current = nextPlan;
     setPlan(nextPlan);
+    setPlanDirty(true);
     setDraggedWidgetId(null);
   }
 
   function resizeWidget(widgetId: string, requestedColumns: number) {
     if (!plan) return;
     const columns = Math.max(4, Math.min(24, requestedColumns));
-    const size = columns <= 8 ? "compact" : columns < 24 ? "half" : "wide";
-    setPlan({
+    const size: DashboardWidget["size"] =
+      columns <= 8 ? "compact" : columns < 24 ? "half" : "wide";
+    const nextPlan = {
       ...plan,
       generatedAt: new Date().toISOString(),
       widgets: plan.widgets.map((widget) =>
         widget.id === widgetId ? { ...widget, columns, size } : widget,
       ),
-    });
+    };
+    activePlanRef.current = nextPlan;
+    setPlan(nextPlan);
+    setPlanDirty(true);
   }
 
-  const latestData = data ?? {
-    overview: initialOverview,
-    activeIncidents: {
-      data: [],
-      page: 1,
-      pageSize: 100,
-      totalItems: 0,
-      totalPages: 0,
-    },
-    nocQueue: {
-      data: [],
-      page: 1,
-      pageSize: 100,
-      totalItems: 0,
-      totalPages: 0,
-      meta: { summary: { received: 0, inProgress: 0 } },
-    },
-    topology: {
-      totals: { cpes: 0, olts: 0, pons: 0, ctos: 0 },
-      olts: [],
-      pons: [],
-      ctos: [],
-      selected: { olt: null, pon: null },
-      limitations: {
-        hasCableIds: false,
-        hasDropIds: false,
-        hasLogicalDropIds: false,
-        message: "",
-      },
-    },
-    inventory: {
-      data: [],
-      page: 1,
-      pageSize: 15,
-      totalItems: 0,
-      totalPages: 0,
-    },
-    telemetry: {
-      data: [],
-      page: 1,
-      pageSize: 15,
-      totalItems: 0,
-      totalPages: 0,
-    },
-    diagnostics: {
-      data: [],
-      page: 1,
-      pageSize: 15,
-      totalItems: 0,
-      totalPages: 0,
-      meta: {
-        summary: {
-          total: 0,
-          completed: 0,
-          errors: 0,
-          avg_download_mbps: null,
-          avg_upload_mbps: null,
-        },
-        filters: { states: [], requested_by: [] },
-      },
-    },
-    fetchedAt: new Date().toISOString(),
-  };
+  const latestData =
+    data ?? runtimeDataRef.current ?? emptyRuntimeData(initialOverview);
+
+  const offlinePanel = (
+    <OfflineClientsPanel
+      page={offlineAlerts}
+      loading={offlineAlertsLoading}
+      error={offlineAlertsError}
+      onRefresh={() => void loadOfflineAlerts()}
+      onDiagnose={onOpenOfflineDiagnosis}
+    />
+  );
 
   if (!plan && !composing && error) {
     return (
@@ -899,6 +1213,7 @@ export function DynamicDashboard({
           <AlertTriangle size={18} />
           <span>{error} Exibindo a visão executiva disponível.</span>
         </div>
+        {offlinePanel}
         {fallback}
       </section>
     );
@@ -911,11 +1226,52 @@ export function DynamicDashboard({
           <AlertTriangle size={17} /> {error}
         </div>
       )}
+      {plan && runtimeWarnings.length > 0 && (
+        <div className="ai-dashboard-data-warning" role="status">
+          <AlertTriangle size={16} />
+          <span>
+            Algumas fontes estão indisponíveis ({runtimeWarnings.join(", ")}).
+            Exibindo o último dado disponível onde houver.
+          </span>
+        </div>
+      )}
+
+      {offlinePanel}
 
       {plan ? (
         <>
           <div className="ai-dashboard-toolbar">
             <div>
+              <div className="ai-dashboard-selector">
+                <label htmlFor="dashboard-library-select">Dashboard</label>
+                <select
+                  id="dashboard-library-select"
+                  aria-label="Selecionar dashboard"
+                  value={activeDashboardId ?? ""}
+                  onChange={(event) =>
+                    void activateDashboard(event.target.value)
+                  }
+                  disabled={composing}
+                >
+                  {dashboards.map((dashboard) => (
+                    <option
+                      key={dashboard.dashboardId}
+                      value={dashboard.dashboardId}
+                    >
+                      {dashboard.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="ai-new-dashboard-button"
+                  type="button"
+                  onClick={openCreateEditor}
+                  disabled={composing}
+                >
+                  <Sparkles size={14} />
+                  Novo dashboard
+                </button>
+              </div>
               <span className={`ai-plan-source ${plan.generatedBy}`}>
                 {plan.generatedBy === "openai"
                   ? `Composição por IA · ${plan.model}`
@@ -953,7 +1309,10 @@ export function DynamicDashboard({
               )}
               <button
                 type="button"
-                onClick={() => void loadRuntimeData()}
+                onClick={() => {
+                  if (activeDashboardId)
+                    void loadRuntimeData(activeDashboardId);
+                }}
                 disabled={refreshing}
               >
                 <RefreshCw
@@ -1059,14 +1418,18 @@ export function DynamicDashboard({
                   <div>
                     <span className="section-label">Edição por conversa</span>
                     <h2 id="ai-composer-title">
-                      {selectedWidget
-                        ? `Editar bloco: ${selectedWidget.title}`
-                        : "Personalizar dashboard"}
+                      {editor.scope === "create"
+                        ? "Criar novo dashboard"
+                        : selectedWidget
+                          ? `Editar bloco: ${selectedWidget.title}`
+                          : "Personalizar dashboard"}
                     </h2>
                     <p>
-                      {selectedWidget
-                        ? "Explique o que deve mudar somente neste bloco. O restante do dashboard será preservado."
-                        : "Explique a mudança desejada. A IA considera a composição atual em vez de começar do zero."}
+                      {editor.scope === "create"
+                        ? "Descreva o que este novo dashboard deve acompanhar. Ele será adicionado ao seletor sem alterar os dashboards existentes."
+                        : selectedWidget
+                          ? "Explique o que deve mudar somente neste bloco. O restante do dashboard será preservado."
+                          : "Explique a mudança desejada. A IA considera a composição atual em vez de começar do zero."}
                     </p>
                   </div>
                   <button
@@ -1083,9 +1446,11 @@ export function DynamicDashboard({
                 <form className="ai-dashboard-composer" onSubmit={submit}>
                   <label>
                     <span>
-                      {selectedWidget
-                        ? "O que você quer mudar neste bloco?"
-                        : "Como você quer alterar este dashboard?"}
+                      {editor.scope === "create"
+                        ? "O que este dashboard deve acompanhar?"
+                        : selectedWidget
+                          ? "O que você quer mudar neste bloco?"
+                          : "Como você quer alterar este dashboard?"}
                     </span>
                     <textarea
                       autoFocus
@@ -1097,9 +1462,11 @@ export function DynamicDashboard({
                       maxLength={600}
                       rows={4}
                       placeholder={
-                        selectedWidget
-                          ? "Ex.: transforme este bloco em uma métrica de clientes afetados"
-                          : "Ex.: mantenha os alertas e dê mais destaque à fila do NOC"
+                        editor.scope === "create"
+                          ? "Ex.: acompanhe incidentes críticos, fila do NOC e clientes afetados"
+                          : selectedWidget
+                            ? "Ex.: transforme este bloco em uma métrica de clientes afetados"
+                            : "Ex.: mantenha os alertas e dê mais destaque à fila do NOC"
                       }
                     />
                   </label>
@@ -1107,22 +1474,25 @@ export function DynamicDashboard({
                     className="ai-composer-suggestions"
                     aria-label="Sugestões de dashboard"
                   >
-                    {(selectedWidget ? widgetSuggestions : suggestions).map(
-                      (suggestion) => (
-                        <button
-                          key={suggestion}
-                          type="button"
-                          onClick={() => setEditInstruction(suggestion)}
-                        >
-                          {suggestion}
-                        </button>
-                      ),
-                    )}
+                    {(editor.scope === "create"
+                      ? suggestions
+                      : selectedWidget
+                        ? widgetSuggestions
+                        : suggestions
+                    ).map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => setEditInstruction(suggestion)}
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
                   </div>
                   <p className="ai-composer-note">
-                    O plano visual atual, sua instrução e o catálogo MCP são
-                    enviados ao modelo. Os dados operacionais continuam via REST
-                    e não usam tokens.
+                    {editor.scope === "create"
+                      ? "A instrução e o catálogo MCP são enviados ao modelo para gerar somente o plano visual. Os dados operacionais continuam via REST."
+                      : "O plano visual atual, sua instrução e o catálogo MCP são enviados ao modelo. Os dados operacionais continuam via REST e não usam tokens."}
                   </p>
                   <footer>
                     <button
@@ -1143,7 +1513,13 @@ export function DynamicDashboard({
                       ) : (
                         <Send size={17} />
                       )}
-                      {composing ? "Aplicando…" : "Aplicar alteração"}
+                      {composing
+                        ? editor.scope === "create"
+                          ? "Criando…"
+                          : "Aplicando…"
+                        : editor.scope === "create"
+                          ? "Criar dashboard"
+                          : "Aplicar alteração"}
                     </button>
                   </footer>
                 </form>
@@ -1161,10 +1537,14 @@ export function DynamicDashboard({
         <div className="ai-dashboard-loading" aria-live="polite">
           <span />
           <strong>
-            Descobrindo recursos e montando a primeira composição…
+            {loadingDashboardId
+              ? "Carregando o dashboard selecionado…"
+              : "Descobrindo recursos e montando a primeira composição…"}
           </strong>
           <small>
-            Os dados operacionais continuam fora do contexto do modelo.
+            {loadingDashboardId
+              ? "A composição e os dados operacionais estão sendo atualizados."
+              : "Os dados operacionais continuam fora do contexto do modelo."}
           </small>
         </div>
       )}

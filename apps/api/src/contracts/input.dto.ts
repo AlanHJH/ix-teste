@@ -2,6 +2,7 @@ import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsDefined,
   IsIn,
   IsInt,
@@ -51,6 +52,37 @@ export class DashboardPreferenceDto {
   @IsDefined()
   @IsObject()
   composition!: Record<string, unknown>;
+}
+
+export class DashboardDefinitionDto {
+  @ApiProperty({ minLength: 2, maxLength: 100, example: "Visão NOC" })
+  @IsDefined()
+  @IsString()
+  @Length(2, 100)
+  name!: string;
+
+  @ApiPropertyOptional({
+    maxLength: 240,
+    example: "Fila e incidentes críticos.",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(240)
+  description?: string;
+
+  @ApiProperty({
+    description: "Composição completa validada pelo endpoint de composição.",
+    type: "object",
+    additionalProperties: true,
+  })
+  @IsDefined()
+  @IsObject()
+  composition!: Record<string, unknown>;
+
+  @ApiPropertyOptional({ description: "Define este dashboard como padrão." })
+  @IsOptional()
+  @IsBoolean()
+  isDefault?: boolean;
 }
 
 export class ResolvedStatusDto {

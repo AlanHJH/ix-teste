@@ -6,6 +6,7 @@ import { AppModule } from "./app.module";
 import { McpGatewayService } from "./mcp-gateway.service";
 import { configureOpenApi } from "./openapi";
 import { OpenApiResponseValidationInterceptor } from "./contracts/openapi-response-validation.interceptor";
+import { InvestigationSchedulerService } from "./investigations/investigation-scheduler.service";
 
 type Next = (error?: unknown) => void;
 
@@ -37,6 +38,7 @@ async function bootstrap(): Promise<void> {
     new OpenApiResponseValidationInterceptor(openApiDocument),
   );
   await app.listen(Number(process.env.PORT ?? 3000), "0.0.0.0");
+  app.get(InvestigationSchedulerService).start();
 }
 
 void bootstrap().catch((error: unknown) => {

@@ -43,6 +43,13 @@ export class UserIdParamDto {
   userId!: string;
 }
 
+export class DashboardIdParamDto extends UserIdParamDto {
+  @ApiProperty({ example: "dash-8d31f1b7-2a4a-4c9e-8dc9-0a0a67ec7d7d" })
+  @IsString()
+  @Length(2, 128)
+  dashboardId!: string;
+}
+
 export class SerialParamDto {
   @ApiProperty({ example: "KSTLD199FB78" })
   @IsString()

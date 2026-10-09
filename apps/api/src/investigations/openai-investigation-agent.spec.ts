@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { RateLimitError } from "openai";
 import {
   configuredReasoningEffort,
+  openAiTimeoutMilliseconds,
   maximumContextCharacters,
   retryAfterMilliseconds,
   toolCallBudget,
@@ -60,6 +61,18 @@ describe("orçamento adaptativo da investigação", () => {
     assert.equal(
       configuredReasoningEffort({ AGENT_REASONING_EFFORT: "low" }),
       "low",
+    );
+  });
+
+  it("limita o tempo máximo de uma chamada externa", () => {
+    assert.equal(openAiTimeoutMilliseconds({}), 90_000);
+    assert.equal(
+      openAiTimeoutMilliseconds({ AGENT_OPENAI_TIMEOUT_MS: "1000" }),
+      5_000,
+    );
+    assert.equal(
+      openAiTimeoutMilliseconds({ AGENT_OPENAI_TIMEOUT_MS: "999999" }),
+      180_000,
     );
   });
 

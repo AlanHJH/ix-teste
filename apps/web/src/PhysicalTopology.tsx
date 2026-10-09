@@ -425,11 +425,18 @@ export function PhysicalTopology({
           <AlertTriangle size={17} aria-hidden="true" />
           <div>
             <strong>Visão pré-filtrada pelo agrupamento</strong>
-            <span>
-              {focusGrouping.scope.identifier} ·{" "}
-              {focusGrouping.affected_cpes.toLocaleString("pt-BR")} CPEs
-              potencialmente afetadas. Os ícones <b>!</b> indicam o ponto de
-              origem ou os descendentes impactados.
+            <span className="topology-focus-path">
+              {focusGrouping.scope.identifier}
+              <b>
+                {focusGrouping.affected_cpes.toLocaleString("pt-BR")} CPEs
+                potencialmente afetadas
+              </b>
+            </span>
+            <span className="topology-focus-help">
+              <i aria-hidden="true">!</i>
+              <span>
+                Ícones indicam a origem ou os descendentes impactados.
+              </span>
             </span>
           </div>
         </div>
