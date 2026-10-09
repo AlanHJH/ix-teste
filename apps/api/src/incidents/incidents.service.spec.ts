@@ -52,7 +52,10 @@ describe("IncidentsService.create", () => {
     assert.equal(queries[2].params[4], 37);
     assert.equal(queries[2].params[9], "TN1-ORIGEM");
     assert.match(queries[2].text, /noc_status='linked'/);
-    assert.match(queries[2].text, /closed_at=coalesce\(closed_at, now\(\)\)/);
+    assert.doesNotMatch(
+      queries[2].text,
+      /closed_at=coalesce\(closed_at, now\(\)\)/,
+    );
   });
 
   it("não cria incidente para um escopo sem CPE ativa", async () => {
@@ -139,7 +142,13 @@ describe("IncidentsService.close", () => {
       async query(text: string, params: unknown[] = []) {
         queries.push({ text, params });
         return {
-          rows: [{ incident_id: "INC-TESTE123", status: "resolved" }],
+          rows: [
+            {
+              incident_id: "INC-TESTE123",
+              status: "resolved",
+              closed_tickets: 4,
+            },
+          ],
         };
       },
     } as unknown as DatabaseService;
@@ -152,9 +161,15 @@ describe("IncidentsService.close", () => {
     assert.deepEqual(result, {
       incident_id: "INC-TESTE123",
       status: "resolved",
+      closed_tickets: 4,
     });
     assert.deepEqual(queries[0].params, ["INC-TESTE123"]);
     assert.match(queries[0].text, /SET status='resolved'/);
+    assert.match(queries[0].text, /UPDATE tickets t/);
+    assert.match(
+      queries[0].text,
+      /noc_status IN \('pending', 'in_progress', 'linked'\)/,
+    );
     assert.match(
       queries[0].text,
       /status IN \('open', 'mitigating', 'monitoring'\)/,

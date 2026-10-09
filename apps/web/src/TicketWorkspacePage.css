@@ -21,7 +21,8 @@
   gap: 9px;
 }
 .ticket-workspace-back,
-.ticket-workspace-action {
+.ticket-workspace-action,
+.ticket-workspace-group-action {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -35,10 +36,20 @@
   font-weight: 800;
 }
 .ticket-workspace-back:hover,
-.ticket-workspace-action:hover:not(:disabled) {
+.ticket-workspace-action:hover:not(:disabled),
+.ticket-workspace-group-action:hover:not(:disabled) {
   border-color: #63b4ac;
   color: var(--teal-dark);
   background: #edf8f6;
+}
+.ticket-workspace-group-action {
+  border-color: #b7d8d2;
+  color: #096e68;
+  background: #e9f7f4;
+}
+.ticket-workspace-group-action:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 .ticket-workspace-action {
   border-color: #0b8178;

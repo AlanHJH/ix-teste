@@ -368,6 +368,9 @@ export class IncidentsController {
       properties: {
         incident_id: apiString("Incidente encerrado."),
         status: { type: "string", enum: ["resolved"] },
+        closed_tickets: apiInteger(
+          "Chamados N1 encerrados junto com o agrupamento.",
+        ),
       },
     },
   })

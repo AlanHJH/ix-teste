@@ -134,6 +134,10 @@ describe("TicketsService.create", () => {
     });
 
     assert.equal(result.related_problem_id, "INC-AABBCCDD");
+    assert.match(
+      queries[2],
+      /WHEN \$6='escalar_noc' AND \$8::text LIKE 'INC-%' THEN 'linked'/,
+    );
     assert.equal(queries.length, 3);
   });
 });

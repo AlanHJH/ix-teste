@@ -50,11 +50,15 @@ export class PostgresTicketsRepository implements TicketsRepository {
          ticket_id, opened_at, customer_id, channel, category, description,
          resolution, closed_at, source, opened_by, related_problem_id,
          source_payload, noc_status
-       ) VALUES (
-         $1, now(), $2, 'Telefone', $3, $4, $5,
+         ) VALUES (
+           $1, now(), $2, 'Telefone', $3, $4, $5,
          CASE WHEN $6='resolver_telefone' THEN now() ELSE NULL END,
          'n1', $7, $8, $9::jsonb,
-         CASE WHEN $6='escalar_noc' THEN 'pending' ELSE 'not_applicable' END
+         CASE
+           WHEN $6='escalar_noc' AND $8::text LIKE 'INC-%' THEN 'linked'
+           WHEN $6='escalar_noc' THEN 'pending'
+           ELSE 'not_applicable'
+         END
        )
        RETURNING ticket_id, opened_at::text, customer_id, channel, category,
          description, resolution, closed_at::text,

@@ -12783,3 +12783,270 @@ main {
   color: #e8f8ff !important;
   background: rgba(94, 192, 237, 0.14) !important;
 }
+
+/* N1 uses the same operational surface as the NOC, with topology opened on demand. */
+.support-hero {
+  max-width: none;
+  margin: 0 0 18px;
+  padding: 25px 28px 20px;
+  border-radius: 20px;
+  text-align: left;
+}
+
+.support-hero h1 {
+  margin-top: 6px;
+  color: var(--ixc-text);
+  font-size: 32px;
+}
+
+.support-hero > p {
+  max-width: 760px;
+  margin: 8px 0 18px;
+  color: var(--ixc-muted);
+}
+
+.search-box {
+  height: 54px;
+  border-color: rgba(157, 190, 214, 0.2);
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: none;
+}
+
+.search-box svg {
+  color: var(--ixc-accent);
+}
+
+.search-box input {
+  color: var(--ixc-text);
+  background: transparent;
+}
+
+.search-box input::placeholder {
+  color: #7f98ac;
+}
+
+.search-box button {
+  color: #062238;
+  background: var(--ixc-accent);
+}
+
+.examples {
+  justify-content: flex-start;
+  margin-top: 13px;
+  color: var(--ixc-muted);
+}
+
+.examples button {
+  border-color: rgba(157, 190, 214, 0.2);
+  color: #cfe5f0;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.examples button:hover {
+  border-color: rgba(94, 192, 237, 0.55);
+  color: var(--ixc-text);
+  background: rgba(94, 192, 237, 0.1);
+}
+
+.empty-support {
+  max-width: none;
+  margin: 0;
+  padding: 52px 24px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  color: var(--ixc-muted);
+  background: linear-gradient(
+    145deg,
+    rgba(16, 43, 67, 0.96),
+    rgba(9, 29, 47, 0.98)
+  );
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+}
+
+.empty-support svg {
+  color: var(--ixc-accent);
+}
+
+.empty-support h2 {
+  color: var(--ixc-text);
+}
+
+.empty-support p {
+  color: var(--ixc-muted);
+}
+
+.customer-strip,
+.diagnosis-card,
+.signals-panel,
+.n1-preflight,
+.n1-ticket-card,
+.history {
+  color: var(--ixc-text);
+}
+
+.customer-strip span,
+.customer-strip small,
+.n1-preflight-header p,
+.n1-preflight-checks article > span,
+.n1-preflight-checks article > small,
+.n1-preflight-advice span,
+.n1-preflight-escalation span,
+.n1-preflight-escalation small,
+.n1-preflight-history > span,
+.n1-preflight-history article > small,
+.n1-ticket-card header p,
+.n1-ticket-link,
+.n1-ticket-link span small {
+  color: var(--ixc-muted);
+}
+
+.customer-strip strong,
+.n1-preflight-header h2,
+.n1-preflight-checks article > strong,
+.n1-preflight-history article > span,
+.n1-ticket-card header h2,
+.diagnosis-card h2,
+.signals-panel h2,
+.history h2 {
+  color: var(--ixc-text);
+}
+
+.customer-strip > div + div,
+.n1-preflight-checks,
+.n1-preflight-checks article + article,
+.n1-preflight-history article,
+.n1-ticket-fields input,
+.n1-ticket-fields select,
+.n1-ticket-fields textarea {
+  border-color: rgba(157, 190, 214, 0.16);
+}
+
+.n1-preflight {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.n1-preflight-ready {
+  border-color: rgba(94, 225, 189, 0.28);
+  color: #91efd4;
+  background: rgba(94, 225, 189, 0.12);
+}
+
+.n1-connection-alert,
+.n1-preflight-escalation,
+.n1-preflight-new-signal {
+  border-color: rgba(234, 196, 108, 0.28);
+  color: #f0cd7e;
+  background: rgba(234, 196, 108, 0.1);
+}
+
+.n1-connection-alert .section-label,
+.n1-preflight-escalation span {
+  color: #f0cd7e;
+}
+
+.n1-connection-alert strong,
+.n1-preflight-escalation strong {
+  color: #ffe1a0;
+}
+
+.n1-connection-alert small,
+.n1-preflight-escalation small,
+.n1-preflight-new-signal {
+  color: #c5b58f;
+}
+
+.n1-preflight-checks {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.n1-preflight-advice {
+  border-left-color: #5ee1bd;
+  background: rgba(94, 225, 189, 0.1);
+}
+
+.n1-preflight-advice span {
+  color: #91efd4;
+}
+
+.n1-preflight-advice p {
+  color: #d3f2eb;
+}
+
+.n1-preflight-history article {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.n1-preflight-history article strong,
+.n1-ticket-link > svg {
+  color: #5ee1bd;
+}
+
+.diagnosis-card header > svg,
+.signals-panel .panel-heading > svg,
+.n1-ticket-card header > svg {
+  color: var(--ixc-accent);
+}
+
+.action-banner {
+  color: #ffb4aa;
+  background: rgba(239, 124, 111, 0.14);
+}
+
+.resolver_telefone .action-banner {
+  color: #91efd4;
+  background: rgba(94, 225, 189, 0.12);
+}
+
+.customer-script blockquote {
+  border-left-color: #5ee1bd;
+  color: #d3e8f1;
+  background: rgba(94, 225, 189, 0.08);
+}
+
+.steps li,
+.reason-list li {
+  color: #c1d6e1;
+}
+
+.signal-value {
+  border-color: rgba(157, 190, 214, 0.16);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.signal-value span {
+  color: var(--ixc-muted);
+}
+
+.signal-value strong {
+  color: var(--ixc-text);
+}
+
+.n1-ticket-card {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.n1-ticket-fields label {
+  color: var(--ixc-muted);
+}
+
+.n1-ticket-fields input,
+.n1-ticket-fields select,
+.n1-ticket-fields textarea,
+.n1-advisor-input input {
+  color: var(--ixc-text);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.n1-ticket-fields input::placeholder,
+.n1-ticket-fields textarea::placeholder,
+.n1-advisor-input input::placeholder {
+  color: #7f98ac;
+}
+
+.n1-ticket-footer > button,
+.n1-advisor-input button {
+  color: #062238;
+  background: var(--ixc-accent);
+}

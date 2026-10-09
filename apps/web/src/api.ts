@@ -427,13 +427,20 @@ export const api = {
     probableCause: string;
     recommendedAction: string;
     originTicketId: string | null;
-  }) => mutate<{ incident_id: string }>("/api/incidents", "POST", input),
-  closeOperationalIncident: (incidentId: string) =>
-    mutate<{ incident_id: string; status: "resolved" }>(
-      `/api/incidents/${encodeURIComponent(incidentId)}/status`,
-      "PATCH",
-      { status: "resolved" },
+  }) =>
+    mutate<{ incident_id: string; affected_cpes: number }>(
+      "/api/incidents",
+      "POST",
+      input,
     ),
+  closeOperationalIncident: (incidentId: string) =>
+    mutate<{
+      incident_id: string;
+      status: "resolved";
+      closed_tickets: number;
+    }>(`/api/incidents/${encodeURIComponent(incidentId)}/status`, "PATCH", {
+      status: "resolved",
+    }),
   closeDetectedGrouping: (groupingId: string) =>
     mutate<{ grouping_id: string; status: "resolved" }>(
       `/api/network/incidents/${encodeURIComponent(groupingId)}/status`,

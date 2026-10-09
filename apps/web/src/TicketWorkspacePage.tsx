@@ -150,6 +150,7 @@ export function TicketWorkspacePage({
   onOpenTicket,
   onOpenAssistant,
   onNocQueueChanged,
+  onOpenGrouping,
 }: {
   ticket: SupportTicket;
   canManageNoc?: boolean;
@@ -158,6 +159,7 @@ export function TicketWorkspacePage({
   canOpenAssistant?: boolean;
   onOpenAssistant?: (context: IrisContext) => void;
   onNocQueueChanged?: () => void | Promise<void>;
+  onOpenGrouping?: (ticket: SupportTicket) => void;
 }) {
   const [currentTicket, setCurrentTicket] = useState(ticket);
   const [profile, setProfile] = useState<SupportProfile | null>(null);
@@ -247,6 +249,9 @@ export function TicketWorkspacePage({
   const activeEquipment = customer?.equipment_history.find(
     (item) => item.status === "active",
   );
+  const linkedToOperationalIncident = Boolean(
+    currentTicket.related_problem_id?.toUpperCase().startsWith("INC-"),
+  );
 
   function openTicketChat(problemId = currentTicket.related_problem_id) {
     onOpenAssistant?.({
@@ -276,6 +281,20 @@ export function TicketWorkspacePage({
             <OpenIrisChatButton onClick={() => openTicketChat()} compact />
           )}
           {canManageNoc &&
+            onOpenGrouping &&
+            !linkedToOperationalIncident &&
+            ["pending", "in_progress"].includes(currentTicket.noc_status) && (
+              <button
+                type="button"
+                className="ticket-workspace-group-action"
+                disabled={busy}
+                onClick={() => onOpenGrouping(currentTicket)}
+                title="Abra o formulário do NOC já preenchido com o cliente e a topologia deste ticket."
+              >
+                <Network size={15} /> Confirmar problema compartilhado
+              </button>
+            )}
+          {canManageNoc &&
             ["pending", "in_progress"].includes(currentTicket.noc_status) && (
               <button
                 type="button"
@@ -298,7 +317,7 @@ export function TicketWorkspacePage({
                   ? "Atualizando…"
                   : currentTicket.noc_status === "pending"
                     ? "Iniciar análise"
-                    : "Encerrar análise"}
+                    : "Encerrar este ticket"}
               </button>
             )}
         </div>

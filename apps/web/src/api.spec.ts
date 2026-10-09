@@ -556,7 +556,11 @@ describe("api client", () => {
   });
 
   it("encerra um agrupamento pelo identificador usando PATCH", async () => {
-    const payload = { incident_id: "INC-TESTE123", status: "resolved" };
+    const payload = {
+      incident_id: "INC-TESTE123",
+      status: "resolved",
+      closed_tickets: 4,
+    };
     const calls: Array<{ path: string; method?: string }> = [];
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (

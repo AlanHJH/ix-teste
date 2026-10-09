@@ -295,8 +295,7 @@ export class PostgresIncidentsRepository {
          RETURNING *
        ), linked AS (
          UPDATE tickets t
-         SET related_problem_id=$1, noc_status='linked',
-           closed_at=coalesce(closed_at, now())
+         SET related_problem_id=$1, noc_status='linked'
          FROM created
          WHERE $10::text IS NOT NULL AND t.ticket_id=$10
          RETURNING t.ticket_id
@@ -327,12 +326,27 @@ export class PostgresIncidentsRepository {
     const result = await this.database.query<{
       incident_id: string;
       status: "resolved";
+      closed_tickets: number;
     }>(
-      `UPDATE operational_incidents
-       SET status='resolved'
-       WHERE incident_id=$1
-         AND status IN ('open', 'mitigating', 'monitoring')
-       RETURNING incident_id, status`,
+      `WITH resolved AS (
+         UPDATE operational_incidents
+         SET status='resolved'
+         WHERE incident_id=$1
+           AND status IN ('open', 'mitigating', 'monitoring')
+         RETURNING incident_id, status
+       ), closed_tickets AS (
+         UPDATE tickets t
+         SET noc_status='closed',
+           closed_at=coalesce(t.closed_at, now())
+         FROM resolved
+         WHERE t.related_problem_id=resolved.incident_id
+           AND t.source='n1'
+           AND t.noc_status IN ('pending', 'in_progress', 'linked')
+         RETURNING t.ticket_id
+       )
+       SELECT resolved.incident_id, resolved.status,
+         (SELECT count(*)::int FROM closed_tickets) AS closed_tickets
+       FROM resolved`,
       [normalizedIncidentId],
     );
 

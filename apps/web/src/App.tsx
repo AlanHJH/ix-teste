@@ -228,16 +228,22 @@ function NocDashboard({
   nocTicketCount,
   onOpenNocTickets,
   onOpenAssistant,
+  originTicket,
+  onOriginTicketConsumed,
 }: {
   nocTicketCount: number;
   onOpenNocTickets: () => void;
   onOpenAssistant?: (context: IrisContext) => void;
+  originTicket?: SupportTicket | null;
+  onOriginTicketConsumed?: () => void;
 }) {
   return (
     <NocOperations
       nocTicketCount={nocTicketCount}
       onOpenNocTickets={onOpenNocTickets}
       onOpenAssistant={onOpenAssistant}
+      originTicket={originTicket}
+      onOriginTicketConsumed={onOriginTicketConsumed}
     />
   );
 }
@@ -323,7 +329,6 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
       setProfile(nextProfile);
       const nextTopologyFocus = topologyFocusFromSupport(nextProfile);
       setConnectionFocus(nextTopologyFocus);
-      setTopologyFocus(nextTopologyFocus);
       setTicketCategory(suggestedCategory(nextProfile.decision.issue));
       setTicketDescription(nextProfile.decision.issue);
       setTicketOutcome(nextProfile.decision.action);
@@ -509,7 +514,8 @@ function SupportDesk({ initialCustomer }: { initialCustomer?: string }) {
                     Problema de conexão detectado
                   </span>
                   <strong>
-                    O mapa já foi aberto com o caminho afetado em foco.
+                    O caminho afetado foi identificado; abra o mapa quando
+                    precisar aprofundar a análise.
                   </strong>
                   <small>
                     {connectionFocus.scope.olt} · PON{" "}
@@ -1018,6 +1024,9 @@ function OperationsApp({
   const [ticketWorkspace, setTicketWorkspace] = useState<SupportTicket | null>(
     null,
   );
+  const [nocOriginTicket, setNocOriginTicket] = useState<SupportTicket | null>(
+    null,
+  );
   const [assistantContext, setAssistantContext] = useState<IrisContext>({});
   const [assistantRequestKey, setAssistantRequestKey] = useState(0);
   const [error, setError] = useState("");
@@ -1075,6 +1084,11 @@ function OperationsApp({
     setAssistantContext({});
     setView(nextView);
     setSidebarOpen(false);
+  }
+
+  function openNocGrouping(ticket: SupportTicket) {
+    setNocOriginTicket(ticket);
+    navigate("noc");
   }
 
   function openAssistant(context: IrisContext) {
@@ -1292,6 +1306,7 @@ function OperationsApp({
                   showGlobalAssistant ? openAssistant : undefined
                 }
                 onNocQueueChanged={refreshNocTicketCount}
+                onOpenGrouping={openNocGrouping}
               />
             ) : (
               <SupportTickets
@@ -1356,6 +1371,8 @@ function OperationsApp({
               nocTicketCount={nocTicketCount}
               onOpenNocTickets={openNocTickets}
               onOpenAssistant={showGlobalAssistant ? openAssistant : undefined}
+              originTicket={nocOriginTicket}
+              onOriginTicketConsumed={() => setNocOriginTicket(null)}
             />
           )}
         </main>

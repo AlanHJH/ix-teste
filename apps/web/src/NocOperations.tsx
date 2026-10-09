@@ -27,6 +27,7 @@ import type {
   IrisContext,
   OperationalIncident,
   OperationalIncidentPage,
+  SupportTicket,
   TopologyFocus,
 } from "./types";
 
@@ -457,10 +458,14 @@ export function NocOperations({
   nocTicketCount,
   onOpenNocTickets,
   onOpenAssistant,
+  originTicket,
+  onOriginTicketConsumed,
 }: {
   nocTicketCount: number;
   onOpenNocTickets: () => void;
   onOpenAssistant?: (context: IrisContext) => void;
+  originTicket?: SupportTicket | null;
+  onOriginTicketConsumed?: () => void;
 }) {
   const agentPolicy = useAgentPolicy();
   const showGroupingAgent = groupingAgentEnabled(agentPolicy);
@@ -474,7 +479,10 @@ export function NocOperations({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState("");
-  const [closedGrouping, setClosedGrouping] = useState("");
+  const [closedGrouping, setClosedGrouping] = useState<{
+    incidentId: string;
+    closedTickets: number;
+  } | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [closingGrouping, setClosingGrouping] = useState("");
   const [selectedGroupingId, setSelectedGroupingId] = useState("");
@@ -505,9 +513,57 @@ export function NocOperations({
   function openCreateGrouping() {
     setCreated("");
     setError("");
+    setClosedGrouping(null);
     setForm((current) => ({ ...initialForm, openedBy: current.openedBy }));
     setModalOpen(true);
   }
+
+  useEffect(() => {
+    if (!originTicket) return;
+
+    const scopeType: ScopeType = originTicket.cto
+      ? "cto"
+      : originTicket.pon
+        ? "pon"
+        : originTicket.olt
+          ? "olt"
+          : "park";
+    const scopeLabel = [
+      originTicket.olt,
+      originTicket.pon ? `PON ${originTicket.pon}` : null,
+      originTicket.cto,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    setCreated("");
+    setClosedGrouping(null);
+    setError("");
+    setForm((current) => ({
+      ...initialForm,
+      openedBy: current.openedBy,
+      originTicketId: originTicket.ticket_id,
+      title:
+        `Problema compartilhado a partir de ${scopeLabel || originTicket.ticket_id}`.slice(
+          0,
+          160,
+        ),
+      severity: "high",
+      scopeType,
+      olt: originTicket.olt ?? "",
+      pon: originTicket.pon ?? "",
+      cto: originTicket.cto ?? "",
+      probableCause:
+        `Sinal compartilhado confirmado pelo NOC a partir do ticket ${originTicket.ticket_id}: ${originTicket.description}`.slice(
+          0,
+          600,
+        ),
+      recommendedAction:
+        "Validar o alcance no escopo informado, acompanhar os chamados vinculados e contatar os clientes após a normalização.",
+    }));
+    setModalOpen(true);
+    onOriginTicketConsumed?.();
+  }, [originTicket]);
 
   useEffect(() => {
     if (!modalOpen) return;
@@ -690,7 +746,7 @@ export function NocOperations({
 
   function confirmGroupingClosure(title: string) {
     return window.confirm(
-      `Encerrar o agrupamento “${title}”?\n\nEle deixará de aparecer para o NOC e para o atendente N1. O registro continuará preservado no histórico.`,
+      `Encerrar o agrupamento “${title}”?\n\nTodos os chamados N1 vinculados serão encerrados junto com ele. O registro continuará preservado no histórico, e a próxima etapa será contatar os clientes impactados.`,
     );
   }
 
@@ -700,10 +756,13 @@ export function NocOperations({
     setClosingGrouping(incident.incident_id);
     setError("");
     setCreated("");
-    setClosedGrouping("");
+    setClosedGrouping(null);
     try {
-      await api.closeOperationalIncident(incident.incident_id);
-      setClosedGrouping(incident.incident_id);
+      const result = await api.closeOperationalIncident(incident.incident_id);
+      setClosedGrouping({
+        incidentId: incident.incident_id,
+        closedTickets: result.closed_tickets,
+      });
       await refresh();
       setSelectedGroupingId("");
     } catch (reason) {
@@ -750,7 +809,7 @@ export function NocOperations({
     setBusy(true);
     setError("");
     setCreated("");
-    setClosedGrouping("");
+    setClosedGrouping(null);
     try {
       const result = await api.createOperationalIncident(form);
       setCreated(result.incident_id);
@@ -828,14 +887,17 @@ export function NocOperations({
         {created && (
           <p className="noc-form-success">
             <CheckCircle2 size={15} /> Agrupamento {created} criado e impacto
-            calculado pelo inventário.
+            calculado pelo inventário. Chamados compatíveis permanecerão
+            vinculados até o encerramento do grupo.
           </p>
         )}
 
         {closedGrouping && (
-          <p className="noc-form-success">
-            <CheckCircle2 size={15} /> Agrupamento {closedGrouping} encerrado
-            nas visões ativas do NOC e do N1.
+          <p className="noc-form-success" aria-live="polite">
+            <CheckCircle2 size={15} /> Agrupamento {closedGrouping.incidentId}{" "}
+            encerrado; {closedGrouping.closedTickets} chamado(s) vinculado(s)
+            também foram encerrado(s). Próxima etapa: contatar os clientes
+            impactados e registrar o retorno em cada atendimento.
           </p>
         )}
 
@@ -1093,17 +1155,23 @@ export function NocOperations({
               <header>
                 <div>
                   <span className="section-label">Decisão do operador</span>
-                  <h3 id="noc-incident-title">Criar agrupamento</h3>
+                  <h3 id="noc-incident-title">
+                    {form.originTicketId
+                      ? "Confirmar problema compartilhado"
+                      : "Criar agrupamento"}
+                  </h3>
                   <p>
-                    Defina o ponto comum; o sistema calcula as CPEs
-                    potencialmente afetadas antes de registrar o caso.
+                    {form.originTicketId
+                      ? "Revise o escopo e confirme se este ticket representa um problema coletivo. Os próximos tickets compatíveis serão vinculados automaticamente."
+                      : "Defina o ponto comum; o sistema calcula as CPEs potencialmente afetadas antes de registrar o caso."}
                   </p>
                 </div>
                 <Network size={24} />
               </header>
               {form.originTicketId && (
                 <div className="noc-origin-ticket">
-                  <TicketCheck size={15} /> Origem: {form.originTicketId}
+                  <TicketCheck size={15} /> Ticket de origem:{" "}
+                  {form.originTicketId}
                   <button
                     type="button"
                     aria-label="Remover vínculo com o chamado de origem"
@@ -1390,7 +1458,11 @@ export function NocOperations({
                 </button>
                 <button className="noc-create-incident" disabled={busy}>
                   <Network size={16} />
-                  {busy ? "Criando…" : "Criar agrupamento"}
+                  {busy
+                    ? "Registrando…"
+                    : form.originTicketId
+                      ? "Confirmar e agrupar"
+                      : "Criar agrupamento"}
                 </button>
               </div>
             </form>
