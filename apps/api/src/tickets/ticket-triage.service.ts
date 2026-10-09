@@ -411,10 +411,10 @@ export class TicketTriageService {
   ): Promise<TicketTriageContext> {
     const [
       equipmentResult,
+      customerResult,
       metricsResult,
       logsResult,
       diagnosticsResult,
-      result,
     ] = await Promise.all([
       this.database.query<{
         serial: string;
@@ -428,68 +428,403 @@ export class TicketTriageService {
         cto: string;
         city: string;
         neighborhood: string;
+        installedAt: string | null;
+        planSince: string | null;
       }>(
         `SELECT serial, vendor, model, hw_revision AS hardware,
-            software_version AS firmware, plan_mbps AS "planMbps", olt,
-            pon_port AS pon, cto, city, neighborhood
-           FROM inventory
-           WHERE customer_id=$1 AND status='active'
-           ORDER BY installed_at DESC
-           LIMIT 1`,
+              software_version AS firmware, plan_mbps AS "planMbps", olt,
+              pon_port AS pon, cto, city, neighborhood,
+              installed_at::text AS "installedAt", plan_since::text AS "planSince"
+             FROM inventory
+             WHERE customer_id=$1 AND status='active'
+             ORDER BY installed_at DESC
+             LIMIT 1`,
+        [ticket.customer_id],
+      ),
+      this.database.query<{
+        customer_id: string;
+        status: string | null;
+        customer_since: string | null;
+        cancelled_at: string | null;
+        equipment_count: number;
+        active_equipment_count: number;
+        active_plan_mbps: number | null;
+      }>(
+        `SELECT $1::text AS customer_id,
+              max(customer_status) AS status,
+              min(customer_since)::text AS customer_since,
+              max(cancelled_at)::text AS cancelled_at,
+              count(*)::int AS equipment_count,
+              count(*) FILTER (WHERE status='active')::int AS active_equipment_count,
+              max(plan_mbps) FILTER (WHERE status='active') AS active_plan_mbps
+             FROM inventory
+             WHERE customer_id=$1`,
         [ticket.customer_id],
       ),
       this.database.query<Record<string, unknown>>(
         `SELECT day::text, serial, software_version, inform_count,
-            mem_min_pct, lan_min_mbps, reboot_count, fec_errors,
-            optical_rx_min_dbm, wifi_signal_avg_raw
-           FROM daily_cpe_metrics
-           WHERE customer_id=$1
-           ORDER BY day DESC
-           LIMIT 7`,
+              mem_min_pct, lan_min_mbps, reboot_count, fec_errors,
+              optical_rx_min_dbm, wifi_signal_avg_raw
+             FROM daily_cpe_metrics
+             WHERE customer_id=$1
+             ORDER BY day DESC
+             LIMIT 7`,
         [ticket.customer_id],
       ),
       this.database.query<Record<string, unknown>>(
         `SELECT ts::text, serial, event_codes, software_version, uptime_s,
-            mem_free_kb, optical_rx_power, pon_fec_uncorrectable,
-            lan1_bit_rate, wifi_clients_24g, wifi_clients_5g, wifi_rssi_avg
-           FROM informs
-           WHERE serial=(SELECT serial FROM inventory
-             WHERE customer_id=$1 AND status='active'
-             ORDER BY installed_at DESC LIMIT 1)
-           ORDER BY ts DESC
-           LIMIT 12`,
+              mem_free_kb, optical_rx_power, pon_fec_uncorrectable,
+              lan1_bit_rate, wifi_clients_24g, wifi_clients_5g, wifi_rssi_avg
+             FROM informs
+             WHERE serial=(SELECT serial FROM inventory
+               WHERE customer_id=$1 AND status='active'
+               ORDER BY installed_at DESC LIMIT 1)
+             ORDER BY ts DESC
+             LIMIT 12`,
         [ticket.customer_id],
       ),
       this.database.query<Record<string, unknown>>(
         `SELECT ts::text, state, download_mbps, upload_mbps, test_server
-           FROM diagnostics
-           WHERE serial=(SELECT serial FROM inventory
-             WHERE customer_id=$1 AND status='active'
-             ORDER BY installed_at DESC LIMIT 1)
-           ORDER BY ts DESC
-           LIMIT 5`,
+             FROM diagnostics
+             WHERE serial=(SELECT serial FROM inventory
+               WHERE customer_id=$1 AND status='active'
+               ORDER BY installed_at DESC LIMIT 1)
+             ORDER BY ts DESC
+             LIMIT 5`,
         [ticket.customer_id],
       ),
+    ]);
+
+    const equipment = equipmentResult.rows[0] ?? null;
+    const equipmentKey = equipment
+      ? `${equipment.vendor} ${equipment.model} ${equipment.hardware}`
+      : "";
+    const relatedParams = [
+      ticket.ticket_id,
+      ticket.opened_at,
+      ticket.customer_id,
+      equipment?.olt ?? "",
+      equipment?.pon ?? "",
+      equipment?.cto ?? "",
+      equipment?.firmware ?? "",
+      equipmentKey,
+      equipment?.city ?? "",
+      equipment?.neighborhood ?? "",
+    ];
+    const relatedCondition = `
+      t.ticket_id<>$1::text
+      AND t.opened_at BETWEEN $2::timestamptz - INTERVAL '7 days'
+        AND $2::timestamptz + INTERVAL '7 days'
+      AND (
+        t.customer_id=$3::text
+        OR ($4::text<>'' AND related_equipment.olt=$4::text)
+        OR ($4::text<>'' AND $5::text<>'' AND related_equipment.olt=$4::text
+          AND related_equipment.pon_port=$5::text)
+        OR ($4::text<>'' AND $5::text<>'' AND $6::text<>''
+          AND related_equipment.olt=$4::text
+          AND related_equipment.pon_port=$5::text AND related_equipment.cto=$6::text)
+        OR ($7::text<>'' AND related_equipment.software_version=$7::text)
+        OR ($8::text<>'' AND lower(concat_ws(' ', related_equipment.vendor,
+          related_equipment.model, related_equipment.hw_revision))=lower($8::text))
+        OR (($9::text<>'' AND related_equipment.city=$9::text)
+          OR ($10::text<>'' AND related_equipment.neighborhood=$10::text))
+      )`;
+    const relatedJoin = `
+      LEFT JOIN LATERAL (
+        SELECT serial, vendor, model, hw_revision, software_version,
+          olt, pon_port, cto, city, neighborhood
+        FROM inventory
+        WHERE customer_id=t.customer_id AND status='active'
+        ORDER BY installed_at DESC
+        LIMIT 1
+      ) related_equipment ON true`;
+    const [
+      recentTicketsResult,
+      relatedTicketsResult,
+      correlationResult,
+      incidentsResult,
+    ] = await Promise.all([
       this.database.query<TicketTriageContext["recentCustomerTickets"][number]>(
-        `SELECT ticket_id, opened_at::text, category, description, resolution,
-            related_problem_id
-           FROM tickets
-           WHERE customer_id=$1 AND ticket_id<>$2
-           ORDER BY opened_at DESC
-           LIMIT 8`,
+        `SELECT ticket_id, opened_at::text, channel, category, description,
+              resolution, source, related_problem_id, ai_triage_status
+             FROM tickets
+             WHERE customer_id=$1 AND ticket_id<>$2
+             ORDER BY opened_at DESC
+             LIMIT 8`,
         [ticket.customer_id, ticket.ticket_id],
       ),
+      this.database.query<TicketTriageContext["relatedTickets"][number]>(
+        `SELECT t.ticket_id, t.opened_at::text, t.customer_id, t.channel,
+              t.category, t.description, t.resolution, t.source,
+              t.related_problem_id, t.ai_triage_status,
+              related_equipment.serial, related_equipment.software_version AS firmware,
+              related_equipment.olt, related_equipment.pon_port AS pon,
+              related_equipment.cto, related_equipment.city,
+              related_equipment.neighborhood,
+              CASE
+                WHEN t.customer_id=$3::text THEN 'same_customer'
+                WHEN $4::text<>'' AND $5::text<>'' AND $6::text<>''
+                  AND related_equipment.olt=$4::text
+                  AND related_equipment.pon_port=$5::text
+                  AND related_equipment.cto=$6::text THEN 'same_cto'
+                WHEN $4::text<>'' AND $5::text<>'' AND related_equipment.olt=$4::text
+                  AND related_equipment.pon_port=$5::text THEN 'same_pon'
+                WHEN $4::text<>'' AND related_equipment.olt=$4::text THEN 'same_olt'
+                WHEN $7::text<>'' AND related_equipment.software_version=$7::text THEN 'same_firmware'
+                WHEN $8::text<>'' AND lower(concat_ws(' ', related_equipment.vendor,
+                  related_equipment.model, related_equipment.hw_revision))=lower($8::text)
+                  THEN 'same_equipment'
+                ELSE 'same_region'
+              END AS relation
+            FROM tickets t
+            ${relatedJoin}
+            WHERE ${relatedCondition}
+            ORDER BY t.opened_at DESC, t.ticket_id ASC
+            LIMIT 24`,
+        relatedParams,
+      ),
+      this.database.query<{
+        related_ticket_count: number;
+        related_customer_count: number;
+        related_equipment_count: number;
+      }>(
+        `SELECT count(*)::int AS related_ticket_count,
+              count(DISTINCT t.customer_id) FILTER (WHERE t.customer_id<>$3::text)::int
+                AS related_customer_count,
+              count(DISTINCT related_equipment.serial)::int AS related_equipment_count
+            FROM tickets t
+            ${relatedJoin}
+            WHERE ${relatedCondition}`,
+        relatedParams,
+      ),
+      this.database.query<TicketTriageContext["activeIncidents"][number]>(
+        `SELECT incident_id, status, severity, title, scope,
+              affected_cpes, confidence, probable_cause, recommended_action,
+              evidence, opened_at::text, origin_ticket_id
+            FROM operational_incidents
+            WHERE status IN ('open', 'mitigating', 'monitoring')
+              AND (
+                scope->>'type'='park'
+                OR (scope->>'type'='customer' AND lower(scope->>'identifier') IN
+                  (lower($1::text), lower($2::text)))
+                OR (scope->>'type'='olt' AND scope->>'identifier'=$3::text)
+                OR (scope->>'type'='pon' AND scope->>'identifier'=concat($3::text, ' · PON ', $4::text))
+                OR (scope->>'type'='cto' AND scope->>'identifier'=concat($3::text, ' · PON ', $4::text, ' · ', $5::text))
+                OR (scope->>'type'='firmware' AND lower(scope->>'identifier')=lower($6::text))
+                OR (scope->>'type'='equipment' AND lower(scope->>'identifier')=lower($7::text))
+                OR (scope->>'type'='region' AND lower(scope->>'identifier') IN
+                  (lower($8::text), lower($9::text)))
+              )
+            ORDER BY CASE severity
+              WHEN 'critical' THEN 0 WHEN 'high' THEN 1
+              WHEN 'medium' THEN 2 ELSE 3 END, opened_at DESC
+            LIMIT 12`,
+        [
+          ticket.customer_id,
+          equipment?.serial ?? "",
+          equipment?.olt ?? "",
+          equipment?.pon ?? "",
+          equipment?.cto ?? "",
+          equipment?.firmware ?? "",
+          equipmentKey,
+          equipment?.city ?? "",
+          equipment?.neighborhood ?? "",
+        ],
+      ),
     ]);
+
+    const customer = customerResult.rows[0] ?? {
+      customer_id: ticket.customer_id,
+      status: null,
+      customer_since: null,
+      cancelled_at: null,
+      equipment_count: 0,
+      active_equipment_count: 0,
+      active_plan_mbps: null,
+    };
+    const relationCounts = relatedTicketsResult.rows.reduce<
+      Record<string, number>
+    >((counts, relatedTicket) => {
+      counts[relatedTicket.relation] =
+        (counts[relatedTicket.relation] ?? 0) + 1;
+      return counts;
+    }, {});
+    const timestamp = (value: unknown) =>
+      value == null || value === "" ? null : String(value);
+    const ticketTimestamp = Date.parse(ticket.opened_at);
+    const windowStart = Number.isNaN(ticketTimestamp)
+      ? ticket.opened_at
+      : new Date(ticketTimestamp - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const windowEnd = Number.isNaN(ticketTimestamp)
+      ? ticket.opened_at
+      : new Date(ticketTimestamp + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const timeline = [
+      {
+        at: ticket.opened_at,
+        source: "ticket",
+        kind: "ticket_opened",
+        reference: ticket.ticket_id,
+        summary: `${ticket.category}: ${ticket.description}`,
+      },
+      ...recentTicketsResult.rows.map((item) => ({
+        at: item.opened_at,
+        source: "ticket_history",
+        kind: "customer_ticket",
+        reference: item.ticket_id,
+        summary: `${item.category}: ${item.description}`,
+      })),
+      ...metricsResult.rows.map((item) => ({
+        at: String(item.day ?? ""),
+        source: "daily_metrics",
+        kind: "metric_day",
+        reference: String(item.serial ?? ticket.customer_id),
+        summary: "Métricas diárias do equipamento.",
+      })),
+      ...logsResult.rows.map((item) => ({
+        at: String(item.ts ?? ""),
+        source: "inform",
+        kind: "device_log",
+        reference: String(item.serial ?? ticket.customer_id),
+        summary: `Inform do equipamento: ${String(item.event_codes ?? "sem código")}`,
+      })),
+      ...diagnosticsResult.rows.map((item) => ({
+        at: String(item.ts ?? ""),
+        source: "diagnostics",
+        kind: "technical_test",
+        reference: ticket.customer_id,
+        summary: `Diagnóstico: ${String(item.state ?? "estado não informado")}`,
+      })),
+    ]
+      .filter((item) => item.at)
+      .sort((left, right) => Date.parse(right.at) - Date.parse(left.at))
+      .slice(0, 40);
+    const missing: string[] = [];
+    const checked = [
+      "ticket e payload bruto",
+      "perfil cadastral derivado do inventário",
+      "histórico de tickets do cliente",
+      "correlação por topologia, firmware, equipamento e região",
+      "incidentes NOC ativos compatíveis",
+    ];
+    if (!equipment) missing.push("equipamento ativo no inventário");
+    if (metricsResult.rows.length === 0)
+      missing.push("métricas diárias recentes");
+    if (logsResult.rows.length === 0) missing.push("logs de Inform recentes");
+    if (diagnosticsResult.rows.length === 0)
+      missing.push("diagnóstico técnico recente");
+    if (recentTicketsResult.rows.length === 0)
+      missing.push("histórico anterior de tickets do cliente");
+    const evidenceBundle = [
+      {
+        source: "ticket",
+        reference: ticket.ticket_id,
+        observedAt: ticket.opened_at,
+        summary: "Relato e classificação informados no atendimento.",
+        details: {
+          category: ticket.category,
+          channel: ticket.channel,
+          description: ticket.description,
+          sourcePayload: ticket.source_payload ?? {},
+        },
+      },
+      ...(equipment
+        ? [
+            {
+              source: "inventory",
+              reference: equipment.serial,
+              observedAt: equipment.installedAt,
+              summary: "Equipamento ativo, capacidade e caminho de rede.",
+              details: equipment,
+            },
+          ]
+        : []),
+      ...(metricsResult.rows[0]
+        ? [
+            {
+              source: "daily_metrics",
+              reference: String(
+                metricsResult.rows[0].serial ?? ticket.customer_id,
+              ),
+              observedAt: timestamp(metricsResult.rows[0].day),
+              summary: "Última janela de métricas diárias disponível.",
+              details: metricsResult.rows[0],
+            },
+          ]
+        : []),
+      ...(logsResult.rows[0]
+        ? [
+            {
+              source: "inform",
+              reference: String(
+                logsResult.rows[0].serial ?? ticket.customer_id,
+              ),
+              observedAt: timestamp(logsResult.rows[0].ts),
+              summary: "Último log de Inform disponível.",
+              details: logsResult.rows[0],
+            },
+          ]
+        : []),
+      ...(diagnosticsResult.rows[0]
+        ? [
+            {
+              source: "diagnostics",
+              reference: ticket.customer_id,
+              observedAt: timestamp(diagnosticsResult.rows[0].ts),
+              summary: "Último diagnóstico técnico disponível.",
+              details: diagnosticsResult.rows[0],
+            },
+          ]
+        : []),
+      ...incidentsResult.rows.slice(0, 5).map((incident) => ({
+        source: "noc_incident",
+        reference: incident.incident_id,
+        observedAt: incident.opened_at,
+        summary: `Incidente ativo: ${incident.title}`,
+        details: incident,
+      })),
+    ];
     return {
       ticket: {
         ...ticket,
         source_payload: ticket.source_payload ?? {},
       },
-      equipment: equipmentResult.rows[0] ?? null,
+      customer: {
+        customerId: customer.customer_id,
+        status: customer.status,
+        customerSince: customer.customer_since,
+        cancelledAt: customer.cancelled_at,
+        equipmentCount: customer.equipment_count,
+        activeEquipmentCount: customer.active_equipment_count,
+        activePlanMbps: customer.active_plan_mbps,
+      },
+      equipment,
       recentMetrics: metricsResult.rows,
       recentLogs: logsResult.rows,
       recentDiagnostics: diagnosticsResult.rows,
-      recentCustomerTickets: result.rows,
+      recentCustomerTickets: recentTicketsResult.rows,
+      relatedTickets: relatedTicketsResult.rows,
+      correlation: {
+        windowStart,
+        windowEnd,
+        relatedTicketCount:
+          correlationResult.rows[0]?.related_ticket_count ?? 0,
+        relatedCustomerCount:
+          correlationResult.rows[0]?.related_customer_count ?? 0,
+        relatedEquipmentCount:
+          correlationResult.rows[0]?.related_equipment_count ?? 0,
+        relationCounts,
+        activeIncidentCount: incidentsResult.rows.length,
+      },
+      activeIncidents: incidentsResult.rows,
+      timeline,
+      evidenceBundle,
+      dataQuality: {
+        checked,
+        missing,
+        latestMetricAt: timestamp(metricsResult.rows[0]?.day),
+        latestLogAt: timestamp(logsResult.rows[0]?.ts),
+        latestDiagnosticAt: timestamp(diagnosticsResult.rows[0]?.ts),
+      },
     };
   }
 }

@@ -10,6 +10,7 @@ import {
   MapPin,
   Network,
   Play,
+  RefreshCw,
   Server,
   ShieldCheck,
   TicketCheck,
@@ -25,6 +26,7 @@ import type {
   IrisContext,
   SupportProfile,
   SupportTicket,
+  TicketTriageContextSnapshot,
   TicketTriageRun,
   TicketFilter,
 } from "./types";
@@ -169,6 +171,11 @@ export function TicketWorkspacePage({
   const [triageRuns, setTriageRuns] = useState<TicketTriageRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [retryBusy, setRetryBusy] = useState(false);
+  const [retryFeedback, setRetryFeedback] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -180,6 +187,7 @@ export function TicketWorkspacePage({
     setCustomer(null);
     setAllTickets([]);
     setTriageRuns([]);
+    setRetryFeedback(null);
     void Promise.all([
       api.support(ticket.customer_id),
       api.customer(ticket.customer_id),
@@ -259,12 +267,50 @@ export function TicketWorkspacePage({
     }
   }
 
+  async function retryTriage() {
+    setRetryBusy(true);
+    setRetryFeedback(null);
+    try {
+      const result = await api.retryTicketTriage(currentTicket.ticket_id);
+      if (result.skipped || result.status === "failed") {
+        setRetryFeedback({
+          tone: "error",
+          message: result.reason ?? "A nova avaliação não foi concluída.",
+        });
+        return;
+      }
+      const [detailedTicket, nextTriageRuns] = await Promise.all([
+        api.ticket(currentTicket.ticket_id),
+        api.ticketTriage(currentTicket.ticket_id),
+      ]);
+      setCurrentTicket(detailedTicket);
+      setTriageRuns(nextTriageRuns);
+      setRetryFeedback({
+        tone: "success",
+        message:
+          "Nova avaliação concluída. O histórico anterior foi preservado.",
+      });
+    } catch (reason) {
+      setRetryFeedback({
+        tone: "error",
+        message:
+          reason instanceof Error
+            ? reason.message
+            : "Não foi possível solicitar a nova avaliação.",
+      });
+    } finally {
+      setRetryBusy(false);
+    }
+  }
+
   const activeEquipment = customer?.equipment_history.find(
     (item) => item.status === "active",
   );
   const linkedToOperationalIncident = Boolean(
     currentTicket.related_problem_id?.toUpperCase().startsWith("INC-"),
   );
+  const triageContext = (triageRuns[0]?.input_snapshot ??
+    null) as TicketTriageContextSnapshot | null;
 
   function openTicketChat(problemId = currentTicket.related_problem_id) {
     onOpenAssistant?.({
@@ -290,6 +336,16 @@ export function TicketWorkspacePage({
         </button>
         <div className="ticket-workspace-toolbar-actions">
           <TicketStatus status={currentTicket.noc_status} />
+          <button
+            type="button"
+            className="ticket-workspace-ai-action"
+            disabled={retryBusy || currentTicket.ai_triage_status === "running"}
+            onClick={() => void retryTriage()}
+            title="Recalcula a avaliação com os dados técnicos mais recentes."
+          >
+            <RefreshCw size={15} />
+            {retryBusy ? "Reavaliando…" : "Reavaliar com IA"}
+          </button>
           {canOpenAssistant && onOpenAssistant && (
             <OpenIrisChatButton onClick={() => openTicketChat()} compact />
           )}
@@ -594,6 +650,136 @@ export function TicketWorkspacePage({
                     <li key={item}>{item}</li>
                   ))}
                 </ul>
+              )}
+              {retryFeedback && (
+                <div
+                  className={`ticket-workspace-ai-feedback ${retryFeedback.tone}`}
+                  role={retryFeedback.tone === "error" ? "alert" : "status"}
+                >
+                  {retryFeedback.message}
+                </div>
+              )}
+              {triageContext && (
+                <div className="ticket-workspace-ai-context">
+                  <div className="ticket-workspace-ai-context-grid">
+                    <article>
+                      <span>Completude do contexto</span>
+                      <strong>
+                        {triageContext.dataQuality?.missing?.length
+                          ? `${triageContext.dataQuality.missing.length} lacuna(s)`
+                          : "Contexto disponível"}
+                      </strong>
+                      <small>
+                        {triageContext.dataQuality?.checked?.length ?? 0} fontes
+                        conferidas antes da decisão.
+                      </small>
+                      {triageContext.dataQuality?.missing?.length ? (
+                        <ul>
+                          {triageContext.dataQuality.missing.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>
+                          Nenhuma lacuna crítica de coleta foi identificada.
+                        </p>
+                      )}
+                    </article>
+                    <article>
+                      <span>Correlação e impacto</span>
+                      <strong>
+                        {triageContext.correlation?.relatedCustomerCount ?? 0}{" "}
+                        outro(s) cliente(s) relacionado(s)
+                      </strong>
+                      <small>
+                        {triageContext.correlation?.relatedTicketCount ?? 0}{" "}
+                        ticket(s) na janela de correlação ·{" "}
+                        {triageContext.correlation?.relatedEquipmentCount ?? 0}{" "}
+                        equipamento(s)
+                      </small>
+                      {triageContext.activeIncidents?.length ? (
+                        <ul>
+                          {triageContext.activeIncidents.map((incident) => (
+                            <li key={incident.incident_id}>
+                              {incident.incident_id} · {incident.title} ·{" "}
+                              {incident.affected_cpes} CPEs
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>
+                          Nenhum incidente NOC ativo compatível foi encontrado.
+                        </p>
+                      )}
+                    </article>
+                  </div>
+                  {triageContext.relatedTickets?.length ? (
+                    <div className="ticket-workspace-ai-related">
+                      <span>Chamados relacionados encontrados</span>
+                      <div>
+                        {triageContext.relatedTickets
+                          .slice(0, 8)
+                          .map((item) => (
+                            <span key={item.ticket_id}>
+                              <strong>{item.ticket_id}</strong> ·{" "}
+                              {item.relation} · {item.customer_id} ·{" "}
+                              {item.category}
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {triageContext.timeline?.length ? (
+                    <details className="ticket-workspace-ai-details">
+                      <summary>
+                        Linha do tempo consolidada (
+                        {triageContext.timeline.length} eventos)
+                      </summary>
+                      <ol>
+                        {triageContext.timeline
+                          .slice(0, 16)
+                          .map((event, index) => (
+                            <li key={`${event.reference}-${event.at}-${index}`}>
+                              <time>{formatDate(event.at)}</time>
+                              <span>
+                                <strong>{event.source}</strong> ·{" "}
+                                {event.summary}
+                              </span>
+                            </li>
+                          ))}
+                      </ol>
+                    </details>
+                  ) : null}
+                  {triageContext.evidenceBundle?.length ? (
+                    <details className="ticket-workspace-ai-details">
+                      <summary>
+                        Evidências estruturadas e fontes (
+                        {triageContext.evidenceBundle.length})
+                      </summary>
+                      <div className="ticket-workspace-ai-evidence-list">
+                        {triageContext.evidenceBundle.map((evidence) => (
+                          <article
+                            key={`${evidence.source}-${evidence.reference}`}
+                          >
+                            <strong>
+                              {evidence.source} · {evidence.reference}
+                            </strong>
+                            <span>
+                              {evidence.observedAt
+                                ? formatDate(evidence.observedAt)
+                                : "Horário não informado"}
+                            </span>
+                            <p>{evidence.summary}</p>
+                          </article>
+                        ))}
+                      </div>
+                    </details>
+                  ) : null}
+                  <details className="ticket-workspace-ai-details">
+                    <summary>Ver contexto completo enviado à IA (JSON)</summary>
+                    <pre>{JSON.stringify(triageContext, null, 2)}</pre>
+                  </details>
+                </div>
               )}
               <p className="ticket-workspace-ai-footnote">
                 O ticket continua sendo do atendimento N1. Quando houver

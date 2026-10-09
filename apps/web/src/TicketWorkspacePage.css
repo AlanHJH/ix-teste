@@ -22,7 +22,8 @@
 }
 .ticket-workspace-back,
 .ticket-workspace-action,
-.ticket-workspace-group-action {
+.ticket-workspace-group-action,
+.ticket-workspace-ai-action {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -37,7 +38,8 @@
 }
 .ticket-workspace-back:hover,
 .ticket-workspace-action:hover:not(:disabled),
-.ticket-workspace-group-action:hover:not(:disabled) {
+.ticket-workspace-group-action:hover:not(:disabled),
+.ticket-workspace-ai-action:hover:not(:disabled) {
   border-color: #63b4ac;
   color: var(--teal-dark);
   background: #edf8f6;
@@ -57,6 +59,15 @@
   background: var(--teal);
 }
 .ticket-workspace-action:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.ticket-workspace-ai-action {
+  border-color: #b7d8d2;
+  color: #096e68;
+  background: #e9f7f4;
+}
+.ticket-workspace-ai-action:disabled {
   cursor: wait;
   opacity: 0.6;
 }
@@ -336,6 +347,167 @@
   border-top: 1px solid #dcebea;
   color: #71878d;
   font-size: 10px;
+}
+.ticket-workspace-ai-feedback {
+  margin-top: 13px;
+  padding: 10px 12px;
+  border: 1px solid #c3e2d6;
+  border-radius: 9px;
+  color: #176d5c;
+  background: #effaf6;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.ticket-workspace-ai-feedback.error {
+  border-color: #ecc7bd;
+  color: #94503d;
+  background: #fff8f5;
+}
+.ticket-workspace-ai-context {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 15px;
+  border-top: 1px solid #dcebea;
+}
+.ticket-workspace-ai-context-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.ticket-workspace-ai-context-grid article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #d7e8e5;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+}
+.ticket-workspace-ai-context-grid span,
+.ticket-workspace-ai-context-grid strong,
+.ticket-workspace-ai-context-grid small {
+  display: block;
+}
+.ticket-workspace-ai-context-grid span,
+.ticket-workspace-ai-related > span {
+  color: #71878d;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.ticket-workspace-ai-context-grid strong {
+  margin-top: 5px;
+  color: #284c55;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.ticket-workspace-ai-context-grid small {
+  margin-top: 4px;
+  color: #71878d;
+  font-size: 9px;
+  line-height: 1.4;
+}
+.ticket-workspace-ai-context-grid p,
+.ticket-workspace-ai-context-grid ul {
+  margin: 9px 0 0;
+  color: #536d74;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.ticket-workspace-ai-context-grid ul {
+  display: grid;
+  gap: 4px;
+  padding-left: 16px;
+}
+.ticket-workspace-ai-related {
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: #f7fbfa;
+}
+.ticket-workspace-ai-related > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 11px;
+}
+.ticket-workspace-ai-related span {
+  color: #536d74;
+  font-size: 10px;
+}
+.ticket-workspace-ai-related strong {
+  color: #176f65;
+}
+.ticket-workspace-ai-details {
+  border: 1px solid #d7e5e4;
+  border-radius: 10px;
+  background: #f8fbfb;
+}
+.ticket-workspace-ai-details summary {
+  padding: 10px 12px;
+  color: #35616a;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+.ticket-workspace-ai-details ol {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0 13px 13px 28px;
+  color: #536d74;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.ticket-workspace-ai-details li {
+  padding-left: 3px;
+}
+.ticket-workspace-ai-details time,
+.ticket-workspace-ai-details li strong {
+  color: #176f65;
+  font-weight: 800;
+}
+.ticket-workspace-ai-details li span {
+  display: block;
+  margin-top: 2px;
+}
+.ticket-workspace-ai-evidence-list {
+  display: grid;
+  gap: 7px;
+  padding: 0 12px 12px;
+}
+.ticket-workspace-ai-evidence-list article {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid #e0ebea;
+  border-radius: 8px;
+  background: white;
+}
+.ticket-workspace-ai-evidence-list strong {
+  color: #284c55;
+  font-size: 10px;
+}
+.ticket-workspace-ai-evidence-list span,
+.ticket-workspace-ai-evidence-list p {
+  color: #71878d;
+  font-size: 9px;
+}
+.ticket-workspace-ai-evidence-list p {
+  margin: 1px 0 0;
+  line-height: 1.4;
+}
+.ticket-workspace-ai-details pre {
+  max-height: 420px;
+  margin: 0;
+  overflow: auto;
+  padding: 0 12px 12px;
+  color: #35535a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 9px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .ticket-workspace-section-heading {
   justify-content: space-between;
@@ -727,6 +899,9 @@
   }
   .ticket-workspace-ai-summary {
     grid-template-columns: 1fr 1fr;
+  }
+  .ticket-workspace-ai-context-grid {
+    grid-template-columns: 1fr;
   }
 }
 @media (max-width: 700px) {

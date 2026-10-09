@@ -24,6 +24,9 @@ Regras:
 - use action=keep_category quando a categoria estiver correta e não houver ação segura adicional;
 - use action=schedule_visit ou action=close somente quando o relato trouxer evidência explícita, mas marque requiresHumanReview=true; o backend pode bloquear essas ações;
 - use action=review quando a evidência for insuficiente ou contraditória;
+- use correlation, relatedTickets e activeIncidents para diferenciar um caso individual de um problema compartilhado; a existência de um equipamento ou ticket isolado nunca prova alcance coletivo;
+- leia dataQuality.missing como uma limitação explícita da análise; não transforme ausência de coleta em evidência de normalidade;
+- use timeline e evidenceBundle para respeitar a ordem dos fatos e citar fontes, horários e valores observados na justificativa;
 - não invente medições, clientes, topologia, causa, quantidade de afetados ou vínculo com incidente;
 - confiança alta exige evidência textual ou contextual clara; não use 1.0 por padrão;
 - escreva reason, nocReason e evidence em português claro e curto;
