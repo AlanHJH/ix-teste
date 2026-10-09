@@ -10,7 +10,6 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
-  ShieldCheck,
   Sparkles,
 } from "lucide-react";
 import { api } from "./api";
@@ -386,32 +385,6 @@ export function AgentConfiguration() {
 
   return (
     <section className="agent-settings-page">
-      <header className="agent-settings-hero">
-        <div>
-          <span className="section-label">Governança do agente</span>
-          <h1>Configuração do agente IA</h1>
-          <p>
-            Consulte a configuração efetiva dos agentes e escolha preferências
-            locais de contexto. As permissões reais continuam controladas no
-            backend e nos servidores MCP.
-          </p>
-        </div>
-        <div
-          className="agent-settings-status"
-          title="O agente não executa mudanças operacionais."
-        >
-          <ShieldCheck size={20} />
-          <span>
-            <strong>Somente leitura</strong>
-            <small>
-              {snapshot?.runtime.autoGroupingEnabled
-                ? `Autoagrupamento ≥ ${formatConfidence(snapshot.runtime.autoGroupingMinConfidence)}`
-                : "Aprovação humana obrigatória"}
-            </small>
-          </span>
-        </div>
-      </header>
-
       <section
         className="agent-settings-policy"
         aria-label="Política de segurança atual"

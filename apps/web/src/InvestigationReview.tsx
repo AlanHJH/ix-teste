@@ -39,6 +39,19 @@ const triggerLabel = {
   manual: "Operador",
 };
 
+function isManualReevaluation(investigation: Investigation) {
+  return (
+    investigation.trigger_type === "manual" &&
+    typeof investigation.scope.reEvaluationOf === "string"
+  );
+}
+
+function investigationTriggerLabel(investigation: Investigation) {
+  return isManualReevaluation(investigation)
+    ? "Reavaliação manual"
+    : triggerLabel[investigation.trigger_type];
+}
+
 const evidenceSourceLabel: Record<string, string> = {
   operations: "Detecção inicial",
   inventory: "Inventário da rede",
@@ -178,7 +191,7 @@ function InvestigationCard({
       >
         <header>
           <div className="investigation-tags">
-            <span>{triggerLabel[investigation.trigger_type]}</span>
+            <span>{investigationTriggerLabel(investigation)}</span>
             <span className={`investigation-status ${investigation.status}`}>
               {investigationStatusLabel(investigation)}
             </span>
@@ -670,7 +683,8 @@ export function InvestigationReview({
   const investigations =
     page?.data.filter(
       (investigation) =>
-        investigation.trigger_type === "metric" &&
+        (investigation.trigger_type === "metric" ||
+          isManualReevaluation(investigation)) &&
         ["queued", "running", "pending_review", "failed"].includes(
           investigation.status,
         ),

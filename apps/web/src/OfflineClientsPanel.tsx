@@ -1,4 +1,11 @@
-import { AlertTriangle, ArrowRight, RefreshCw, WifiOff } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  LoaderCircle,
+  RefreshCw,
+  WifiOff,
+} from "lucide-react";
+import { useState } from "react";
 import type { OfflineAlert, OfflineAlertPage } from "./types";
 
 type Props = {
@@ -31,6 +38,10 @@ export function OfflineClientsPanel({
   onRefresh,
   onDiagnose,
 }: Props) {
+  const [diagnosingCustomerId, setDiagnosingCustomerId] = useState<
+    string | null
+  >(null);
+
   return (
     <section
       className="offline-alert-panel panel"
@@ -97,10 +108,22 @@ export function OfflineClientsPanel({
               <button
                 className="offline-alert-open"
                 type="button"
-                onClick={() => onDiagnose(alert.customer_id)}
+                onClick={() => {
+                  setDiagnosingCustomerId(alert.customer_id);
+                  onDiagnose(alert.customer_id);
+                }}
+                disabled={diagnosingCustomerId === alert.customer_id}
               >
-                Diagnosticar
-                <ArrowRight size={15} />
+                {diagnosingCustomerId === alert.customer_id ? (
+                  <>
+                    <LoaderCircle size={15} className="spin" /> Buscando…
+                  </>
+                ) : (
+                  <>
+                    Diagnosticar
+                    <ArrowRight size={15} />
+                  </>
+                )}
               </button>
             </article>
           ))}

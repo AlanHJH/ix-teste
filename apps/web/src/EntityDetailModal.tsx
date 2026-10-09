@@ -1,5 +1,6 @@
 import { ReactNode, useId } from "react";
 import { HelpTooltip } from "./HelpTooltip";
+import { technicalHintForLabel } from "./ProviderGlossary";
 import { SideDrawer } from "./SideDrawer";
 
 export type EntityDetailItem = {
@@ -57,10 +58,12 @@ export function EntityDetailModal({
               >
                 <dt>
                   {detail.label}
-                  {detail.hint && (
+                  {(detail.hint ?? technicalHintForLabel(detail.label)) && (
                     <HelpTooltip
                       term={detail.label}
-                      description={detail.hint}
+                      description={
+                        detail.hint ?? technicalHintForLabel(detail.label) ?? ""
+                      }
                     />
                   )}
                 </dt>

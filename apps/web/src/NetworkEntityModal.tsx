@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { Boxes, Cable, GitBranch, MapPin, Server } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  Boxes,
+  Cable,
+  GitBranch,
+  MapPin,
+  RefreshCw,
+  Server,
+} from "lucide-react";
 import { api } from "./api";
 import { EntityDetailModal } from "./EntityDetailModal";
 import type { EntityDetailItem } from "./EntityDetailModal";
@@ -30,10 +39,11 @@ const detailHints: Record<string, string> = {
   "CTOs atendidas": providerGlossary.cto.description,
   "CTOs conectadas": providerGlossary.cto.description,
   "CPEs ativas": providerGlossary.cpe.description,
+  "Equipamentos ativos (CPEs)": providerGlossary.cpe.description,
   "OLT de origem": providerGlossary.olt.description,
   "Porta PON": providerGlossary.pon.description,
   "Drop lógico": providerGlossary.drop.description,
-  "Relações de drop": providerGlossary.drop.description,
+  "Drop físico de campo": providerGlossary.drop.description,
   Firmware: providerGlossary.firmware.description,
   Equipamento: providerGlossary.hardware.description,
   "Plano contratado": providerGlossary.mbps.description,
@@ -235,10 +245,141 @@ function formatHistoryDate(value: string) {
   }).format(date);
 }
 
-function NetworkEntityHistory({ entity }: { entity: NetworkEntity }) {
+function confidencePercent(finding: Investigation["finding"]) {
+  if (!finding) return null;
+  return Math.round(
+    finding.confidence <= 1 ? finding.confidence * 100 : finding.confidence,
+  );
+}
+
+function isScopedToEntity(investigation: Investigation) {
+  const scope = investigationScope(investigation);
+  return Boolean(scope.olt || scope.pon || scope.cto || scope.identifier);
+}
+
+function primaryInvestigation(records: Investigation[]) {
+  return (
+    records.find(
+      (investigation) =>
+        historyState(investigation) === "problem" &&
+        isScopedToEntity(investigation),
+    ) ??
+    records.find((investigation) => historyState(investigation) === "problem")
+  );
+}
+
+function operationalFindingSummary(
+  entity: NetworkEntity,
+  investigation: Investigation,
+) {
+  const finding = investigation.finding;
+  if (!finding) return "A análise identificou um sinal que precisa de revisão.";
+
+  const title = finding.title.toLocaleLowerCase("pt-BR");
+  if (title.includes("fec")) {
+    const total =
+      entity.kind === "pon" ? entity.data.cpes : finding.affectedCpes;
+    return `Erros de transmissão óptica identificados em ${number.format(finding.affectedCpes)} de ${number.format(total)} CPEs.`;
+  }
+  if (title.includes("degradação óptica compartilhada")) {
+    return "Há indícios de degradação no trecho compartilhado, mas a causa física ainda não foi confirmada.";
+  }
+  return finding.summary;
+}
+
+function NetworkEntityOperationalSummary({
+  entity,
+  investigation,
+  retrying,
+  retryError,
+  onRetry,
+  onOpenNoc,
+}: {
+  entity: NetworkEntity;
+  investigation?: Investigation;
+  retrying: boolean;
+  retryError: string;
+  onRetry: (investigationId: string) => void;
+  onOpenNoc?: () => void;
+}) {
+  if (!investigation?.finding) return null;
+
+  const confidence = confidencePercent(investigation.finding);
+  const path =
+    entity.kind === "pon"
+      ? `${entity.olt} → PON ${entity.data.pon}`
+      : undefined;
+
+  return (
+    <section
+      className="entity-operational-summary"
+      aria-labelledby="entity-operational-summary-title"
+    >
+      <div className="entity-operational-summary-heading">
+        <span className="entity-operational-summary-label">
+          <AlertTriangle size={13} aria-hidden="true" /> Leitura operacional
+        </span>
+        {confidence !== null && (
+          <span className="entity-operational-confidence">
+            {confidence}% de confiança
+          </span>
+        )}
+      </div>
+      {path && <span className="entity-operational-path">{path}</span>}
+      <strong id="entity-operational-summary-title">
+        {investigation.finding.title}
+      </strong>
+      <p>{operationalFindingSummary(entity, investigation)}</p>
+      {entity.kind === "pon" && (
+        <p className="entity-operational-explanation">
+          FEC é a contagem de erros detectados na transmissão óptica. O padrão
+          distribuído entre várias CTOs sugere investigar a PON como trecho
+          compartilhado.
+        </p>
+      )}
+      <div className="entity-operational-actions">
+        <button
+          type="button"
+          className="entity-operational-action primary"
+          onClick={() => onRetry(investigation.investigation_id)}
+          disabled={retrying}
+        >
+          <RefreshCw size={14} className={retrying ? "spin" : undefined} />
+          {retrying ? "Reavaliando…" : "Reavaliar com IA"}
+        </button>
+        {onOpenNoc && (
+          <button
+            type="button"
+            className="entity-operational-action secondary"
+            onClick={onOpenNoc}
+            title="Abrir a visão NOC para revisão humana; nenhuma ação de rede é executada automaticamente."
+          >
+            <ArrowUpRight size={14} /> Abrir visão NOC
+          </button>
+        )}
+      </div>
+      {retryError && (
+        <p className="entity-operational-error" role="alert">
+          {retryError}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function NetworkEntityHistory({
+  entity,
+  onOpenNoc,
+}: {
+  entity: NetworkEntity;
+  onOpenNoc?: () => void;
+}) {
   const [records, setRecords] = useState<Investigation[]>([]);
   const [loading, setLoading] = useState(true);
   const [failedRequests, setFailedRequests] = useState(0);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [retryingId, setRetryingId] = useState("");
+  const [retryError, setRetryError] = useState("");
 
   const entityKey = [
     entity.kind,
@@ -250,6 +391,7 @@ function NetworkEntityHistory({ entity }: { entity: NetworkEntity }) {
     setLoading(true);
     setRecords([]);
     setFailedRequests(0);
+    setRetryError("");
 
     void Promise.allSettled(
       investigationStatuses.map((status) => api.investigations(status)),
@@ -283,10 +425,37 @@ function NetworkEntityHistory({ entity }: { entity: NetworkEntity }) {
     return () => {
       cancelled = true;
     };
-  }, [entity, entityKey]);
+  }, [entity, entityKey, reloadToken]);
+
+  async function retry(investigationId: string) {
+    setRetryingId(investigationId);
+    setRetryError("");
+    try {
+      await api.reEvaluateInvestigation(investigationId);
+      setReloadToken((current) => current + 1);
+    } catch (reason) {
+      setRetryError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível solicitar a reavaliação agora.",
+      );
+    } finally {
+      setRetryingId("");
+    }
+  }
+
+  const primary = primaryInvestigation(records);
 
   return (
     <section className="entity-history" aria-labelledby="entity-history-title">
+      <NetworkEntityOperationalSummary
+        entity={entity}
+        investigation={primary}
+        retrying={Boolean(retryingId)}
+        retryError={retryError}
+        onRetry={(investigationId) => void retry(investigationId)}
+        onOpenNoc={onOpenNoc}
+      />
       <div className="entity-history-header">
         <div>
           <span className="entity-history-label">
@@ -294,13 +463,27 @@ function NetworkEntityHistory({ entity }: { entity: NetworkEntity }) {
           </span>
           <h4 id="entity-history-title">Histórico de análises dos agentes</h4>
         </div>
-        {!loading && (
-          <span className="entity-history-count">{records.length}</span>
-        )}
+        <div className="entity-history-actions">
+          {!loading && (
+            <span className="entity-history-count">{records.length}</span>
+          )}
+          <button
+            type="button"
+            className="entity-history-refresh"
+            onClick={() => setReloadToken((current) => current + 1)}
+            disabled={loading}
+            aria-label="Atualizar histórico deste item"
+            title="Consultar novamente as análises relacionadas a este item"
+          >
+            <RefreshCw size={13} className={loading ? "spin" : undefined} />
+            {loading ? "Atualizando…" : "Atualizar"}
+          </button>
+        </div>
       </div>
       <p className="entity-history-description">
         Problemas identificados, análises sem problema e resultados
-        inconclusivos relacionados a este ponto e aos seus descendentes.
+        inconclusivos relacionados a este ponto e aos seus descendentes. Use
+        Atualizar depois de uma nova análise para trazer o estado mais recente.
       </p>
 
       {loading && (
@@ -369,10 +552,12 @@ export function NetworkEntityModal({
   entity,
   onClose,
   directChildren,
+  onOpenNoc,
 }: {
   entity: NetworkEntity;
   onClose: () => void;
   directChildren?: DirectChildrenAction;
+  onOpenNoc?: () => void;
 }) {
   let icon = <Boxes size={22} />;
   let eyebrow = "CPE / equipamento do cliente";
@@ -414,10 +599,13 @@ export function NetworkEntityModal({
     details = [
       { label: "OLT de origem", value: entity.olt },
       { label: "Porta PON", value: entity.pon },
-      { label: "CPEs ativas", value: number.format(entity.data.cpes) },
       {
-        label: "Relações de drop",
-        value: "Estimadas por CPE; sem ID físico de campo",
+        label: "Equipamentos ativos (CPEs)",
+        value: number.format(entity.data.cpes),
+      },
+      {
+        label: "Drop físico de campo",
+        value: "Não informado no cadastro",
       },
     ];
   } else {
@@ -461,7 +649,7 @@ export function NetworkEntityModal({
       details={details}
       note={
         entity.kind === "cto"
-          ? "Cada CPE ativa recebe um identificador lógico estimado. O identificador físico de campo de cada drop não foi fornecido pela fonte."
+          ? `O inventário confirma ${number.format(entity.data.cpes)} equipamentos ativos nesta CTO. O cadastro não informa o ID físico do cabo/drop em campo; portanto, esse vínculo físico precisa ser confirmado fora desta base.`
           : entity.kind === "cpe" && !entity.data.logical_drop_id
             ? "Este recorte do inventário não inclui o identificador de drop lógico. Os demais dados refletem o cadastro disponível para a CPE."
             : undefined
@@ -481,7 +669,6 @@ export function NetworkEntityModal({
             type="button"
             onClick={() => {
               directChildren.onExpand();
-              onClose();
             }}
             disabled={directChildren.expanded}
             title="Exibe somente os filhos diretos deste nó no grafo."
@@ -489,11 +676,13 @@ export function NetworkEntityModal({
             <GitBranch size={16} aria-hidden="true" />
             {directChildren.expanded
               ? "Filhos diretos exibidos"
-              : `Exibir ${directChildren.count} ${directChildren.label}`}
+              : entity.kind === "pon"
+                ? `Ver ${directChildren.count} CTOs desta PON`
+                : `Ver ${directChildren.count} ${directChildren.label}`}
           </button>
         </div>
       )}
-      <NetworkEntityHistory entity={entity} />
+      <NetworkEntityHistory entity={entity} onOpenNoc={onOpenNoc} />
     </EntityDetailModal>
   );
 }

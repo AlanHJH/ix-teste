@@ -10,7 +10,6 @@ import { NetworkEntityModal } from "./NetworkEntityModal";
 import type { NetworkEntity } from "./NetworkEntityModal";
 import { InventoryFilterSelect } from "./InventoryFilterSelect";
 import { providerGlossary, TechnicalText } from "./ProviderGlossary";
-import { SortableHeader } from "./SortableHeader";
 import type {
   EquipmentPath,
   InventoryFilter,
@@ -28,6 +27,21 @@ const statusLabel = {
   active: "Ativo",
   removed: "Removido",
 } as const;
+
+const inventorySortOptions: Array<{ value: InventorySort; label: string }> = [
+  { value: "customer_id_asc", label: "Cliente (A–Z)" },
+  { value: "customer_id_desc", label: "Cliente (Z–A)" },
+  { value: "serial_asc", label: "Serial (A–Z)" },
+  { value: "serial_desc", label: "Serial (Z–A)" },
+  { value: "equipment_asc", label: "Equipamento (A–Z)" },
+  { value: "equipment_desc", label: "Equipamento (Z–A)" },
+  { value: "firmware_plan_asc", label: "Firmware / plano (A–Z)" },
+  { value: "firmware_plan_desc", label: "Firmware / plano (Z–A)" },
+  { value: "topology_asc", label: "Topologia (A–Z)" },
+  { value: "topology_desc", label: "Topologia (Z–A)" },
+  { value: "status_asc", label: "Situação (A–Z)" },
+  { value: "status_desc", label: "Situação (Z–A)" },
+];
 
 export function InventoryDirectory({
   onOpenSupport,
@@ -215,21 +229,29 @@ export function InventoryDirectory({
                   <Server size={19} />
                 </span>
                 <div>
-                  <strong>{olt.olt}</strong>
+                  <strong>
+                    <TechnicalText text={olt.olt} />
+                  </strong>
                   <small>{olt.cities.join(" · ")}</small>
                 </div>
               </header>
               <dl>
                 <div>
-                  <dt>Portas PON</dt>
+                  <dt>
+                    <TechnicalText text="Portas PON" />
+                  </dt>
                   <dd>{number.format(olt.pons)}</dd>
                 </div>
                 <div>
-                  <dt>CTOs</dt>
+                  <dt>
+                    <TechnicalText text="CTOs" />
+                  </dt>
                   <dd>{number.format(olt.ctos)}</dd>
                 </div>
                 <div>
-                  <dt>CPEs ativas</dt>
+                  <dt>
+                    <TechnicalText text="CPEs ativas" />
+                  </dt>
                   <dd>{number.format(olt.cpes)}</dd>
                 </div>
                 <div>
@@ -281,222 +303,194 @@ export function InventoryDirectory({
               }}
             />
           </form>
-          <div className="inventory-status" aria-label="Filtrar por situação">
-            {(
-              [
-                ["active", "Ativos"],
-                ["removed", "Removidos"],
-                ["all", "Todos"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={status === value ? "active" : ""}
-                onClick={() => chooseStatus(value)}
+          <div className="inventory-toolbar-actions">
+            <label className="inventory-sort-control">
+              <span>Ordenar por</span>
+              <select
+                aria-label="Ordenar equipamentos"
+                value={sort}
+                onChange={(event) => {
+                  setSort(event.target.value as InventorySort);
+                  setPage(1);
+                }}
               >
-                {label}
-              </button>
-            ))}
+                {inventorySortOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="inventory-status" aria-label="Filtrar por situação">
+              {(
+                [
+                  ["active", "Ativos"],
+                  ["removed", "Removidos"],
+                  ["all", "Todos"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={status === value ? "active" : ""}
+                  onClick={() => chooseStatus(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {error && <p className="inventory-error">{error}</p>}
-        <div className="inventory-table-wrap">
-          <table className="inventory-table">
-            <thead>
-              <tr>
-                <SortableHeader
-                  label="Cliente"
-                  ascending="customer_id_asc"
-                  descending="customer_id_desc"
-                  current={sort}
-                  onChange={(nextSort) => {
-                    setSort(nextSort);
-                    setPage(1);
-                  }}
-                />
-                <SortableHeader
-                  label="Serial da CPE"
-                  ascending="serial_asc"
-                  descending="serial_desc"
-                  current={sort}
-                  onChange={(nextSort) => {
-                    setSort(nextSort);
-                    setPage(1);
-                  }}
+        <div className="inventory-equipment-cards" aria-label="Equipamentos do inventário">
+          {data?.data.map((item) => (
+            <article className="inventory-equipment-card" key={item.serial}>
+              <header className="inventory-equipment-card-header">
+                <button
+                  className="inventory-card-link inventory-customer-card-link"
+                  type="button"
+                  onClick={() => setContextModal({ kind: "customer", item })}
+                  title="Ver informações gerais do cliente"
                 >
-                  <HelpTooltip
-                    term="CPE e serial"
-                    description={`${providerGlossary.cpe.description} ${providerGlossary.serial.description}`}
-                  />
-                </SortableHeader>
-                <SortableHeader
-                  label="Equipamento"
-                  ascending="equipment_asc"
-                  descending="equipment_desc"
-                  current={sort}
-                  onChange={(nextSort) => {
-                    setSort(nextSort);
-                    setPage(1);
-                  }}
-                >
-                  <HelpTooltip
-                    term="Revisão de hardware"
-                    description={providerGlossary.hardware.description}
-                  />
-                </SortableHeader>
-                <SortableHeader
-                  label="Firmware / plano"
-                  ascending="firmware_plan_asc"
-                  descending="firmware_plan_desc"
-                  current={sort}
-                  onChange={(nextSort) => {
-                    setSort(nextSort);
-                    setPage(1);
-                  }}
-                >
-                  <HelpTooltip
-                    term="Firmware"
-                    description={providerGlossary.firmware.description}
-                  />
-                  <HelpTooltip
-                    term="Plano"
-                    description={`Velocidade contratada pelo cliente. ${providerGlossary.mbps.description}`}
-                  />
-                </SortableHeader>
-                <SortableHeader
-                  label="Topologia"
-                  ascending="topology_asc"
-                  descending="topology_desc"
-                  current={sort}
-                  onChange={(nextSort) => {
-                    setSort(nextSort);
-                    setPage(1);
-                  }}
-                >
-                  <HelpTooltip
-                    term="OLT, PON e CTO"
-                    description={`${providerGlossary.olt.description} ${providerGlossary.pon.description} ${providerGlossary.cto.description}`}
-                  />
-                </SortableHeader>
-                <SortableHeader
-                  label="Situação"
-                  ascending="status_asc"
-                  descending="status_desc"
-                  current={sort}
-                  onChange={(nextSort) => {
-                    setSort(nextSort);
-                    setPage(1);
-                  }}
-                />
-              </tr>
-            </thead>
-            <tbody>
-              {data?.data.map((item) => (
-                <tr key={item.serial}>
-                  <td>
+                  <span className="inventory-card-eyebrow">Cliente</span>
+                  <strong className="inventory-code">{item.customer_id}</strong>
+                  <small>
+                    <MapPin size={13} /> {item.neighborhood} · {item.city}
+                  </small>
+                </button>
+                <span className={`inventory-badge ${item.status}`}>
+                  {statusLabel[item.status]}
+                </span>
+              </header>
+
+              <div className="inventory-equipment-card-grid">
+                <div className="inventory-equipment-card-field">
+                  <span className="inventory-card-eyebrow">
+                    Serial da CPE
+                    <HelpTooltip
+                      term="CPE e serial"
+                      description={`${providerGlossary.cpe.description} ${providerGlossary.serial.description}`}
+                    />
+                  </span>
+                  <button
+                    className="inventory-card-link inventory-card-serial"
+                    type="button"
+                    onClick={() => openEquipment(item)}
+                    title="Ver detalhes desta CPE"
+                  >
+                    <code>{item.serial}</code>
+                  </button>
+                </div>
+
+                <div className="inventory-equipment-card-field">
+                  <span className="inventory-card-eyebrow">
+                    Equipamento
+                    <HelpTooltip
+                      term="Revisão de hardware"
+                      description={providerGlossary.hardware.description}
+                    />
+                  </span>
+                  <button
+                    className="inventory-card-link"
+                    type="button"
+                    onClick={() => openEquipment(item)}
+                    title="Ver detalhes deste equipamento"
+                  >
+                    <strong>
+                      {item.vendor} {item.model}
+                    </strong>
+                    <small>rev. {item.hw_revision}</small>
+                  </button>
+                </div>
+
+                <div className="inventory-equipment-card-field">
+                  <span className="inventory-card-eyebrow">
+                    Firmware
+                    <HelpTooltip
+                      term="Firmware"
+                      description={providerGlossary.firmware.description}
+                    />
+                  </span>
+                  <button
+                    className="inventory-card-link"
+                    type="button"
+                    title={providerGlossary.firmware.description}
+                    onClick={() => setContextModal({ kind: "firmware", item })}
+                  >
+                    <strong>fw {item.software_version}</strong>
+                  </button>
+                </div>
+
+                <div className="inventory-equipment-card-field">
+                  <span className="inventory-card-eyebrow">
+                    Plano contratado
+                    <HelpTooltip
+                      term="Plano"
+                      description={`Velocidade contratada pelo cliente. ${providerGlossary.mbps.description}`}
+                    />
+                  </span>
+                  <button
+                    className="inventory-card-link"
+                    type="button"
+                    title={providerGlossary.mbps.description}
+                    onClick={() => setContextModal({ kind: "plan", item })}
+                  >
+                    <strong>{item.plan_mbps} Mbps</strong>
+                  </button>
+                </div>
+              </div>
+
+              <footer className="inventory-equipment-card-footer">
+                <div className="inventory-equipment-topology">
+                  <span className="inventory-card-eyebrow">
+                    Topologia
+                    <HelpTooltip
+                      term="OLT, PON e CTO"
+                      description={`${providerGlossary.olt.description} ${providerGlossary.pon.description} ${providerGlossary.cto.description}`}
+                    />
+                  </span>
+                  <div className="inventory-topology-actions">
+                    <Server size={14} />
                     <button
-                      className="inventory-cell-action inventory-customer-cell"
                       type="button"
-                      onClick={() =>
-                        setContextModal({ kind: "customer", item })
-                      }
-                      title="Ver informações gerais do cliente"
+                      title={providerGlossary.olt.description}
+                      onClick={() => {
+                        const olt = topology?.olts.find(
+                          (entry) => entry.olt === item.olt,
+                        );
+                        if (olt) setNetworkModal({ kind: "olt", data: olt });
+                      }}
                     >
-                      <strong className="inventory-code">
-                        {item.customer_id}
-                      </strong>
-                      <small>
-                        <MapPin size={13} /> {item.neighborhood} · {item.city}
-                      </small>
+                      {item.olt}
                     </button>
-                  </td>
-                  <td>
+                    <span>·</span>
                     <button
-                      className="inventory-cell-action"
                       type="button"
-                      onClick={() => openEquipment(item)}
-                      title="Ver detalhes desta CPE"
+                      title={providerGlossary.pon.description}
+                      onClick={() => void openPon(item)}
                     >
-                      <code>{item.serial}</code>
+                      PON {item.pon_port}
                     </button>
-                  </td>
-                  <td>
                     <button
-                      className="inventory-cell-action"
+                      className="inventory-cto-action"
                       type="button"
-                      onClick={() => openEquipment(item)}
-                      title="Ver detalhes deste equipamento"
+                      title={providerGlossary.cto.description}
+                      onClick={() => void openCto(item)}
                     >
-                      <strong>
-                        {item.vendor} {item.model}
-                      </strong>
-                      <small>rev. {item.hw_revision}</small>
+                      {item.cto}
                     </button>
-                  </td>
-                  <td>
-                    <div className="inventory-stacked-actions">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setContextModal({ kind: "firmware", item })
-                        }
-                      >
-                        fw {item.software_version}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setContextModal({ kind: "plan", item })}
-                      >
-                        {item.plan_mbps} Mbps
-                      </button>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="inventory-topology-actions">
-                      <Server size={14} />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const olt = topology?.olts.find(
-                            (entry) => entry.olt === item.olt,
-                          );
-                          if (olt) setNetworkModal({ kind: "olt", data: olt });
-                        }}
-                      >
-                        {item.olt}
-                      </button>
-                      <span>·</span>
-                      <button type="button" onClick={() => void openPon(item)}>
-                        PON {item.pon_port}
-                      </button>
-                      <button
-                        className="inventory-cto-action"
-                        type="button"
-                        onClick={() => void openCto(item)}
-                      >
-                        {item.cto}
-                      </button>
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`inventory-badge ${item.status}`}>
-                      {statusLabel[item.status]}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {!loading && data?.data.length === 0 && (
-                <tr>
-                  <td className="inventory-empty" colSpan={6}>
-                    Nenhum cadastro encontrado. Tente outro código, serial ou
-                    filtro.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+                <span className="inventory-card-hint">Abrir detalhes</span>
+              </footer>
+            </article>
+          ))}
+          {!loading && data?.data.length === 0 && (
+            <div className="inventory-empty-card">
+              Nenhum cadastro encontrado. Tente outro código, serial ou filtro.
+            </div>
+          )}
         </div>
 
         <footer className="inventory-pagination">

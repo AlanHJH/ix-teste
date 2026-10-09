@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TechnicalText } from "./ProviderGlossary";
+import { technicalHintForLabel, TechnicalText } from "./ProviderGlossary";
 
 describe("TechnicalText", () => {
   it("anota siglas, unidades e variações de hífen", () => {
@@ -21,5 +21,17 @@ describe("TechnicalText", () => {
     );
 
     assert.doesNotMatch(html, /class="provider-term"/);
+  });
+
+  it("explica labels técnicos usados nos detalhes de rede", () => {
+    assert.match(
+      technicalHintForLabel("Potência RX mínima") ?? "",
+      /potência.*CPE/i,
+    );
+    assert.match(
+      technicalHintForLabel("CPEs ativas") ?? "",
+      /Equipamento instalado no cliente/i,
+    );
+    assert.equal(technicalHintForLabel("Status"), undefined);
   });
 });

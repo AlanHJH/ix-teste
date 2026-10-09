@@ -37,6 +37,18 @@ export const providerGlossary = {
       "Equipamento instalado no cliente, como o equipamento óptico ou o roteador gerenciado pelo provedor.",
     aliases: ["CPEs", "CPE"],
   },
+  fiber: {
+    label: "Fibra óptica",
+    description:
+      "Meio físico que transporta o sinal de internet por luz. Atenuação, emendas e conectores podem reduzir a potência recebida.",
+    aliases: ["fibra óptica", "fibra"],
+  },
+  splitter: {
+    label: "Splitter",
+    description:
+      "Componente passivo que divide uma fibra óptica para atender vários clientes; uma perda nele pode afetar um grupo inteiro.",
+    aliases: ["splitter"],
+  },
   acs: {
     label: "ACS",
     description:
@@ -79,6 +91,12 @@ export const providerGlossary = {
       "Unidade de potência usada no sinal óptico. Quanto mais negativo, mais fraco é o sinal recebido.",
     aliases: ["dBm"],
   },
+  opticalLevels: {
+    label: "Níveis ópticos",
+    description:
+      "Valores de potência medidos no caminho óptico. Compará-los entre a OLT, a CTO e a CPE ajuda a localizar perdas na fibra.",
+    aliases: ["níveis ópticos", "nível óptico"],
+  },
   lan: {
     label: "LAN",
     description:
@@ -120,6 +138,12 @@ export const providerGlossary = {
     description:
       "Medições enviadas pelo equipamento, como memória, reinícios, sinal óptico e erros de transmissão.",
     aliases: ["telemetria"],
+  },
+  memory: {
+    label: "Memória",
+    description:
+      "Recurso interno disponível na CPE. Pouca memória livre pode acompanhar travamentos, lentidão ou reinicializações.",
+    aliases: ["memória"],
   },
   reboot: {
     label: "Reboot",
@@ -185,6 +209,36 @@ export const providerGlossary = {
     description: "Velocidade de envio de dados do cliente para a rede.",
     aliases: ["upload"],
   },
+  latency: {
+    label: "Latência",
+    description:
+      "Tempo que um pacote leva para ir até o destino e voltar. Valores altos tornam aplicações interativas mais lentas.",
+    aliases: ["latência"],
+  },
+  packetLoss: {
+    label: "Perda de pacotes",
+    description:
+      "Percentual de dados que não chega ao destino. Pode causar travamentos, falhas de voz e retransmissões.",
+    aliases: ["perda de pacotes", "perda de pacote"],
+  },
+  jitter: {
+    label: "Jitter",
+    description:
+      "Variação do tempo de entrega dos pacotes. Oscilações altas prejudicam voz, vídeo e jogos online.",
+    aliases: ["jitter"],
+  },
+  diagnostic: {
+    label: "Diagnóstico",
+    description:
+      "Coleta técnica usada para verificar o estado da conexão, do equipamento e do caminho de rede.",
+    aliases: ["diagnósticos", "diagnóstico"],
+  },
+  incident: {
+    label: "Incidente",
+    description:
+      "Ocorrência operacional que pode afetar um cliente ou um trecho compartilhado da rede e precisa de acompanhamento.",
+    aliases: ["incidentes", "incidente"],
+  },
   logicalTopology: {
     label: "Topologia",
     description:
@@ -200,6 +254,50 @@ export const providerGlossary = {
 } as const;
 
 export type ProviderTermKey = keyof typeof providerGlossary;
+
+const labelHints: Array<[RegExp, ProviderTermKey]> = [
+  [/\b(?:OLTs?|OLT de origem)\b/i, "olt"],
+  [/\b(?:PONs?|Portas? PON|Porta PON)\b/i, "pon"],
+  [/\bCTOs?\b/i, "cto"],
+  [/\bCPEs?\b/i, "cpe"],
+  [/\bNOC\b/i, "noc"],
+  [/\bN1\b/i, "n1"],
+  [/\bACS\b/i, "acs"],
+  [/\bMCP\b/i, "mcp"],
+  [/TR[-‑‐]069/i, "tr069"],
+  [/TR[-‑‐]143/i, "tr143"],
+  [/\bFEC\b/i, "fec"],
+  [/(?:sinal|potência|níveis?).*óptic|potência\s+rx/i, "opticalSignal"],
+  [/\bdBm\b/i, "dbm"],
+  [/\b(?:LAN|porta LAN)\b/i, "lan"],
+  [/Wi[-‑‐]?Fi/i, "wifi"],
+  [/\bMbps\b/i, "mbps"],
+  [/\b(?:fw|firmware)\b/i, "firmware"],
+  [/\bhardware\b/i, "hardware"],
+  [/\bserial\b/i, "serial"],
+  [/\btelemetria\b/i, "telemetry"],
+  [/memória/i, "memory"],
+  [/\breboot|reiníci/i, "reboot"],
+  [/\bdrop\b/i, "drop"],
+  [/\buplink\b/i, "uplink"],
+  [/\bchassi\b/i, "chassis"],
+  [/\b(?:topologia|caminho)\b/i, "logicalTopology"],
+  [/\binventário\b/i, "inventory"],
+  [/\bfibra\b/i, "fiber"],
+  [/\bsplitter\b/i, "splitter"],
+  [/\bdownload\b/i, "download"],
+  [/\bupload\b/i, "upload"],
+  [/\blatência\b/i, "latency"],
+  [/\b(?:jitter)\b/i, "jitter"],
+  [/perda de pacotes?/i, "packetLoss"],
+  [/\bdiagnósticos?\b/i, "diagnostic"],
+  [/\bincidentes?\b/i, "incident"],
+];
+
+export function technicalHintForLabel(label: string) {
+  const match = labelHints.find(([pattern]) => pattern.test(label));
+  return match ? providerGlossary[match[1]].description : undefined;
+}
 
 export function ProviderTerm({
   term,

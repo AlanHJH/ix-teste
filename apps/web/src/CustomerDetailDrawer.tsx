@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { Fragment, useEffect, useId, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -93,6 +93,50 @@ function equipmentSnapshot(
       equipment.olt + " · PON " + equipment.pon_port + " · " + equipment.cto,
     status: equipment.status,
   };
+}
+
+function topologySteps(network: string) {
+  return network
+    .split("·")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part, index) => ({
+      key: `${part}-${index}`,
+      label:
+        part.match(/^(OLT|PON|CTO)/i)?.[1].toUpperCase() ??
+        `ETAPA ${index + 1}`,
+      value: part,
+    }));
+}
+
+function TopologyFlow({
+  network,
+  className = "",
+}: {
+  network: string;
+  className?: string;
+}) {
+  const steps = topologySteps(network);
+  return (
+    <div
+      className={`customer-detail-topology-flow ${className}`.trim()}
+      aria-label={`Caminho de infraestrutura: ${network}`}
+    >
+      {steps.map((step, index) => (
+        <Fragment key={step.key}>
+          {index > 0 && (
+            <span className="customer-detail-topology-arrow" aria-hidden="true">
+              →
+            </span>
+          )}
+          <span className="customer-detail-topology-node">
+            <span>{step.label}</span>
+            <strong>{step.value}</strong>
+          </span>
+        </Fragment>
+      ))}
+    </div>
+  );
 }
 
 export function CustomerDetailDrawer({
@@ -261,20 +305,26 @@ export function CustomerDetailDrawer({
           <section className="customer-detail-observation">
             <div>
               {hasTelemetry ? <Wifi size={19} /> : <WifiOff size={19} />}
-              <div>
-                <span>Disponibilidade observada</span>
-                <strong>
-                  {isActive
-                    ? hasTelemetry
-                      ? "CPE ativa com telemetria recente"
-                      : "CPE ativa sem telemetria recente"
-                    : "Sem CPE ativa no cadastro"}
-                </strong>
+              <div className="customer-detail-observation-copy">
+                <span>Disponibilidade do CPE</span>
+                <strong>{isActive ? "CPE ativa" : "Sem CPE ativa"}</strong>
+                {isActive && (
+                  <span
+                    className={`customer-detail-observation-status ${
+                      hasTelemetry ? "is-positive" : "is-muted"
+                    }`}
+                  >
+                    {hasTelemetry
+                      ? "Telemetria recente"
+                      : "Sem telemetria recente"}
+                  </span>
+                )}
                 <small>
                   {hasTelemetry
-                    ? "Último dia de telemetria: " +
-                      formattedDate(profile?.metrics.last_day)
-                    : "Não há evidência de presença em tempo real nesta base."}
+                    ? `Último registro: ${formattedDate(profile?.metrics.last_day)}`
+                    : isActive
+                      ? "Não há evidência recente de presença nesta base."
+                      : "Não há CPE ativa no cadastro."}
                 </small>
               </div>
             </div>
@@ -289,18 +339,28 @@ export function CustomerDetailDrawer({
                       ? "Histórico de equipamento encontrado"
                       : "Sem equipamento registrado"}
                 </strong>
-                <small>
-                  {profile
-                    ? "OLT, PON e CTO foram consultadas no contexto operacional."
-                    : "Não há CPE ativa para validar a infraestrutura atual."}
-                </small>
+                {profile && equipment ? (
+                  <>
+                    <TopologyFlow
+                      network={equipment.network}
+                      className="compact"
+                    />
+                    <small>
+                      <TechnicalText text="Caminho consultado no contexto operacional." />
+                    </small>
+                  </>
+                ) : (
+                  <small>
+                    Não há CPE ativa para validar a infraestrutura atual.
+                  </small>
+                )}
               </div>
             </div>
           </section>
 
           <p className="customer-detail-disclaimer">
-            <CheckCircle2 size={14} /> “Telemetria recente” descreve o último
-            sinal registrado; não é um ping em tempo real.
+            <CheckCircle2 size={14} />
+            <TechnicalText text="“Telemetria recente” descreve o último sinal registrado; não é um ping em tempo real." />
           </p>
 
           <section className="customer-detail-section">
@@ -314,26 +374,40 @@ export function CustomerDetailDrawer({
             {equipment ? (
               <div className="customer-detail-facts">
                 <div>
-                  <span>Equipamento</span>
+                  <span>
+                    <TechnicalText text="Equipamento" />
+                  </span>
                   <strong>
                     {equipment.vendor} {equipment.model}
                   </strong>
-                  <small>Serial {equipment.serial}</small>
+                  <small>
+                    <TechnicalText text={`Serial ${equipment.serial}`} />
+                  </small>
                 </div>
                 <div>
-                  <span>Firmware</span>
+                  <span>
+                    <TechnicalText text="Firmware" />
+                  </span>
                   <strong>{equipment.firmware}</strong>
-                  <small>Versão registrada na CPE</small>
+                  <small>
+                    <TechnicalText text="Versão registrada na CPE" />
+                  </small>
                 </div>
                 <div>
                   <span>Plano</span>
-                  <strong>{equipment.planMbps} Mbps</strong>
-                  <small>Velocidade contratada</small>
+                  <strong>
+                    <TechnicalText text={`${equipment.planMbps} Mbps`} />
+                  </strong>
+                  <small>
+                    <TechnicalText text="Velocidade contratada" />
+                  </small>
                 </div>
                 <div>
-                  <span>Topologia</span>
-                  <strong>{equipment.network}</strong>
-                  <small>OLT · PON · CTO</small>
+                  <span>
+                    <TechnicalText text="Topologia" />
+                  </span>
+                  <TopologyFlow network={equipment.network} />
+                  <small>Caminho de conexão na rede</small>
                 </div>
               </div>
             ) : (
@@ -354,7 +428,9 @@ export function CustomerDetailDrawer({
               </header>
               <div className="customer-detail-metrics">
                 <div>
-                  <span>Memória mínima</span>
+                  <span>
+                    <TechnicalText text="Memória mínima" />
+                  </span>
                   <strong>
                     {profile.metrics.mem_min_pct == null
                       ? "n/d"
@@ -362,11 +438,15 @@ export function CustomerDetailDrawer({
                   </strong>
                 </div>
                 <div>
-                  <span>Reinícios</span>
+                  <span>
+                    <TechnicalText text="Reinícios" />
+                  </span>
                   <strong>{profile.metrics.reboot_count}</strong>
                 </div>
                 <div>
-                  <span>Sinal óptico mínimo</span>
+                  <span>
+                    <TechnicalText text="Sinal óptico mínimo" />
+                  </span>
                   <strong>
                     {profile.metrics.optical_rx_min_dbm == null
                       ? "n/d"
@@ -374,7 +454,9 @@ export function CustomerDetailDrawer({
                   </strong>
                 </div>
                 <div>
-                  <span>Porta LAN mínima</span>
+                  <span>
+                    <TechnicalText text="Porta LAN mínima" />
+                  </span>
                   <strong>
                     {profile.metrics.lan_min_mbps == null
                       ? "n/d"

@@ -6,8 +6,9 @@ import {
   useRef,
   useState,
 } from "react";
+import { RefreshCw } from "lucide-react";
 import { HelpTooltip } from "./HelpTooltip";
-import { providerGlossary } from "./ProviderGlossary";
+import { providerGlossary, TechnicalText } from "./ProviderGlossary";
 import type { EquipmentPath, TopologyIssue, TopologySnapshot } from "./types";
 import type { NetworkEntity } from "./NetworkEntityModal";
 
@@ -735,7 +736,7 @@ function OltConstellation({
               point={node}
               tone="cto"
               title={node.item.cto}
-              detail={`${number.format(node.item.cpes)} CPEs`}
+              detail={`PON ${selectedPon} · ${number.format(node.item.cpes)} CPEs`}
               active={node.item.cto === selectedCto}
               issue={issueForNode("cto", {
                 olt: olt.olt,
@@ -792,7 +793,9 @@ export function NetworkExplorerGraph({
   highlightedEntity,
   topologyIssues,
   loading,
+  refreshing,
   focusMode = false,
+  onRefresh,
   onChangeOlt,
   onSelectOlt,
   onSelectPon,
@@ -808,7 +811,9 @@ export function NetworkExplorerGraph({
   highlightedEntity: NetworkEntity | null;
   topologyIssues: TopologyIssue[];
   loading: boolean;
+  refreshing: boolean;
   focusMode?: boolean;
+  onRefresh: () => void;
   onChangeOlt: (olt: string) => void;
   onSelectOlt: (olt: NetworkEntity & { kind: "olt" }) => void;
   onSelectPon: (pon: NetworkEntity & { kind: "pon" }) => void;
@@ -880,6 +885,17 @@ export function NetworkExplorerGraph({
               ))}
             </select>
           </label>
+          <button
+            type="button"
+            className="network-graph-refresh"
+            onClick={onRefresh}
+            disabled={loading || refreshing}
+            aria-label="Atualizar dados da infraestrutura"
+            title="Reconsultar topologia, medições e problemas indicados"
+          >
+            <RefreshCw size={14} className={refreshing ? "spin" : undefined} />
+            {refreshing ? "Atualizando…" : "Atualizar dados"}
+          </button>
           <div
             className="network-graph-controls"
             aria-label="Controles do mapa"
@@ -944,10 +960,10 @@ export function NetworkExplorerGraph({
             />
           </span>
           <small>
-            CTO → CPE: drop lógico estimado{" "}
+            CTO → CPE: vínculo de inventário; drop físico não informado{" "}
             <HelpTooltip
-              term="Drop lógico"
-              description={providerGlossary.drop.description}
+              term="Drop físico"
+              description={`${providerGlossary.drop.description} O ID físico de campo não foi fornecido neste dataset.`}
             />
           </small>
           {topologyIssues.length > 0 && (
@@ -959,10 +975,18 @@ export function NetworkExplorerGraph({
         </div>
         {olt && (
           <p className="network-graph-summary">
-            <strong>{olt.olt}</strong>
-            <span>{number.format(olt.pons)} PONs</span>
-            <span>{number.format(olt.ctos)} CTOs</span>
-            <span>{number.format(olt.cpes)} CPEs ativas</span>
+            <strong>
+              <TechnicalText text={olt.olt} />
+            </strong>
+            <span>
+              <TechnicalText text={`${number.format(olt.pons)} PONs`} />
+            </span>
+            <span>
+              <TechnicalText text={`${number.format(olt.ctos)} CTOs`} />
+            </span>
+            <span>
+              <TechnicalText text={`${number.format(olt.cpes)} CPEs ativas`} />
+            </span>
           </p>
         )}
       </div>

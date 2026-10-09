@@ -18,7 +18,7 @@ import {
   InventoryContextModal,
   type InventoryContext,
 } from "./InventoryContextModal";
-import { providerGlossary } from "./ProviderGlossary";
+import { providerGlossary, TechnicalText } from "./ProviderGlossary";
 import { TicketFilterSelect } from "./TicketFilterSelect";
 import { SortableHeader } from "./SortableHeader";
 import type {
@@ -392,22 +392,34 @@ export function SupportTickets({
                     </span>
                   </td>
                   <td>
-                    <span className="ticket-category">{ticket.category}</span>
-                    <p>{ticket.description}</p>
+                    <span className="ticket-category">
+                      <TechnicalText text={ticket.category} />
+                    </span>
+                    <p>
+                      <TechnicalText text={ticket.description} />
+                    </p>
                   </td>
                   <td>
-                    <strong>{ticket.resolution}</strong>
+                    <strong>
+                      <TechnicalText text={ticket.resolution} />
+                    </strong>
                     {["pending", "in_progress"].includes(ticket.noc_status) && (
                       <span className="ticket-noc-badge">
                         <i aria-hidden="true" />
-                        {ticket.noc_status === "pending"
-                          ? "Aguardando NOC"
-                          : "Em análise pelo NOC"}
+                        <TechnicalText
+                          text={
+                            ticket.noc_status === "pending"
+                              ? "Aguardando NOC"
+                              : "Em análise pelo NOC"
+                          }
+                        />
                       </span>
                     )}
                     {ticket.olt && ticket.pon && ticket.cto && (
                       <small>
-                        {ticket.olt} · PON {ticket.pon} · {ticket.cto}
+                        <TechnicalText
+                          text={`${ticket.olt} · PON ${ticket.pon} · ${ticket.cto}`}
+                        />
                       </small>
                     )}
                     {ticket.related_problem_id && (

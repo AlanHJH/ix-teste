@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -20,12 +20,14 @@ import {
 import { api } from "./api";
 import { OpenIrisChatButton } from "./OpenIrisChatButton";
 import { TechnicalText } from "./ProviderGlossary";
+import { readTicketFieldWork } from "./ticketFieldWork";
 import "./TicketWorkspacePage.css";
 import type {
   CustomerDetail,
   IrisContext,
   SupportProfile,
   SupportTicket,
+  TicketMcpContext,
   TicketTriageContextSnapshot,
   TicketTriageRun,
   TicketFilter,
@@ -113,7 +115,7 @@ async function loadAllCustomerTickets(customerId: string) {
     );
 }
 
-function DetailItem({ label, value }: { label: string; value: string }) {
+function DetailItem({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="ticket-workspace-detail-item">
       <dt>{label}</dt>
@@ -169,6 +171,8 @@ export function TicketWorkspacePage({
   const [customer, setCustomer] = useState<CustomerDetail | null>(null);
   const [allTickets, setAllTickets] = useState<SupportTicket[]>([]);
   const [triageRuns, setTriageRuns] = useState<TicketTriageRun[]>([]);
+  const [mcpContext, setMcpContext] = useState<TicketMcpContext | null>(null);
+  const [mcpContextError, setMcpContextError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [retryBusy, setRetryBusy] = useState(false);
@@ -187,6 +191,8 @@ export function TicketWorkspacePage({
     setCustomer(null);
     setAllTickets([]);
     setTriageRuns([]);
+    setMcpContext(null);
+    setMcpContextError("");
     setRetryFeedback(null);
     void Promise.all([
       api.support(ticket.customer_id),
@@ -194,6 +200,16 @@ export function TicketWorkspacePage({
       loadAllCustomerTickets(ticket.customer_id),
       api.ticket(ticket.ticket_id),
       api.ticketTriage(ticket.ticket_id),
+      api.ticketMcpContext(ticket.ticket_id).catch((reason) => {
+        if (!canceled) {
+          setMcpContextError(
+            reason instanceof Error
+              ? reason.message
+              : "Não foi possível coletar o contexto pelos servidores MCP.",
+          );
+        }
+        return null;
+      }),
     ])
       .then(
         ([
@@ -202,6 +218,7 @@ export function TicketWorkspacePage({
           nextTickets,
           detailedTicket,
           nextTriageRuns,
+          nextMcpContext,
         ]) => {
           if (canceled) return;
           setProfile(nextProfile);
@@ -209,6 +226,7 @@ export function TicketWorkspacePage({
           setAllTickets(nextTickets);
           setCurrentTicket(detailedTicket);
           setTriageRuns(nextTriageRuns);
+          setMcpContext(nextMcpContext);
         },
       )
       .catch((reason) => {
@@ -466,17 +484,26 @@ export function TicketWorkspacePage({
                   {profile.equipment.vendor} {profile.equipment.model}
                 </h2>
                 <p>
-                  <Network size={13} /> {profile.equipment.network}
+                  <Network size={13} />{" "}
+                  <TechnicalText text={profile.equipment.network} />
                 </p>
                 <dl>
                   <DetailItem label="Serial" value={profile.equipment.serial} />
                   <DetailItem
                     label="Firmware / hardware"
-                    value={`${profile.equipment.firmware} · ${profile.equipment.hardware}`}
+                    value={
+                      <TechnicalText
+                        text={`${profile.equipment.firmware} · ${profile.equipment.hardware}`}
+                      />
+                    }
                   />
                   <DetailItem
                     label="Plano atual"
-                    value={`${profile.equipment.planMbps} Mbps`}
+                    value={
+                      <TechnicalText
+                        text={`${profile.equipment.planMbps} Mbps`}
+                      />
+                    }
                   />
                 </dl>
               </div>
@@ -527,9 +554,15 @@ export function TicketWorkspacePage({
                 <DetailItem
                   label="Topologia relacionada"
                   value={
-                    currentTicket.olt && currentTicket.pon && currentTicket.cto
-                      ? `${currentTicket.olt} · PON ${currentTicket.pon} · ${currentTicket.cto}`
-                      : "Não informada"
+                    currentTicket.olt &&
+                    currentTicket.pon &&
+                    currentTicket.cto ? (
+                      <TechnicalText
+                        text={`${currentTicket.olt} · PON ${currentTicket.pon} · ${currentTicket.cto}`}
+                      />
+                    ) : (
+                      "Não informada"
+                    )
                   }
                 />
                 <DetailItem
@@ -548,6 +581,11 @@ export function TicketWorkspacePage({
                 <span>Resolução ou encaminhamento registrado</span>
                 <p>{currentTicket.resolution}</p>
               </div>
+              {readTicketFieldWork(currentTicket.source_payload) && (
+                <FieldWorkSummary
+                  fieldWork={readTicketFieldWork(currentTicket.source_payload)!}
+                />
+              )}
               <RawSourcePayload payload={currentTicket.source_payload} />
             </article>
 
@@ -585,6 +623,116 @@ export function TicketWorkspacePage({
               </ol>
             </aside>
           </section>
+
+          {mcpContextError && (
+            <div className="ticket-workspace-mcp-error" role="alert">
+              <AlertTriangle size={17} /> {mcpContextError}
+            </div>
+          )}
+
+          {mcpContext && (
+            <section className="ticket-workspace-section ticket-workspace-mcp-context">
+              <header className="ticket-workspace-section-heading">
+                <div>
+                  <span className="section-label">
+                    Evidências consultadas na abertura
+                  </span>
+                  <h2>Contexto técnico via MCP</h2>
+                </div>
+                <Server size={21} />
+              </header>
+              <p className="ticket-workspace-mcp-intro">
+                <TechnicalText text="A ficha consultou automaticamente os domínios disponíveis para cruzar o relato com cadastro, equipamento, rede, telemetria, diagnósticos, histórico e operação do NOC." />
+              </p>
+              <div className="ticket-workspace-mcp-summary">
+                <div>
+                  <span>Fontes consultadas</span>
+                  <strong>
+                    {mcpContext.summary.successfulToolCount}/
+                    {mcpContext.summary.requestedToolCount}
+                  </strong>
+                  <small>
+                    {mcpContext.summary.domainCount} domínios MCP ·{" "}
+                    {mcpContext.summary.recordsCollected} registros retornados
+                  </small>
+                </div>
+                <div>
+                  <span>Escopo encontrado</span>
+                  <strong>
+                    {mcpContext.scope.customerId ?? "Cliente não identificado"}
+                  </strong>
+                  <small>
+                    {mcpContext.scope.serial ?? "Sem CPE"} ·{" "}
+                    <TechnicalText
+                      text={
+                        [
+                          mcpContext.scope.olt,
+                          mcpContext.scope.pon,
+                          mcpContext.scope.cto,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "Topologia não localizada"
+                      }
+                    />
+                  </small>
+                </div>
+                <div>
+                  <span>Status da coleta</span>
+                  <strong>
+                    {mcpContext.status === "complete"
+                      ? "Completa"
+                      : mcpContext.status === "partial"
+                        ? "Parcial"
+                        : "Falhou"}
+                  </strong>
+                  <small>
+                    {mcpContext.summary.failedToolCount
+                      ? `${mcpContext.summary.failedToolCount} fonte(s) indisponível(is)`
+                      : "Todas as fontes responderam"}
+                  </small>
+                </div>
+              </div>
+              <div className="ticket-workspace-mcp-domains">
+                {mcpContext.summary.domains.map((domain) => (
+                  <span key={domain}>{domain}</span>
+                ))}
+              </div>
+              <details className="ticket-workspace-mcp-source-list">
+                <summary>
+                  Explorar as {mcpContext.sources.length} consultas MCP e seus
+                  retornos brutos
+                </summary>
+                <div className="ticket-workspace-mcp-sources">
+                  {mcpContext.sources.map((source) => (
+                    <details
+                      className={`ticket-workspace-mcp-source ${source.status}`}
+                      key={`${source.domain}-${source.tool}`}
+                    >
+                      <summary>
+                        <span>
+                          <strong>{source.tool}</strong>
+                          <small>
+                            {source.domain} · {source.recordCount ?? 0}{" "}
+                            registro(s)
+                          </small>
+                        </span>
+                        <em>{source.status === "ok" ? "OK" : "Falha"}</em>
+                      </summary>
+                      {source.status === "ok" ? (
+                        <pre>{JSON.stringify(source.data, null, 2)}</pre>
+                      ) : (
+                        <p>{source.error ?? "Fonte MCP indisponível."}</p>
+                      )}
+                    </details>
+                  ))}
+                </div>
+              </details>
+              <details className="ticket-workspace-ai-details ticket-workspace-mcp-json">
+                <summary>Ver coleta completa em JSON</summary>
+                <pre>{JSON.stringify(mcpContext, null, 2)}</pre>
+              </details>
+            </section>
+          )}
 
           {currentTicket.ai_triage_status !== "unprocessed" && (
             <section className="ticket-workspace-section ticket-workspace-ai-triage">
@@ -1019,5 +1167,34 @@ export function TicketWorkspacePage({
         </>
       )}
     </section>
+  );
+}
+
+function FieldWorkSummary({
+  fieldWork,
+}: {
+  fieldWork: NonNullable<ReturnType<typeof readTicketFieldWork>>;
+}) {
+  return (
+    <div className="ticket-workspace-field-work">
+      <div>
+        <span>Execução em campo</span>
+        <strong>{fieldWork.layerLabel}</strong>
+        <small>
+          Técnico: {fieldWork.technician}
+          {fieldWork.networkPath !== "Não informado"
+            ? ` · Caminho: ${fieldWork.networkPath}`
+            : ""}
+        </small>
+      </div>
+      <div>
+        <span>Medições previstas</span>
+        <p>
+          {fieldWork.measurements.length
+            ? fieldWork.measurements.join(" · ")
+            : "Nenhuma medição informada"}
+        </p>
+      </div>
+    </div>
   );
 }

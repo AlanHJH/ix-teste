@@ -36,6 +36,7 @@ import type {
   TicketTriageRun,
   TicketTriageConfig,
   TicketTriageRetryResult,
+  TicketMcpContext,
   TopologySnapshot,
   AgentRuntimeConfiguration,
   AiConfigurationSnapshot,
@@ -198,6 +199,7 @@ export const api = {
     query = "",
     page = 1,
     status: "active" | "cancelled" | "all" = "active",
+    filters: InventoryFilter[] = [],
   ) => {
     const params = new URLSearchParams({
       page: String(page),
@@ -206,6 +208,9 @@ export const api = {
       status,
     });
     if (query.trim()) params.set("q", query.trim());
+    filters.forEach((filter) =>
+      params.append("filter", `${filter.kind}:${filter.value}`),
+    );
     return request<CustomerSummaryPage>(
       `/api/customers/search?${params.toString()}`,
     );
@@ -370,6 +375,11 @@ export const api = {
       `/api/tickets/${encodeURIComponent(ticketId)}/triage`,
       "no-store",
     ),
+  ticketMcpContext: (ticketId: string) =>
+    request<TicketMcpContext>(
+      `/api/tickets/${encodeURIComponent(ticketId)}/mcp-context`,
+      "no-store",
+    ),
   ticketTriageConfig: () =>
     request<TicketTriageConfig>("/api/tickets/triage/config", "no-store"),
   retryTicketTriage: (ticketId: string) =>
@@ -454,6 +464,17 @@ export const api = {
       closed_tickets: number;
     }>(`/api/incidents/${encodeURIComponent(incidentId)}/status`, "PATCH", {
       status: "resolved",
+    }),
+  updateOperationalIncidentStatus: (
+    incidentId: string,
+    status: "open" | "mitigating" | "monitoring" | "resolved",
+  ) =>
+    mutate<{
+      incident_id: string;
+      status: "open" | "mitigating" | "monitoring" | "resolved";
+      closed_tickets?: number;
+    }>(`/api/incidents/${encodeURIComponent(incidentId)}/status`, "PATCH", {
+      status,
     }),
   closeDetectedGrouping: (groupingId: string) =>
     mutate<{ grouping_id: string; status: "resolved" }>(
@@ -552,6 +573,11 @@ export const api = {
   retryInvestigation: (investigationId: string) =>
     mutate<Record<string, unknown>>(
       `/api/investigations/${encodeURIComponent(investigationId)}/retry`,
+      "POST",
+    ),
+  reEvaluateInvestigation: (investigationId: string) =>
+    mutate<Record<string, unknown>>(
+      `/api/investigations/${encodeURIComponent(investigationId)}/re-evaluate`,
       "POST",
     ),
   reviewInvestigation: (

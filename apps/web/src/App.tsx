@@ -50,6 +50,12 @@ import { OfflineDiagnosis } from "./OfflineDiagnosis";
 import { CustomersDirectory } from "./CustomersDirectory";
 import { PhysicalTopology } from "./PhysicalTopology";
 import { topologyFocusFromSupport } from "./topologyFocus";
+import ixcLogo from "./assets/ixc-logo.svg";
+import {
+  fieldWorkLayerLabels,
+  fieldWorkMeasurementOptions,
+  opticalFieldWorkCategory,
+} from "./ticketFieldWork";
 import {
   globalAssistantEnabled,
   n1GuidanceEnabled,
@@ -297,15 +303,32 @@ function SupportDesk({
   const [ticketOpenedBy, setTicketOpenedBy] = useState(operatorName ?? "");
   const [ticketCategory, setTicketCategory] = useState("Lentidão");
   const [ticketDescription, setTicketDescription] = useState("");
+  const [fieldWorkLayer, setFieldWorkLayer] =
+    useState<keyof typeof fieldWorkLayerLabels>("poste_trecho");
+  const [fieldWorkMeasurements, setFieldWorkMeasurements] = useState<string[]>([
+    ...fieldWorkMeasurementOptions,
+  ]);
   const [ticketOutcome, setTicketOutcome] = useState<
     "resolver_telefone" | "escalar_noc" | "agendar_visita"
   >("escalar_noc");
   const [ticketBusy, setTicketBusy] = useState(false);
   const [ticketError, setTicketError] = useState("");
   const [createdTicket, setCreatedTicket] = useState("");
+  const isOpticalFieldWork = ticketCategory === opticalFieldWorkCategory;
 
-  function suggestedCategory(issue: string) {
+  function suggestedCategory(
+    issue: string,
+    outcome: "resolver_telefone" | "escalar_noc" | "agendar_visita",
+  ) {
     const normalized = issue.toLocaleLowerCase("pt-BR");
+    if (
+      outcome === "agendar_visita" &&
+      /(fec|ópt|opt|fibra|pon|cto|splitter|trecho compartilhado)/i.test(
+        normalized,
+      )
+    ) {
+      return "Medição óptica em campo";
+    }
     if (normalized.includes("wi-fi")) return "Wi-Fi";
     if (normalized.includes("fibra") || normalized.includes("sinal óptico")) {
       return "Sem conexão";
@@ -335,7 +358,12 @@ function SupportDesk({
       setProfile(nextProfile);
       const nextTopologyFocus = topologyFocusFromSupport(nextProfile);
       setConnectionFocus(nextTopologyFocus);
-      setTicketCategory(suggestedCategory(nextProfile.decision.issue));
+      setTicketCategory(
+        suggestedCategory(
+          nextProfile.decision.issue,
+          nextProfile.decision.action,
+        ),
+      );
       setTicketDescription(nextProfile.decision.issue);
       setTicketOutcome(nextProfile.decision.action);
       setTicketError("");
@@ -383,6 +411,10 @@ function SupportDesk({
   async function createTicket(event: FormEvent) {
     event.preventDefault();
     if (!profile) return;
+    if (isOpticalFieldWork && fieldWorkMeasurements.length === 0) {
+      setTicketError("Selecione ao menos uma medição para a equipe de campo.");
+      return;
+    }
     setTicketBusy(true);
     setTicketError("");
     setCreatedTicket("");
@@ -404,12 +436,26 @@ function SupportDesk({
           activeIncidents: profile.activeIncidents,
           recentTickets: profile.recentTickets,
           allTickets: profile.allTickets,
+          field_work: isOpticalFieldWork
+            ? {
+                category: opticalFieldWorkCategory,
+                technician: ticketOpenedBy,
+                layer: fieldWorkLayer,
+                layerLabel: fieldWorkLayerLabels[fieldWorkLayer],
+                measurements: fieldWorkMeasurements,
+                networkPath: profile.equipment.network,
+              }
+            : null,
           atendimento: {
             openedBy: ticketOpenedBy,
             category: ticketCategory,
             description: ticketDescription,
             outcome: ticketOutcome,
             relatedProblemId: profile.decision.relatedProblemId,
+            fieldWorkLayer: isOpticalFieldWork ? fieldWorkLayer : null,
+            fieldWorkMeasurements: isOpticalFieldWork
+              ? fieldWorkMeasurements
+              : [],
           },
         },
       });
@@ -512,9 +558,18 @@ function SupportDesk({
             </div>
             <div>
               <span>Rede</span>
-              <strong>{profile.equipment.network.split(" · ")[0]}</strong>
+              <strong>
+                <TechnicalText
+                  text={profile.equipment.network.split(" · ")[0]}
+                />
+              </strong>
               <small>
-                {profile.equipment.network.split(" · ").slice(1).join(" · ")}
+                <TechnicalText
+                  text={profile.equipment.network
+                    .split(" · ")
+                    .slice(1)
+                    .join(" · ")}
+                />
               </small>
             </div>
           </div>
@@ -591,8 +646,9 @@ function SupportDesk({
                     precisar aprofundar a análise.
                   </strong>
                   <small>
-                    {connectionFocus.scope.olt} · PON{" "}
-                    {connectionFocus.scope.pon} · {connectionFocus.scope.cto}
+                    <TechnicalText
+                      text={`${connectionFocus.scope.olt} · PON ${connectionFocus.scope.pon} · ${connectionFocus.scope.cto}`}
+                    />
                   </small>
                 </div>
                 <button
@@ -609,7 +665,9 @@ function SupportDesk({
               <article>
                 <span>Infraestrutura</span>
                 <strong>Conferida</strong>
-                <small>{profile.equipment.network}</small>
+                <small>
+                  <TechnicalText text={profile.equipment.network} />
+                </small>
               </article>
               <article>
                 <span>Histórico do NOC</span>
@@ -832,11 +890,18 @@ function SupportDesk({
                 Categoria
                 <select
                   value={ticketCategory}
-                  onChange={(event) => setTicketCategory(event.target.value)}
+                  onChange={(event) => {
+                    const nextCategory = event.target.value;
+                    setTicketCategory(nextCategory);
+                    if (nextCategory === opticalFieldWorkCategory) {
+                      setTicketOutcome("agendar_visita");
+                    }
+                  }}
                 >
                   <option>Lentidão</option>
                   <option>Sem conexão</option>
                   <option>Wi-Fi</option>
+                  <option>{opticalFieldWorkCategory}</option>
                 </select>
               </label>
               <label>
@@ -864,6 +929,71 @@ function SupportDesk({
                   required
                 />
               </label>
+              {isOpticalFieldWork && (
+                <fieldset className="n1-fieldwork-panel">
+                  <legend>Camada de execução em campo</legend>
+                  <p>
+                    Registre até onde o técnico precisa ir e quais medições
+                    devem voltar para o histórico do ticket.
+                  </p>
+                  <div className="n1-fieldwork-grid">
+                    <div className="n1-fieldwork-owner">
+                      <span>Responsável pela execução</span>
+                      <strong>
+                        {ticketOpenedBy || "Informe o responsável acima"}
+                      </strong>
+                      <small>
+                        O nome da sessão fica preservado no payload técnico.
+                      </small>
+                    </div>
+                    <label>
+                      Camada física
+                      <select
+                        value={fieldWorkLayer}
+                        onChange={(event) =>
+                          setFieldWorkLayer(
+                            event.target
+                              .value as keyof typeof fieldWorkLayerLabels,
+                          )
+                        }
+                      >
+                        {Object.entries(fieldWorkLayerLabels).map(
+                          ([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="n1-fieldwork-checklist">
+                    <span>Medições previstas</span>
+                    <div>
+                      {fieldWorkMeasurementOptions.map((measurement) => (
+                        <label key={measurement}>
+                          <input
+                            type="checkbox"
+                            checked={fieldWorkMeasurements.includes(
+                              measurement,
+                            )}
+                            onChange={(event) =>
+                              setFieldWorkMeasurements((current) =>
+                                event.target.checked
+                                  ? [...current, measurement]
+                                  : current.filter(
+                                      (item) => item !== measurement,
+                                    ),
+                              )
+                            }
+                          />
+                          {measurement}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </fieldset>
+              )}
             </div>
             <div className="n1-ticket-footer">
               <div className="n1-ticket-link">
@@ -990,13 +1120,7 @@ function LoginScreen({
       <section className="login-shell" aria-labelledby="login-title">
         <div className="login-intro">
           <a className="login-brand" href="#" aria-label="IXC ACS">
-            <span className="brand-mark">
-              <RadioTower size={21} />
-            </span>
-            <span>
-              <strong>IXC ACS</strong>
-              <small>Network operations</small>
-            </span>
+            <img className="login-brand-logo" src={ixcLogo} alt="IXC ACS" />
           </a>
           <div className="login-intro-copy">
             <span className="login-eyebrow">Ambiente de demonstração</span>
@@ -1222,13 +1346,7 @@ function OperationsApp({
           }}
           aria-label="Ir para a página inicial"
         >
-          <span className="brand-mark">
-            <RadioTower size={20} />
-          </span>
-          <span>
-            <strong>IXC ACS</strong>
-            <small>Network operations</small>
-          </span>
+          <img className="brand-logo" src={ixcLogo} alt="IXC ACS" />
         </a>
         <nav aria-label="Áreas da aplicação">
           <span className="sidebar-section-label">Operação</span>
@@ -1353,18 +1471,6 @@ function OperationsApp({
             <LogOut size={16} />
           </button>
         </div>
-        <div className="data-state">
-          <span />
-          <div>
-            <strong>Dados carregados</strong>
-            <small>
-              8 semanas
-              {overview
-                ? ` · ${number.format(overview.kpis.activeCpes)} CPEs`
-                : ""}
-            </small>
-          </div>
-        </div>
       </aside>
       <button
         className="sidebar-toggle"
@@ -1405,7 +1511,7 @@ function OperationsApp({
           ) : view === "agent-config" ? (
             <AgentConfiguration />
           ) : view === "topology" ? (
-            <TopologyMap />
+            <TopologyMap onOpenNoc={() => navigate("noc")} />
           ) : view === "tickets" ? (
             ticketWorkspace ? (
               <TicketWorkspacePage
@@ -1472,15 +1578,17 @@ function OperationsApp({
               <p>Consolidando sinais da rede…</p>
             </div>
           ) : view === "dashboard" ? (
-            <DynamicDashboard
-              initialOverview={overview}
-              userId={user.id}
-              onOpenOfflineDiagnosis={(customerId) => {
-                setOfflineCustomer(customerId);
-                navigate("offline-diagnosis");
-              }}
-              fallback={<ExecutiveDashboard overview={overview} />}
-            />
+            <>
+              <DynamicDashboard
+                initialOverview={overview}
+                userId={user.id}
+                onOpenOfflineDiagnosis={(customerId) => {
+                  setOfflineCustomer(customerId);
+                  navigate("offline-diagnosis");
+                }}
+                fallback={<ExecutiveDashboard overview={overview} />}
+              />
+            </>
           ) : (
             <NocDashboard
               nocTicketCount={nocTicketCount}

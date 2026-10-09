@@ -169,8 +169,8 @@ export function N1AdvisorChat({
               ? `${profile.activeIncidents.length} ativo(s)`
               : "Nenhum ativo"}
             <HelpTooltip
-              term="Grupos NOC"
-              description="Agrupamentos confirmados pelo NOC que alcançam este cliente. Eles têm prioridade sobre uma hipótese isolada."
+              term="NOC e grupos NOC"
+              description="NOC significa Centro de Operações de Rede: a equipe que monitora falhas coletivas e coordena a recuperação. Um grupo NOC é uma ocorrência confirmada pelo NOC que pode alcançar este cliente e tem prioridade sobre uma hipótese isolada."
             />
           </strong>
         </div>

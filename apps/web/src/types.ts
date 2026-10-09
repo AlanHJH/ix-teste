@@ -650,6 +650,38 @@ export type TicketTriageContextSnapshot = {
   };
 };
 
+export type TicketMcpEvidenceSource = {
+  domain: string;
+  tool: string;
+  status: "ok" | "error";
+  recordCount: number | null;
+  data: unknown;
+  error?: string;
+  arguments: Record<string, unknown>;
+};
+
+export type TicketMcpContext = {
+  ticketId: string;
+  collectedAt: string;
+  status: "complete" | "partial" | "failed";
+  scope: {
+    customerId: string | null;
+    serial: string | null;
+    olt: string | null;
+    pon: string | null;
+    cto: string | null;
+  };
+  summary: {
+    requestedToolCount: number;
+    successfulToolCount: number;
+    failedToolCount: number;
+    domainCount: number;
+    domains: string[];
+    recordsCollected: number;
+  };
+  sources: TicketMcpEvidenceSource[];
+};
+
 export type TicketTriageConfig = {
   openaiConfigured: boolean;
   model: string;

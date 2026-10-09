@@ -23,6 +23,7 @@ import type {
 } from "./types";
 import type { DashboardDrilldown } from "./DashboardDetailModal";
 import { DateRangeFilter, type DateRange } from "./DateRangeFilter";
+import { TechnicalText } from "./ProviderGlossary";
 import { SortableHeader } from "./SortableHeader";
 
 const number = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
@@ -91,8 +92,12 @@ function Heading({
     <header className="ai-widget-heading">
       <div>
         <span className="section-label">Visualização dinâmica</span>
-        <h2>{widget.title}</h2>
-        <p>{widget.description}</p>
+        <h2>
+          <TechnicalText text={widget.title} />
+        </h2>
+        <p>
+          <TechnicalText text={widget.description} />
+        </p>
       </div>
       {icon}
     </header>

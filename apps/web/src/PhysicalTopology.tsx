@@ -244,9 +244,11 @@ function TopologyMeasurementAlert({
 export function PhysicalTopology({
   focus,
   onClose,
+  onOpenNoc,
 }: {
   focus?: TopologyFocus;
   onClose?: () => void;
+  onOpenNoc?: () => void;
 }) {
   const [topology, setTopology] = useState<TopologySnapshot | null>(null);
   const [selectedOlt, setSelectedOlt] = useState("");
@@ -261,6 +263,7 @@ export function PhysicalTopology({
   const [measurementIssue, setMeasurementIssue] =
     useState<HistoricalTopologyIssue | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const activeBranch = useRef("");
   const measurementBranch = useRef("");
@@ -446,7 +449,12 @@ export function PhysicalTopology({
     }
   }
 
-  async function expandCto(olt: string, pon: string, cto: string) {
+  async function expandCto(
+    olt: string,
+    pon: string,
+    cto: string,
+    force = false,
+  ) {
     const branch = `${olt}:${pon}`;
     activeBranch.current = branch;
     setMeasurementIssue(null);
@@ -457,7 +465,9 @@ export function PhysicalTopology({
     setSelectedCto(cto);
     setSelectedPath(null);
 
-    if (Object.prototype.hasOwnProperty.call(devicesByCto, cto)) return;
+    if (!force && Object.prototype.hasOwnProperty.call(devicesByCto, cto)) {
+      return;
+    }
 
     setDevicesByCto((current) => ({ ...current, [cto]: [] }));
     try {
@@ -476,6 +486,26 @@ export function PhysicalTopology({
           ? reason.message
           : "Não foi possível carregar as CPEs da CTO",
       );
+    }
+  }
+
+  async function refreshCurrentBranch() {
+    if (refreshing) return;
+    setRefreshing(true);
+    await loadTopologyIssues();
+
+    try {
+      if (selectedOlt && selectedPon && selectedCto) {
+        await expandCto(selectedOlt, selectedPon, selectedCto, true);
+      } else if (selectedOlt && selectedPon) {
+        await choosePon(selectedOlt, selectedPon);
+      } else if (selectedOlt) {
+        await chooseOlt(selectedOlt);
+      } else {
+        await loadInitialTopology();
+      }
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -571,7 +601,9 @@ export function PhysicalTopology({
             ...(measurementIssue ? [measurementIssue] : []),
           ]}
           loading={loading}
+          refreshing={refreshing}
           focusMode={Boolean(onClose)}
+          onRefresh={() => void refreshCurrentBranch()}
           onChangeOlt={(olt) => void chooseOlt(olt)}
           onSelectOlt={setModalEntity}
           onSelectPon={setModalEntity}
@@ -593,6 +625,7 @@ export function PhysicalTopology({
         <NetworkEntityModal
           entity={modalEntity}
           directChildren={directChildren}
+          onOpenNoc={onOpenNoc}
           onClose={() => setModalEntity(null)}
         />
       )}

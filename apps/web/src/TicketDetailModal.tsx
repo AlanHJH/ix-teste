@@ -3,6 +3,7 @@ import { CheckCircle2, Play, TicketCheck } from "lucide-react";
 import { api } from "./api";
 import { EntityDetailModal } from "./EntityDetailModal";
 import type { EntityDetailItem } from "./EntityDetailModal";
+import { readTicketFieldWork } from "./ticketFieldWork";
 import type { SupportTicket } from "./types";
 
 const nocStatusLabel: Record<SupportTicket["noc_status"], string> = {
@@ -47,6 +48,7 @@ export function TicketDetailModal({
     ticket.olt && ticket.pon && ticket.cto
       ? `${ticket.olt} · PON ${ticket.pon} · ${ticket.cto}`
       : "Não informada";
+  const fieldWork = readTicketFieldWork(ticket.source_payload);
   const details: EntityDetailItem[] = [
     { label: "Cliente", value: ticket.customer_id },
     { label: "Localidade", value: location },
@@ -70,6 +72,17 @@ export function TicketDetailModal({
       value: ticket.opened_by ?? "Não informado",
     },
     { label: "Topologia relacionada", value: topology },
+    ...(fieldWork
+      ? [
+          { label: "Camada de execução", value: fieldWork.layerLabel },
+          { label: "Técnico responsável", value: fieldWork.technician },
+          {
+            label: "Medições previstas",
+            value: fieldWork.measurements.join(" · ") || "Não informadas",
+            wide: true,
+          },
+        ]
+      : []),
     { label: "Situação no NOC", value: nocStatusLabel[ticket.noc_status] },
     {
       label: "Incidente relacionado",

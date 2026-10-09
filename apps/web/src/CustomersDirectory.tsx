@@ -1,16 +1,21 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   MapPin,
-  Search,
   UserRound,
   Wifi,
 } from "lucide-react";
 import { api } from "./api";
 import { CustomerDetailDrawer } from "./CustomerDetailDrawer";
-import type { CustomerSummary, CustomerSummaryPage } from "./types";
+import { FacetFilterSelect } from "./FacetFilterSelect";
+import type {
+  CustomerSummary,
+  CustomerSummaryPage,
+  InventoryFilter,
+  InventoryFilterOption,
+} from "./types";
 
 type CustomerStatus = "active" | "cancelled" | "all";
 
@@ -98,6 +103,7 @@ export function CustomersDirectory({
 }) {
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
+  const [filters, setFilters] = useState<InventoryFilter[]>([]);
   const [status, setStatus] = useState<CustomerStatus>("active");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<CustomerSummaryPage | null>(null);
@@ -111,7 +117,7 @@ export function CustomersDirectory({
     setLoading(true);
     setError("");
     void api
-      .customerSearch(submittedQuery, page, status)
+      .customerSearch(submittedQuery, page, status, filters)
       .then((nextData) => {
         if (!cancelled) setData(nextData);
       })
@@ -130,7 +136,26 @@ export function CustomersDirectory({
     return () => {
       cancelled = true;
     };
-  }, [page, status, submittedQuery]);
+  }, [filters, page, status, submittedQuery]);
+
+  const loadCustomerOptions = useCallback(
+    (search: string): Promise<InventoryFilterOption[]> => {
+      const inventoryStatus =
+        status === "cancelled"
+          ? "removed"
+          : status === "all"
+            ? "all"
+            : "active";
+      return api
+        .inventoryFilterOptions(search, inventoryStatus)
+        .then((options) =>
+          options.filter((option) =>
+            ["customer", "city", "neighborhood"].includes(option.kind),
+          ),
+        );
+    },
+    [status],
+  );
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -140,6 +165,12 @@ export function CustomersDirectory({
 
   function chooseStatus(nextStatus: CustomerStatus) {
     setStatus(nextStatus);
+    setPage(1);
+    setFilters([]);
+  }
+
+  function chooseFilters(nextFilters: InventoryFilter[]) {
+    setFilters(nextFilters);
     setPage(1);
   }
 
@@ -154,25 +185,6 @@ export function CustomersDirectory({
 
   return (
     <section className="customers-page">
-      <header className="customers-hero">
-        <div>
-          <span className="section-label">Cadastro consolidado</span>
-          <h1>Clientes</h1>
-          <p>
-            Uma visão simples dos clientes atendidos, usando a localidade já
-            registrada na operação. Os nomes exibidos são fictícios e servem
-            apenas para facilitar a leitura da demonstração.
-          </p>
-        </div>
-        <div className="customers-hero-note">
-          <UserRound size={22} />
-          <span>
-            <strong>Nomes de demonstração</strong>
-            <small>O código e a localidade continuam vindo do cadastro.</small>
-          </span>
-        </div>
-      </header>
-
       <section className="customers-summary" aria-label="Resumo dos clientes">
         <article>
           <span>
@@ -196,13 +208,20 @@ export function CustomersDirectory({
 
       <section className="customers-directory">
         <div className="customers-toolbar">
-          <form className="customers-search" onSubmit={submit}>
-            <Search size={18} aria-hidden="true" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
+          <form
+            className="customers-search customers-search--faceted"
+            onSubmit={submit}
+          >
+            <FacetFilterSelect<InventoryFilter, InventoryFilterOption>
+              filters={filters}
+              onChange={chooseFilters}
+              query={query}
+              onQueryChange={setQuery}
+              loadOptions={loadCustomerOptions}
               placeholder="Buscar por código ou localidade"
-              aria-label="Buscar clientes por código ou localidade"
+              ariaLabel="Buscar clientes por código ou localidade"
+              optionsId="customer-search-options"
+              showClear
             />
             <button type="submit">Buscar</button>
           </form>

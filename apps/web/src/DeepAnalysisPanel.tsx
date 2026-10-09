@@ -1,10 +1,4 @@
-import {
-  Bot,
-  CheckCircle2,
-  CircleAlert,
-  Compass,
-  ShieldQuestion,
-} from "lucide-react";
+import { Bot, CheckCircle2, CircleAlert, Compass } from "lucide-react";
 import { TechnicalText } from "./ProviderGlossary";
 import type { N1DeepAnalysis } from "./types";
 import "./DeepAnalysisPanel.css";
@@ -46,8 +40,18 @@ export function DeepAnalysisPanel({
       </header>
 
       {loading && (
-        <div className="deep-analysis-loading" role="status">
-          <span /> Cruzando cadastro, equipamento, histórico e medições…
+        <div className="deep-analysis-loading" role="status" aria-live="polite">
+          <span className="deep-analysis-loading-spinner" aria-hidden="true" />
+          <div className="deep-analysis-loading-copy">
+            <strong>Preparando análise com IA</strong>
+            <span>
+              Cruzando cadastro, equipamento, histórico e medições. Isso pode
+              levar alguns segundos.
+            </span>
+          </div>
+          <div className="deep-analysis-loading-progress" aria-hidden="true">
+            <span />
+          </div>
         </div>
       )}
 
@@ -75,8 +79,11 @@ export function DeepAnalysisPanel({
                     O que pode ter acontecido
                   </span>
                   <h3>Hipóteses comparadas</h3>
+                  <p className="deep-analysis-block-help">
+                    Compare as causas possíveis. “Alta probabilidade” prioriza a
+                    investigação, mas não confirma a causa física.
+                  </p>
                 </div>
-                <ShieldQuestion size={18} />
               </div>
               <div className="deep-analysis-causes">
                 {analysis.causes.map((cause) => (
@@ -112,8 +119,11 @@ export function DeepAnalysisPanel({
                 <div>
                   <span className="section-label">Sequência recomendada</span>
                   <h3>Como conduzir</h3>
+                  <p className="deep-analysis-block-help">
+                    Siga estes passos para validar o sinal sem executar ações
+                    automáticas na rede.
+                  </p>
                 </div>
-                <Compass size={18} />
               </div>
               <ol className="deep-analysis-path">
                 {analysis.path.map((step) => (
@@ -137,6 +147,9 @@ export function DeepAnalysisPanel({
           <div className="deep-analysis-facts">
             <div>
               <span className="section-label">Fatos confirmados</span>
+              <p className="deep-analysis-facts-help">
+                Dados observados nos registros consultados e usados na análise.
+              </p>
               <ul>
                 {analysis.confirmed.map((item) => (
                   <li key={item}>
@@ -147,6 +160,9 @@ export function DeepAnalysisPanel({
             </div>
             <div>
               <span className="section-label">Ainda falta confirmar</span>
+              <p className="deep-analysis-facts-help">
+                Informações que o técnico ou o NOC ainda precisam validar.
+              </p>
               <ul>
                 {analysis.unknowns.map((item) => (
                   <li key={item}>

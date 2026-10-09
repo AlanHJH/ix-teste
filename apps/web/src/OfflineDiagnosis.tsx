@@ -68,6 +68,14 @@ export function OfflineDiagnosis({
     };
   }, [customerId]);
 
+  const analysisStatus = profile
+    ? profile.activeIncidents.length > 0
+      ? "Incidente ativo"
+      : profile.decision.relatedProblemId
+        ? "Indício coletivo · confirmação pendente"
+        : "Causa ainda não identificada"
+    : "";
+
   return (
     <section className="offline-diagnosis-page">
       <header className="offline-diagnosis-hero">
@@ -88,9 +96,18 @@ export function OfflineDiagnosis({
       </header>
 
       {loading && (
-        <div className="offline-diagnosis-loading" role="status">
+        <div
+          className="offline-diagnosis-loading"
+          role="status"
+          aria-live="polite"
+        >
           <RefreshCw size={18} className="spin" />
-          <span>Consolidando cadastro, medições, rede e histórico…</span>
+          <div>
+            <strong>Buscando dados do diagnóstico…</strong>
+            <span>
+              <TechnicalText text="Consolidando cadastro, equipamento, medições, rede e histórico do NOC." />
+            </span>
+          </div>
         </div>
       )}
 
@@ -108,7 +125,7 @@ export function OfflineDiagnosis({
         <>
           <section className="offline-diagnosis-summary">
             <div>
-              <span className="section-label">Cliente selecionado</span>
+              <span className="section-label">Paciente selecionado</span>
               <h2>{profile.customer.id}</h2>
               <p>
                 <MapPin size={14} /> {profile.customer.neighborhood} ·{" "}
@@ -116,13 +133,17 @@ export function OfflineDiagnosis({
               </p>
             </div>
             <div className="offline-diagnosis-decision">
-              <span>Hipótese atual</span>
+              <div className="offline-diagnosis-decision-label">
+                <span>Hipótese atual</span>
+                <b>{analysisStatus}</b>
+              </div>
               <strong>
                 <TechnicalText text={profile.decision.issue} />
               </strong>
               <small>
-                Confiança {profile.decision.confidence.toLowerCase()} ·{" "}
-                {profile.decision.actionLabel}
+                <TechnicalText
+                  text={`Confiança ${profile.decision.confidence.toLowerCase()} · ${profile.decision.actionLabel}`}
+                />
               </small>
             </div>
             <button
@@ -138,29 +159,41 @@ export function OfflineDiagnosis({
             <article className="panel offline-diagnosis-context-card">
               <div className="panel-heading">
                 <div>
-                  <span className="section-label">CPE ativa</span>
+                  <span className="section-label">
+                    <TechnicalText text="CPE ativa" />
+                  </span>
                   <h2>Equipamento e caminho</h2>
                 </div>
                 <Network size={20} />
               </div>
               <dl className="offline-diagnosis-dl">
                 <div>
-                  <dt>Equipamento</dt>
+                  <dt>
+                    <TechnicalText text="Equipamento" />
+                  </dt>
                   <dd>
                     {profile.equipment.vendor} {profile.equipment.model}
                   </dd>
                 </div>
                 <div>
-                  <dt>Serial</dt>
+                  <dt>
+                    <TechnicalText text="Serial" />
+                  </dt>
                   <dd>{profile.equipment.serial}</dd>
                 </div>
                 <div>
-                  <dt>Firmware</dt>
+                  <dt>
+                    <TechnicalText text="Firmware" />
+                  </dt>
                   <dd>{profile.equipment.firmware}</dd>
                 </div>
                 <div>
-                  <dt>Rede</dt>
-                  <dd>{profile.equipment.network}</dd>
+                  <dt>
+                    <TechnicalText text="Rede" />
+                  </dt>
+                  <dd>
+                    <TechnicalText text={profile.equipment.network} />
+                  </dd>
                 </div>
               </dl>
             </article>
@@ -175,14 +208,16 @@ export function OfflineDiagnosis({
               </div>
               <ul className="offline-diagnosis-checks">
                 <li>
-                  <CheckCircle2 size={14} /> Caminho de infraestrutura
-                  consultado
+                  <CheckCircle2 size={14} />
+                  <TechnicalText text="Caminho de infraestrutura consultado" />
                 </li>
                 <li>
-                  <CheckCircle2 size={14} /> Medições recentes consultadas
+                  <CheckCircle2 size={14} />
+                  <TechnicalText text="Medições recentes consultadas" />
                 </li>
                 <li>
-                  <CheckCircle2 size={14} /> Histórico NOC consultado
+                  <CheckCircle2 size={14} />
+                  <TechnicalText text="Histórico NOC consultado" />
                 </li>
                 <li>
                   <CheckCircle2 size={14} /> {profile.recentTickets.length}{" "}
@@ -190,7 +225,7 @@ export function OfflineDiagnosis({
                 </li>
               </ul>
               <p className="offline-diagnosis-advice">
-                <strong>Orientação atual:</strong>{" "}
+                <strong>Próximo passo para confirmar:</strong>{" "}
                 {profile.preflight.mainAdvice}
               </p>
             </article>
@@ -215,8 +250,9 @@ export function OfflineDiagnosis({
                     <TechnicalText text={incident.title} />
                   </strong>
                   <span>
-                    {incident.affectedCpes.toLocaleString("pt-BR")} CPEs ·{" "}
-                    {incident.probableCause}
+                    <TechnicalText
+                      text={`${incident.affectedCpes.toLocaleString("pt-BR")} CPEs · ${incident.probableCause}`}
+                    />
                   </span>
                 </div>
               ))}
@@ -232,9 +268,7 @@ export function OfflineDiagnosis({
                     <Bot size={18} /> Contexto disponível para a IA
                   </h2>
                   <p>
-                    A IA pode consultar o cadastro, CPE ativa, caminho de rede,
-                    telemetria, medições, histórico de chamados e incidentes do
-                    NOC deste cliente.
+                    <TechnicalText text="A IA pode consultar o cadastro, CPE ativa, caminho de rede, telemetria, medições, histórico de chamados e incidentes do NOC deste cliente." />
                   </p>
                 </div>
                 <small>

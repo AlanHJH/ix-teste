@@ -1,5 +1,7 @@
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import type { ReactNode } from "react";
+import { HelpTooltip } from "./HelpTooltip";
+import { technicalHintForLabel } from "./ProviderGlossary";
 
 export function SortableHeader<Sort extends string>({
   label,
@@ -29,6 +31,7 @@ export function SortableHeader<Sort extends string>({
       : direction === "descending"
         ? ArrowDown
         : ChevronsUpDown;
+  const automaticHint = children ? undefined : technicalHintForLabel(label);
 
   return (
     <th aria-sort={direction}>
@@ -42,7 +45,10 @@ export function SortableHeader<Sort extends string>({
           <span>{label}</span>
           <Icon size={13} aria-hidden="true" />
         </button>
-        {children}
+        {children ??
+          (automaticHint ? (
+            <HelpTooltip term={label} description={automaticHint} />
+          ) : null)}
       </span>
     </th>
   );
