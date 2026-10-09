@@ -3,6 +3,9 @@ import {
   AlertTriangle,
   Check,
   ChevronRight,
+  Database,
+  FileJson,
+  Network,
   RefreshCw,
   ShieldCheck,
   X,
@@ -142,6 +145,20 @@ function formatDate(value: string | null) {
     : "—";
 }
 
+function scopeTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    olt: "OLT",
+    pon: "PON",
+    cto: "CTO",
+    firmware: "Firmware",
+  };
+  return labels[type] ?? type;
+}
+
+function sumInvestigationStatuses(summary: Record<string, number>) {
+  return Object.values(summary).reduce((total, count) => total + count, 0);
+}
+
 function InvestigationCard({
   investigation,
   onOpen,
@@ -186,13 +203,24 @@ function InvestigationCard({
           <div className="investigation-card-preview">
             <div>
               <span>Alcance</span>
-              <strong>{finding.scope.identifier}</strong>
+              <strong>
+                {scopeTypeLabel(finding.scope.type)} ·{" "}
+                {finding.scope.identifier}
+              </strong>
             </div>
             <div>
               <span>Impacto estimado</span>
               <strong>{finding.affectedCpes} CPEs</strong>
             </div>
             <p>{finding.probableCause}</p>
+            <div
+              className="investigation-card-facts"
+              aria-label="Sinais da análise"
+            >
+              <span>{finding.evidence.length} evidências</span>
+              <span>{finding.counterEvidence.length} contrapontos</span>
+              <span>{investigation.tool_trace.length} consultas</span>
+            </div>
           </div>
         ) : (
           <p className="investigation-card-objective">
@@ -220,6 +248,7 @@ function InvestigationDetailModal({
   onClose,
   busy,
   onOpenAssistant,
+  onOpenTopology,
 }: {
   investigation: Investigation;
   reviewer: string;
@@ -231,9 +260,12 @@ function InvestigationDetailModal({
   onClose: () => void;
   busy: boolean;
   onOpenAssistant?: (context: IrisContext) => void;
+  onOpenTopology?: (investigation: Investigation) => void;
 }) {
   const finding = investigation.finding;
   const titleId = useId();
+  const [rawDataOpen, setRawDataOpen] = useState(false);
+  const [technicalDetailsOpen, setTechnicalDetailsOpen] = useState(false);
 
   return (
     <SideDrawer
@@ -280,6 +312,45 @@ function InvestigationDetailModal({
             })
           }
         />
+      )}
+
+      {finding && (
+        <div
+          className="investigation-deep-actions"
+          aria-label="Aprofundar investigação"
+        >
+          {onOpenTopology && (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                onOpenTopology(investigation);
+                onClose();
+              }}
+            >
+              <Network size={15} />
+              Ver infraestrutura afetada
+            </button>
+          )}
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => setTechnicalDetailsOpen((current) => !current)}
+          >
+            <Database size={15} />
+            {technicalDetailsOpen
+              ? "Ocultar consultas"
+              : "Ver consultas técnicas"}
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => setRawDataOpen((current) => !current)}
+          >
+            <FileJson size={15} />
+            {rawDataOpen ? "Ocultar JSON" : "Ver JSON completo"}
+          </button>
+        </div>
       )}
 
       <div className="investigation-modal-content">
@@ -394,7 +465,15 @@ function InvestigationDetailModal({
                 )}
               </section>
             </div>
-            <details className="tool-trace">
+            <details
+              className="tool-trace"
+              open={technicalDetailsOpen}
+              onToggle={(event) =>
+                setTechnicalDetailsOpen(
+                  (event.currentTarget as HTMLDetailsElement).open,
+                )
+              }
+            >
               <summary>
                 Auditoria técnica · {investigation.tool_trace.length} consultas
                 MCP (opcional)
@@ -419,6 +498,39 @@ function InvestigationDetailModal({
                 ))}
               </ol>
             </details>
+            {rawDataOpen && (
+              <section className="investigation-raw-data">
+                <div>
+                  <span>Dados completos da investigação</span>
+                  <small>
+                    Inclui contexto, evidências e rastreabilidade MCP.
+                  </small>
+                </div>
+                <pre>
+                  {JSON.stringify(
+                    {
+                      investigation_id: investigation.investigation_id,
+                      trigger_type: investigation.trigger_type,
+                      trigger_label: investigation.trigger_label,
+                      objective: investigation.objective,
+                      status: investigation.status,
+                      scope: investigation.scope,
+                      finding: investigation.finding,
+                      tool_trace: investigation.tool_trace,
+                      incident_id: investigation.incident_id,
+                      timestamps: {
+                        created_at: investigation.created_at,
+                        started_at: investigation.started_at,
+                        completed_at: investigation.completed_at,
+                        reviewed_at: investigation.reviewed_at,
+                      },
+                    },
+                    null,
+                    2,
+                  )}
+                </pre>
+              </section>
+            )}
           </>
         )}
 
@@ -491,9 +603,11 @@ function InvestigationDetailModal({
 export function InvestigationReview({
   onGroupingChanged,
   onOpenAssistant,
+  onOpenTopology,
 }: {
   onGroupingChanged?: () => void;
   onOpenAssistant?: (context: IrisContext) => void;
+  onOpenTopology?: (investigation: Investigation) => void;
 }) {
   const [page, setPage] = useState<InvestigationPage | null>(null);
   const [reviewer, setReviewer] = useState("");
@@ -567,6 +681,11 @@ export function InvestigationReview({
   const active = investigations.filter((investigation) =>
     ["queued", "running"].includes(investigation.status),
   ).length;
+  const statusSummary = page?.meta.summary ?? {};
+  const runtime = page?.meta.config;
+  const totalTracked = sumInvestigationStatuses(statusSummary);
+  const failed = statusSummary.failed ?? 0;
+  const approved = statusSummary.approved ?? 0;
   const intervalMinutes = Math.round(
     (page?.meta.config.metricTriggerIntervalMs ?? 300_000) / 60_000,
   );
@@ -578,6 +697,50 @@ export function InvestigationReview({
   return (
     <section className="investigations-page noc-investigations">
       {error && <p className="investigations-error">{error}</p>}
+
+      <section className="agent-investigation-overview">
+        <header>
+          <div>
+            <span className="section-label">Visão operacional</span>
+            <h2>Saúde do agente e da fila</h2>
+          </div>
+          <p>
+            {runtime?.openaiConfigured
+              ? `Modelo ativo: ${runtime.model}`
+              : "Modo local disponível; configure o modelo para ampliar as análises"}
+          </p>
+        </header>
+        <div className="agent-investigation-metrics">
+          <div className="agent-investigation-metric attention">
+            <span>Revisão humana</span>
+            <strong>{pending}</strong>
+            <small>decisões aguardando o NOC</small>
+          </div>
+          <div className="agent-investigation-metric active">
+            <span>Em processamento</span>
+            <strong>{active}</strong>
+            <small>candidatos na janela atual</small>
+          </div>
+          <div className="agent-investigation-metric danger">
+            <span>Falhas</span>
+            <strong>{failed}</strong>
+            <small>investigações que podem ser retomadas</small>
+          </div>
+          <div className="agent-investigation-metric">
+            <span>Histórico rastreado</span>
+            <strong>{totalTracked}</strong>
+            <small>{approved} aprovações registradas</small>
+          </div>
+        </div>
+        <footer>
+          <span>
+            Detector de agrupamentos:{" "}
+            {runtime?.metricTriggerEnabled ? "ativo" : "pausado"}
+          </span>
+          <span>Consulta automática a cada {intervalMinutes} min</span>
+          <span>Sem alterações automáticas na rede</span>
+        </footer>
+      </section>
 
       <section className="review-queue">
         <header>
@@ -641,6 +804,7 @@ export function InvestigationReview({
           onClose={() => setSelectedInvestigationId("")}
           busy={busy === selectedInvestigation.investigation_id}
           onOpenAssistant={onOpenAssistant}
+          onOpenTopology={onOpenTopology}
         />
       )}
     </section>

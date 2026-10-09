@@ -27,6 +27,7 @@ import type {
   IrisContext,
   OperationalIncident,
   OperationalIncidentPage,
+  TopologyFocus,
 } from "./types";
 
 type IncidentOption = { value: string; label: string };
@@ -245,6 +246,23 @@ function confidencePercent(value: number) {
   return Math.round(value <= 1 ? value * 100 : value);
 }
 
+function topologyFocusFromInvestigation(
+  investigation: Investigation,
+): TopologyFocus | null {
+  const finding = investigation.finding;
+  if (!finding) return null;
+
+  return {
+    id: investigation.incident_id ?? investigation.investigation_id,
+    kind: "grouping",
+    title: finding.title,
+    severity: finding.severity,
+    confidence: finding.confidence,
+    scope: finding.scope,
+    affectedCpes: finding.affectedCpes,
+  };
+}
+
 function InfrastructureAiAnalysis({
   analysis,
   loading,
@@ -461,7 +479,7 @@ export function NocOperations({
   const [closingGrouping, setClosingGrouping] = useState("");
   const [selectedGroupingId, setSelectedGroupingId] = useState("");
   const [topologyGrouping, setTopologyGrouping] =
-    useState<OperationalIncident | null>(null);
+    useState<TopologyFocus | null>(null);
   const [selectedAnalysis, setSelectedAnalysis] =
     useState<Investigation | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
@@ -825,6 +843,10 @@ export function NocOperations({
           <InvestigationReview
             onGroupingChanged={() => void refresh()}
             onOpenAssistant={onOpenAssistant}
+            onOpenTopology={(investigation) => {
+              const focus = topologyFocusFromInvestigation(investigation);
+              if (focus) setTopologyGrouping(focus);
+            }}
           />
         )}
 
@@ -995,7 +1017,11 @@ export function NocOperations({
                 <button
                   type="button"
                   className="grouping-topology-open"
-                  onClick={() => setTopologyGrouping(selectedGrouping)}
+                  onClick={() =>
+                    setTopologyGrouping(
+                      topologyFocusFromIncident(selectedGrouping),
+                    )
+                  }
                 >
                   <Network size={15} aria-hidden="true" />
                   Ver infraestrutura afetada
@@ -1031,7 +1057,7 @@ export function NocOperations({
 
       {topologyGrouping && (
         <PhysicalTopology
-          focus={topologyFocusFromIncident(topologyGrouping)}
+          focus={topologyGrouping}
           onClose={() => setTopologyGrouping(null)}
         />
       )}

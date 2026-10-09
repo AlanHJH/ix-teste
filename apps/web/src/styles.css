@@ -7178,6 +7178,107 @@ h3 {
 .noc-investigations {
   margin: 26px 0 35px;
 }
+.agent-investigation-overview {
+  display: grid;
+  gap: 16px;
+  padding: 20px 22px;
+  border: 1px solid #cfe1e1;
+  border-radius: 16px;
+  background:
+    radial-gradient(
+      circle at 95% 10%,
+      rgba(55, 164, 147, 0.12),
+      transparent 28%
+    ),
+    #f7fbfb;
+}
+.agent-investigation-overview > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.agent-investigation-overview h2 {
+  margin: 6px 0 0;
+  color: #244b53;
+  font-size: 19px;
+}
+.agent-investigation-overview > header > p {
+  max-width: 290px;
+  margin: 3px 0 0;
+  color: #5f777d;
+  font-size: 10px;
+  line-height: 1.45;
+  text-align: right;
+}
+.agent-investigation-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.agent-investigation-metric {
+  display: grid;
+  min-height: 92px;
+  align-content: space-between;
+  gap: 6px;
+  padding: 13px;
+  border: 1px solid #dce9e9;
+  border-radius: 11px;
+  background: #fff;
+}
+.agent-investigation-metric > span {
+  color: #668086;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.agent-investigation-metric strong {
+  color: #28535a;
+  font-size: 25px;
+  line-height: 1;
+}
+.agent-investigation-metric small {
+  color: #7a9094;
+  font-size: 9px;
+}
+.agent-investigation-metric.attention {
+  border-color: #efd4aa;
+  background: #fffaf2;
+}
+.agent-investigation-metric.attention strong {
+  color: #a96620;
+}
+.agent-investigation-metric.active {
+  border-color: #c7e3df;
+  background: #f5fbfa;
+}
+.agent-investigation-metric.active strong {
+  color: #177765;
+}
+.agent-investigation-metric.danger {
+  border-color: #efccc2;
+  background: #fff8f5;
+}
+.agent-investigation-metric.danger strong {
+  color: #ad4f38;
+}
+.agent-investigation-overview > footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  color: #6b8287;
+  font-size: 9px;
+}
+.agent-investigation-overview > footer span::before {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 6px 1px 0;
+  border-radius: 50%;
+  background: #36a494;
+  content: "";
+}
 .review-queue {
   min-width: 0;
   padding: 22px;
@@ -7358,6 +7459,20 @@ h3 {
   grid-column: 1 / -1;
   padding-top: 9px;
   border-top: 1px solid #dce7e8;
+}
+.investigation-card-facts {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.investigation-card-facts span {
+  padding: 4px 6px;
+  border-radius: 99px;
+  color: #537278;
+  background: #e8f1f1;
+  font-size: 8px;
+  font-weight: 800;
 }
 .investigation-card-objective {
   margin-top: 15px;
@@ -8106,6 +8221,67 @@ h3 {
   gap: 18px;
   padding-top: 2px;
 }
+.investigation-deep-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 2px;
+}
+.investigation-deep-actions .secondary {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid #c9dddd;
+  border-radius: 8px;
+  color: #176f64;
+  background: #f5fbfa;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+}
+.investigation-deep-actions .secondary:hover {
+  border-color: #79b8ab;
+  background: #eaf7f3;
+}
+.investigation-raw-data {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #cbdfe0;
+  border-radius: 10px;
+  background: #f5f9f9;
+}
+.investigation-raw-data > div {
+  display: grid;
+  gap: 3px;
+}
+.investigation-raw-data > div > span {
+  color: #315b61;
+  font-size: 10px;
+  font-weight: 800;
+}
+.investigation-raw-data > div > small {
+  color: #71868b;
+  font-size: 9px;
+}
+.investigation-raw-data pre {
+  max-height: 360px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  color: #3e5c63;
+  background: #edf5f4;
+  font:
+    10px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .investigation-overview {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -8532,6 +8708,9 @@ h3 {
   }
   .investigations-list {
     grid-template-columns: 1fr;
+  }
+  .agent-investigation-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .investigation-modal {
     width: min(760px, 100%);
@@ -9010,6 +9189,23 @@ h3 {
     flex-direction: column-reverse;
   }
   .investigation-modal .review-actions button {
+    justify-content: center;
+  }
+  .agent-investigation-overview > header {
+    flex-direction: column;
+  }
+  .agent-investigation-overview > header > p {
+    max-width: none;
+    text-align: left;
+  }
+  .agent-investigation-metrics {
+    grid-template-columns: 1fr;
+  }
+  .investigation-deep-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .investigation-deep-actions .secondary {
     justify-content: center;
   }
   .grouping-detail-actions {
