@@ -51,7 +51,7 @@ O modelo precisa decidir entre atendimento individual N1 e candidato compartilha
 
 Cada execução é registrada em `ticket_ai_triage_runs` com snapshot de entrada, decisão estruturada, evidências, confiança, modelo, resposta, ação aplicada e erro. O detalhe REST `GET /api/tickets/:ticketId/triage` e as ferramentas MCP `tickets_get_triage` e `tickets_get_triage_config` permitem auditar o caminho sem expor a chave do modelo. A tela do ticket mantém visível o atendimento normal, os dados do equipamento e o histórico; a triagem aparece como contexto adicional, não como substituição do atendente.
 
-A configuração também oferece a reavaliação manual por `POST /api/tickets/triage/retry` ou pela ferramenta MCP `tickets_retry_triage`. O identificador pode apontar para um ticket N1 ou histórico importado. O backend marca somente o estado corrente como pendente, executa novamente a análise com os sinais atuais e preserva as execuções anteriores para comparação; uma nova execução não apaga nem sobrescreve o registro de auditoria anterior.
+A configuração também oferece a reavaliação manual por `POST /api/tickets/triage/retry` ou pela ferramenta MCP `tickets_retry_triage`. Na interface, o ticket pode ser encontrado pelo ID, cliente ou parte do relato antes da seleção; a API recebe o identificador escolhido, que pode apontar para um ticket N1 ou histórico importado. O backend marca somente o estado corrente como pendente, executa novamente a análise com os sinais atuais e preserva as execuções anteriores para comparação; uma nova execução não apaga nem sobrescreve o registro de auditoria anterior.
 
 ## Configuração local
 

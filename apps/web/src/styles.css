@@ -11097,9 +11097,14 @@ main {
   display: flex;
   gap: 9px;
 }
-.agent-settings-retry-controls input {
+.agent-settings-retry-input-wrap {
+  position: relative;
   min-width: 0;
   flex: 1;
+}
+.agent-settings-retry-controls input {
+  min-width: 0;
+  width: 100%;
   padding: 11px 12px;
   border: 1px solid #cbdedf;
   border-radius: 9px;
@@ -11112,7 +11117,7 @@ main {
   outline: 3px solid rgba(8, 127, 120, 0.16);
   border-color: var(--teal);
 }
-.agent-settings-retry-controls button {
+.agent-settings-retry-submit {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -11126,12 +11131,60 @@ main {
   font-size: 11px;
   font-weight: 800;
 }
-.agent-settings-retry-controls button:hover:not(:disabled) {
+.agent-settings-retry-submit:hover:not(:disabled) {
   background: #086660;
 }
-.agent-settings-retry-controls button:disabled {
+.agent-settings-retry-submit:disabled {
   cursor: wait;
   opacity: 0.6;
+}
+.agent-settings-retry-suggestions {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  max-height: 290px;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid #cbdedf;
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 12px 28px rgba(24, 73, 78, 0.14);
+}
+.agent-settings-retry-suggestion {
+  display: grid;
+  width: 100%;
+  gap: 3px;
+  padding: 10px 11px;
+  border: 0;
+  border-radius: 7px;
+  color: #31555e;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.agent-settings-retry-suggestion:hover,
+.agent-settings-retry-suggestion.active {
+  background: #edf7f5;
+}
+.agent-settings-retry-suggestion strong {
+  color: #1e525b;
+  font-size: 11px;
+}
+.agent-settings-retry-suggestion span,
+.agent-settings-retry-suggestion small {
+  overflow: hidden;
+  color: #71868b;
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-settings-retry-suggestion-state {
+  padding: 13px;
+  color: #71868b;
+  font-size: 10px;
 }
 .agent-settings-retry-hint {
   margin: 10px 0 0;
@@ -11587,7 +11640,7 @@ main {
     align-items: stretch;
     flex-direction: column;
   }
-  .agent-settings-retry-controls button {
+  .agent-settings-retry-submit {
     min-height: 40px;
   }
   .agent-settings-runtime-facts,

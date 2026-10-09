@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Bot,
@@ -20,7 +20,11 @@ import {
   resetAgentPolicy,
   saveAgentPolicy,
 } from "./agentPolicy";
-import type { AiConfigurationSnapshot, TicketTriageConfig } from "./types";
+import type {
+  AiConfigurationSnapshot,
+  SupportTicket,
+  TicketTriageConfig,
+} from "./types";
 
 type ConfigurationOption = {
   id: string;
@@ -184,6 +188,11 @@ export function AgentConfiguration() {
     null,
   );
   const [retryTicketId, setRetryTicketId] = useState("");
+  const [retrySuggestions, setRetrySuggestions] = useState<SupportTicket[]>([]);
+  const [retrySuggestionsBusy, setRetrySuggestionsBusy] = useState(false);
+  const [retrySuggestionsOpen, setRetrySuggestionsOpen] = useState(false);
+  const [retryActiveSuggestion, setRetryActiveSuggestion] = useState(0);
+  const skipRetrySearchRef = useRef(false);
   const [retryBusy, setRetryBusy] = useState(false);
   const [retryFeedback, setRetryFeedback] = useState<{
     tone: "success" | "error";
@@ -202,6 +211,48 @@ export function AgentConfiguration() {
     }
     void refreshRuntime();
   }, []);
+
+  useEffect(() => {
+    if (skipRetrySearchRef.current) {
+      skipRetrySearchRef.current = false;
+      return;
+    }
+    const query = retryTicketId.trim();
+    if (query.length < 2) {
+      setRetrySuggestions([]);
+      setRetrySuggestionsBusy(false);
+      setRetrySuggestionsOpen(false);
+      setRetryActiveSuggestion(0);
+      return;
+    }
+
+    let cancelled = false;
+    setRetrySuggestionsBusy(true);
+    const timeoutId = window.setTimeout(() => {
+      void api
+        .tickets(query, 1)
+        .then((result) => {
+          if (cancelled) return;
+          setRetrySuggestions(result.data.slice(0, 8));
+          setRetrySuggestionsOpen(true);
+          setRetryActiveSuggestion(0);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setRetrySuggestions([]);
+          setRetrySuggestionsOpen(true);
+          setRetryActiveSuggestion(0);
+        })
+        .finally(() => {
+          if (!cancelled) setRetrySuggestionsBusy(false);
+        });
+    }, 280);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [retryTicketId]);
 
   async function refreshRuntime() {
     setRefreshing(true);
@@ -277,6 +328,17 @@ export function AgentConfiguration() {
     } catch {
       setFeedback("Configuração padrão restaurada nesta sessão.");
     }
+  }
+
+  function selectRetryTicket(ticket: SupportTicket) {
+    if (ticket.ticket_id !== retryTicketId.trim()) {
+      skipRetrySearchRef.current = true;
+    }
+    setRetryTicketId(ticket.ticket_id);
+    setRetrySuggestions([]);
+    setRetrySuggestionsOpen(false);
+    setRetryActiveSuggestion(0);
+    setRetryFeedback(null);
   }
 
   async function requestTicketRetry() {
@@ -634,8 +696,8 @@ export function AgentConfiguration() {
           <History size={23} />
         </header>
         <p className="agent-settings-card-note">
-          Informe um ticket que já foi analisado ou encaminhado pela IA. Uma
-          nova execução usa os dados técnicos atuais, não apaga as análises
+          Busque um ticket já analisado ou encaminhado pela IA. Uma nova
+          execução usa os dados técnicos atuais, não apaga as análises
           anteriores e registra uma nova decisão no histórico de auditoria.
         </p>
         <form
@@ -645,29 +707,120 @@ export function AgentConfiguration() {
             void requestTicketRetry();
           }}
         >
-          <label htmlFor="agent-settings-retry-ticket">
-            Identificador do ticket
-          </label>
+          <label htmlFor="agent-settings-retry-ticket">Buscar ticket</label>
           <div className="agent-settings-retry-controls">
-            <input
-              id="agent-settings-retry-ticket"
-              value={retryTicketId}
-              onChange={(event) => {
-                setRetryTicketId(event.target.value);
-                setRetryFeedback(null);
-              }}
-              placeholder="Ex.: T000123 ou OL-0200557"
-              maxLength={120}
+            <div className="agent-settings-retry-input-wrap">
+              <input
+                id="agent-settings-retry-ticket"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-controls="agent-settings-retry-suggestions"
+                aria-expanded={retrySuggestionsOpen}
+                aria-activedescendant={
+                  retrySuggestionsOpen && retrySuggestions.length > 0
+                    ? `agent-settings-retry-option-${retrySuggestions[retryActiveSuggestion]?.ticket_id}`
+                    : undefined
+                }
+                value={retryTicketId}
+                onChange={(event) => {
+                  setRetryTicketId(event.target.value);
+                  setRetryFeedback(null);
+                  setRetrySuggestionsOpen(true);
+                }}
+                onFocus={() => {
+                  if (retryTicketId.trim().length >= 2) {
+                    setRetrySuggestionsOpen(true);
+                  }
+                }}
+                onBlur={() => setRetrySuggestionsOpen(false)}
+                onKeyDown={(event) => {
+                  if (
+                    event.key === "ArrowDown" &&
+                    retrySuggestions.length > 0
+                  ) {
+                    event.preventDefault();
+                    setRetrySuggestionsOpen(true);
+                    setRetryActiveSuggestion((current) =>
+                      Math.min(current + 1, retrySuggestions.length - 1),
+                    );
+                  } else if (
+                    event.key === "ArrowUp" &&
+                    retrySuggestions.length > 0
+                  ) {
+                    event.preventDefault();
+                    setRetryActiveSuggestion((current) =>
+                      Math.max(current - 1, 0),
+                    );
+                  } else if (
+                    event.key === "Enter" &&
+                    retrySuggestionsOpen &&
+                    retrySuggestions[retryActiveSuggestion]
+                  ) {
+                    event.preventDefault();
+                    selectRetryTicket(retrySuggestions[retryActiveSuggestion]);
+                  } else if (event.key === "Escape") {
+                    setRetrySuggestionsOpen(false);
+                  }
+                }}
+                placeholder="Digite ID, cliente ou parte do relato"
+                maxLength={120}
+                disabled={retryBusy}
+              />
+              {retrySuggestionsOpen && retryTicketId.trim().length >= 2 && (
+                <div
+                  id="agent-settings-retry-suggestions"
+                  className="agent-settings-retry-suggestions"
+                  role="listbox"
+                  aria-label="Tickets encontrados"
+                >
+                  {retrySuggestionsBusy ? (
+                    <div className="agent-settings-retry-suggestion-state">
+                      Buscando tickets…
+                    </div>
+                  ) : retrySuggestions.length > 0 ? (
+                    retrySuggestions.map((ticket, index) => (
+                      <button
+                        key={ticket.ticket_id}
+                        id={`agent-settings-retry-option-${ticket.ticket_id}`}
+                        type="button"
+                        role="option"
+                        aria-selected={index === retryActiveSuggestion}
+                        className={`agent-settings-retry-suggestion ${index === retryActiveSuggestion ? "active" : ""}`}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => selectRetryTicket(ticket)}
+                      >
+                        <strong>{ticket.ticket_id}</strong>
+                        <span>
+                          Cliente {ticket.customer_id} · {ticket.category} ·{" "}
+                          {ticket.channel}
+                        </span>
+                        <small>
+                          {ticket.description || "Sem relato registrado"} ·{" "}
+                          {ticket.city ?? "Localidade não informada"}
+                        </small>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="agent-settings-retry-suggestion-state">
+                      Nenhum ticket encontrado.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <button
+              className="agent-settings-retry-submit"
+              type="submit"
               disabled={retryBusy}
-            />
-            <button type="submit" disabled={retryBusy}>
+            >
               <RefreshCw size={15} />
               {retryBusy ? "Reavaliando…" : "Solicitar nova análise"}
             </button>
           </div>
         </form>
         <p className="agent-settings-retry-hint">
-          A reavaliação manual também pode ser usada em tickets históricos; a
+          Pesquise pelo ID, cliente ou parte do relato e selecione o chamado
+          correto. A reavaliação também pode ser usada em tickets históricos; a
           triagem automática recorrente continua priorizando tickets novos do
           N1.
         </p>
