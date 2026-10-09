@@ -6,14 +6,14 @@ export type AgentPolicy = {
 };
 
 export const agentPolicyStorageKey = "ondaluz.agent.configuration.v1";
-export const globalAssistantFeatureEnabled = false;
+export const globalAssistantFeatureEnabled = true;
 
 export const defaultAgentPolicy: AgentPolicy = {
   capabilities: {
     detect_grouping_candidates: true,
     propose_grouping: true,
     generate_n1_guidance: true,
-    global_assistant: false,
+    global_assistant: true,
     execute_remote_actions: false,
   },
   resources: {

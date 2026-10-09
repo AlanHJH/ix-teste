@@ -210,12 +210,45 @@ export function ProviderTerm({
 }) {
   const id = useId();
   const entry = providerGlossary[term];
+  function explainWithAgent(event?: {
+    preventDefault(): void;
+    stopPropagation(): void;
+  }) {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(
+      new CustomEvent("ondaluz:agent-explain", {
+        detail: {
+          technicalTerm: entry.label,
+          technicalDescription: entry.description,
+        },
+      }),
+    );
+  }
+
   return (
-    <span className="provider-term" tabIndex={0} aria-describedby={id}>
+    <span
+      className="provider-term"
+      role="button"
+      tabIndex={0}
+      aria-describedby={id}
+      aria-label={`${entry.label}. Clique para explicar com o Agente IA.`}
+      title="Clique para explicar com o Agente IA"
+      onClick={explainWithAgent}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          explainWithAgent(event);
+        }
+      }}
+    >
       {children ?? entry.label}
       <span id={id} className="provider-term-tooltip" role="tooltip">
         <strong>{entry.label}</strong>
         {entry.description}
+        <small className="provider-term-ai-hint">
+          Clique para explicar com o Agente IA
+        </small>
       </span>
     </span>
   );

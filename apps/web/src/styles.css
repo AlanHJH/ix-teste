@@ -3347,6 +3347,35 @@ h3 {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+.topology-impact-customers-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.topology-impact-customers-heading > span {
+  margin: 0;
+  color: #55747a;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.topology-impact-toggle {
+  flex: 0 0 auto;
+  border: 1px solid #b9d8d3;
+  border-radius: 6px;
+  padding: 4px 7px;
+  color: #187263;
+  background: #ffffff;
+  font-size: 8px;
+  font-weight: 850;
+}
+.topology-impact-toggle:hover {
+  border-color: #6daf9f;
+  background: #eaf8f4;
+}
 .topology-impact-points > div {
   display: flex;
   align-items: center;
@@ -8063,15 +8092,77 @@ h3 {
 .grouping-topology-modal .physical-topology {
   display: flex;
   flex-direction: column;
+  gap: 8px;
   height: 100%;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  overflow: hidden;
+}
+.grouping-topology-modal .topology-focus-banner,
+.grouping-topology-modal .topology-measurement-alert {
+  margin-bottom: 0;
+  padding: 8px 10px;
+}
+.grouping-topology-modal .topology-focus-help {
+  display: none;
+}
+.grouping-topology-modal .topology-impact-summary {
+  flex: 0 0 auto;
+  gap: 8px;
+  margin-bottom: 0;
+  padding: 9px 11px;
+}
+.grouping-topology-modal .topology-impact-summary > header h2 {
+  font-size: 13px;
+}
+.grouping-topology-modal .topology-impact-summary > header > strong {
+  font-size: 12px;
+}
+.grouping-topology-modal .topology-impact-grid.compact {
+  grid-template-columns: minmax(0, 1.1fr) minmax(220px, 0.9fr);
+  gap: 8px;
+}
+.grouping-topology-modal .topology-impact-points,
+.grouping-topology-modal .topology-impact-customers {
+  padding: 7px 9px;
+}
+.grouping-topology-modal .topology-impact-customers > div {
+  max-height: 108px;
 }
 .grouping-topology-modal .network-graph-panel {
   height: auto;
   flex: 1;
   min-height: 0;
+  padding: 13px;
   border: 0;
   border-radius: 18px;
   box-shadow: none;
+}
+.grouping-topology-modal .network-graph-panel.is-focus-mode {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.grouping-topology-modal
+  .network-graph-panel.is-focus-mode
+  .network-graph-heading
+  p {
+  max-width: 620px;
+  font-size: 11px;
+}
+.grouping-topology-modal
+  .network-graph-panel.is-focus-mode
+  .network-graph-meta {
+  margin: 8px 0 7px;
+}
+.grouping-topology-modal
+  .network-graph-panel.is-focus-mode
+  .network-graph-legend
+  > small:not(.network-graph-issue-legend) {
+  display: none;
+}
+.grouping-topology-modal
+  .network-graph-panel.is-focus-mode
+  .olt-constellations {
+  min-height: 0;
 }
 .grouping-topology-close {
   z-index: 4;
@@ -10847,6 +10938,112 @@ main {
 .iris-response-detail > small {
   color: #6c7e7e;
   font-size: 8px;
+}
+.iris-visualizations {
+  display: grid;
+  gap: 8px;
+}
+.iris-visualization {
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid #cfe5e1;
+  border-radius: 10px;
+  background: #fbfffe;
+}
+.iris-visualization-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+.iris-visualization-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 7px;
+  color: #19796d;
+  background: #def4ee;
+}
+.iris-visualization-header strong,
+.iris-visualization-header small {
+  display: block;
+}
+.iris-visualization-header strong {
+  color: #1c665b;
+  font-size: 10px;
+}
+.iris-visualization-header small {
+  margin-top: 2px;
+  color: #7a9192;
+  font-size: 8px;
+  line-height: 1.35;
+}
+.iris-gauge-icon {
+  font-size: 10px;
+  font-weight: 900;
+}
+.iris-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.iris-kpi-card {
+  display: grid;
+  gap: 3px;
+  padding: 7px;
+  border: 1px solid #d8ebe7;
+  border-radius: 7px;
+  background: #f2faf8;
+}
+.iris-kpi-card span {
+  overflow: hidden;
+  color: #71908e;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.iris-kpi-card strong {
+  color: #1c665b;
+  font-size: 13px;
+}
+.iris-visualization-chart {
+  width: 100%;
+  height: 142px;
+}
+.iris-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.iris-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #4d7071;
+  font-size: 8px;
+}
+.iris-data-table th,
+.iris-data-table td {
+  padding: 5px 4px;
+  border-bottom: 1px solid #e0eeeb;
+  text-align: left;
+  white-space: nowrap;
+}
+.iris-data-table th {
+  color: #6b8586;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.iris-data-table td:first-child {
+  max-width: 118px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.iris-capability-note {
+  color: #19796d !important;
+  font-weight: 800;
 }
 .iris-thinking {
   display: inline-flex;

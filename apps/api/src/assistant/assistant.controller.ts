@@ -6,7 +6,8 @@ import { IrisAssistantService } from "./iris-assistant.service";
 
 const irisReplySchema = {
   type: "object" as const,
-  description: "Resposta explicável da Íris com as fontes MCP consultadas.",
+  description:
+    "Resposta explicável do Agente IA com as fontes MCP consultadas.",
   required: [
     "assistantMessage",
     "summary",
@@ -60,10 +61,10 @@ export class AssistantController {
   constructor(private readonly iris: IrisAssistantService) {}
 
   @ApiRead({
-    summary: "Conversar com a Íris",
+    summary: "Conversar com o Agente IA",
     description:
       "Consulta fontes MCP somente leitura para responder perguntas contextuais da aplicação. Não executa ações operacionais.",
-    responseDescription: "Resposta estruturada da agente Íris.",
+    responseDescription: "Resposta estruturada do Agente IA.",
     schema: irisReplySchema,
     created: true,
   })
@@ -77,7 +78,7 @@ export class AssistantController {
           type: "string",
           minLength: 2,
           maxLength: 600,
-          description: "Pergunta do operador para a Íris.",
+          description: "Pergunta do operador para o Agente IA.",
         },
         history: {
           type: "array",

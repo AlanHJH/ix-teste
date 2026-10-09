@@ -792,6 +792,7 @@ export function NetworkExplorerGraph({
   highlightedEntity,
   topologyIssues,
   loading,
+  focusMode = false,
   onChangeOlt,
   onSelectOlt,
   onSelectPon,
@@ -807,6 +808,7 @@ export function NetworkExplorerGraph({
   highlightedEntity: NetworkEntity | null;
   topologyIssues: TopologyIssue[];
   loading: boolean;
+  focusMode?: boolean;
   onChangeOlt: (olt: string) => void;
   onSelectOlt: (olt: NetworkEntity & { kind: "olt" }) => void;
   onSelectPon: (pon: NetworkEntity & { kind: "pon" }) => void;
@@ -845,16 +847,21 @@ export function NetworkExplorerGraph({
 
   return (
     <section
-      className={`network-graph-panel ${loading ? "is-loading" : ""}`}
+      className={`network-graph-panel ${loading ? "is-loading" : ""} ${focusMode ? "is-focus-mode" : ""}`}
       aria-labelledby="network-graph-title"
     >
       <header className="network-graph-heading">
         <div>
-          <span className="section-label">Mapa de entidades</span>
-          <h1 id="network-graph-title">Infraestrutura de rede</h1>
+          <span className="section-label">
+            {focusMode ? "NOC · Topologia afetada" : "Mapa de entidades"}
+          </span>
+          <h1 id="network-graph-title">
+            {focusMode ? "Mapa da infraestrutura" : "Infraestrutura de rede"}
+          </h1>
           <p>
-            Selecione uma OLT, arraste o mapa para navegar e clique nos
-            equipamentos para ver detalhes ou abrir a próxima camada.
+            {focusMode
+              ? "Clique nos nós para abrir os dados técnicos e expandir somente a camada necessária."
+              : "Selecione uma OLT, arraste o mapa para navegar e clique nos equipamentos para ver detalhes ou abrir a próxima camada."}
           </p>
         </div>
         <div className="network-graph-actions">

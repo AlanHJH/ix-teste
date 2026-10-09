@@ -2,7 +2,7 @@ import { MessageCircle, Sparkles } from "lucide-react";
 
 export function OpenIrisChatButton({
   onClick,
-  label = "Abrir chat com a Íris",
+  label = "Abrir o Agente IA",
   compact = false,
 }: {
   onClick: () => void;

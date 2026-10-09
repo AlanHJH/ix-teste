@@ -111,10 +111,13 @@ function focusPoints(grouping: TopologyFocus) {
 function TopologyImpactSummary({
   grouping,
   devicesByCto,
+  compact = false,
 }: {
   grouping: TopologyFocus;
   devicesByCto: Record<string, EquipmentPath[]>;
+  compact?: boolean;
 }) {
+  const [showDetails, setShowDetails] = useState(false);
   const affectedDevices = Object.values(devicesByCto)
     .flat()
     .filter((device) => focusMatchesDevice(grouping, device))
@@ -144,7 +147,7 @@ function TopologyImpactSummary({
           {grouping.affectedCpes.toLocaleString("pt-BR")} CPEs estimadas
         </strong>
       </header>
-      <div className="topology-impact-grid">
+      <div className={`topology-impact-grid ${compact ? "compact" : ""}`}>
         <div className="topology-impact-points">
           <span>Pontos da rota afetada</span>
           <div>
@@ -161,34 +164,49 @@ function TopologyImpactSummary({
           </div>
         </div>
         <div className="topology-impact-customers">
-          <span>
-            Clientes identificados no recorte ({affectedDevices.length})
-          </span>
-          {affectedDevices.length > 0 ? (
-            <div>
-              {affectedDevices.map((device) => (
-                <span
-                  className="topology-impact-customer"
-                  key={device.serial}
-                  title={"CPE " + device.serial}
-                >
-                  <strong>{device.customer_id}</strong>
-                  <small>{device.serial}</small>
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p>
-              Expanda a CTO correspondente para carregar os clientes deste
-              escopo.
-            </p>
-          )}
+          <div className="topology-impact-customers-heading">
+            <span>
+              Clientes identificados no recorte ({affectedDevices.length})
+            </span>
+            {compact && (
+              <button
+                type="button"
+                className="topology-impact-toggle"
+                onClick={() => setShowDetails((current) => !current)}
+                aria-expanded={showDetails}
+              >
+                {showDetails ? "Ocultar detalhes" : "Ver detalhes"}
+              </button>
+            )}
+          </div>
+          {(!compact || showDetails) &&
+            (affectedDevices.length > 0 ? (
+              <div>
+                {affectedDevices.map((device) => (
+                  <span
+                    className="topology-impact-customer"
+                    key={device.serial}
+                    title={"CPE " + device.serial}
+                  >
+                    <strong>{device.customer_id}</strong>
+                    <small>{device.serial}</small>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p>
+                Expanda a CTO correspondente para carregar os clientes deste
+                escopo.
+              </p>
+            ))}
         </div>
       </div>
-      <small className="topology-impact-note">
-        A lista representa o alcance calculado pelo inventário e pelo
-        agrupamento; a confirmação da causa continua sendo operacional.
-      </small>
+      {!compact && (
+        <small className="topology-impact-note">
+          A lista representa o alcance calculado pelo inventário e pelo
+          agrupamento; a confirmação da causa continua sendo operacional.
+        </small>
+      )}
     </section>
   );
 }
@@ -531,7 +549,11 @@ export function PhysicalTopology({
         <TopologyMeasurementAlert issue={measurementIssue} />
       )}
       {focus && (
-        <TopologyImpactSummary grouping={focus} devicesByCto={devicesByCto} />
+        <TopologyImpactSummary
+          grouping={focus}
+          devicesByCto={devicesByCto}
+          compact={Boolean(onClose)}
+        />
       )}
       {error && <p className="physical-error">{error}</p>}
 
@@ -549,6 +571,7 @@ export function PhysicalTopology({
             ...(measurementIssue ? [measurementIssue] : []),
           ]}
           loading={loading}
+          focusMode={Boolean(onClose)}
           onChangeOlt={(olt) => void chooseOlt(olt)}
           onSelectOlt={setModalEntity}
           onSelectPon={setModalEntity}

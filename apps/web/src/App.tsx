@@ -1112,6 +1112,36 @@ function OperationsApp({
   const [assistantContext, setAssistantContext] = useState<IrisContext>({});
   const [assistantRequestKey, setAssistantRequestKey] = useState(0);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    function handleTechnicalExplanation(event: Event) {
+      const detail = (
+        event as CustomEvent<{
+          technicalTerm?: string;
+          technicalDescription?: string;
+        }>
+      ).detail;
+      if (!detail?.technicalTerm) return;
+      setAssistantContext({
+        entity: detail.technicalTerm,
+        selection: detail.technicalDescription,
+        technicalTerm: detail.technicalTerm,
+        technicalDescription: detail.technicalDescription,
+      });
+      setAssistantRequestKey((current) => current + 1);
+    }
+
+    window.addEventListener(
+      "ondaluz:agent-explain",
+      handleTechnicalExplanation,
+    );
+    return () =>
+      window.removeEventListener(
+        "ondaluz:agent-explain",
+        handleTechnicalExplanation,
+      );
+  }, []);
+
   useEffect(() => {
     api
       .overview()

@@ -356,6 +356,8 @@ export type IrisContext = {
   problemId?: string;
   customerId?: string;
   serial?: string;
+  technicalTerm?: string;
+  technicalDescription?: string;
 };
 
 export type IrisEvidence = {
@@ -368,11 +370,27 @@ export type IrisSource = {
   tool: string;
 };
 
+export type IrisVisualization = {
+  kind: "kpi" | "bar" | "line" | "table";
+  title: string;
+  description: string;
+  unit: string;
+  primaryLabel: string;
+  secondaryLabel: string;
+  points: Array<{
+    label: string;
+    value: number;
+    secondaryValue: number;
+    detail: string;
+  }>;
+};
+
 export type IrisReply = {
   assistantMessage: string;
   summary: string;
   evidence: IrisEvidence[];
   sources: IrisSource[];
+  visualizations: IrisVisualization[];
   suggestedQuestions: string[];
   actionNote: string;
   model: "openai" | "fallback" | "unavailable";

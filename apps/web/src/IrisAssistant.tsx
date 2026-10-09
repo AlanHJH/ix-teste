@@ -1,17 +1,35 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Bot,
+  BarChart3,
   ChevronRight,
   Database,
   LoaderCircle,
   Send,
   ShieldCheck,
   Sparkles,
+  Table2,
   X,
 } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { api } from "./api";
 import { globalAssistantEnabled, useAgentPolicy } from "./agentPolicy";
-import type { IrisChatMessage, IrisContext, IrisReply } from "./types";
+import type {
+  IrisChatMessage,
+  IrisContext,
+  IrisReply,
+  IrisVisualization,
+} from "./types";
 
 type Props = {
   view: string;
@@ -66,10 +84,16 @@ const suggestionsByView: Record<string, string[]> = {
   ],
   "agent-config": [
     "Quais fontes MCP estão disponíveis?",
-    "Como a Íris protege ações operacionais?",
+    "Como o Agente IA protege ações operacionais?",
     "O que significa somente leitura aqui?",
   ],
 };
+
+const openEndedSuggestions = [
+  "Monte um resumo com os principais indicadores.",
+  "Compare os principais grupos encontrados.",
+  "Mostre uma tendência em gráfico.",
+];
 
 const viewLabels: Record<string, string> = {
   dashboard: "Dashboard",
@@ -83,7 +107,182 @@ const viewLabels: Record<string, string> = {
   "agent-config": "Configuração IA",
 };
 
+const visualizationNumber = new Intl.NumberFormat("pt-BR", {
+  maximumFractionDigits: 2,
+});
+
+function visualizationValue(value: number, unit: string) {
+  return `${visualizationNumber.format(value)}${unit ? ` ${unit}` : ""}`;
+}
+
+function visualizationTooltipValue(value: unknown, unit: string) {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number)
+    ? visualizationValue(number, unit)
+    : String(value ?? "—");
+}
+
+function AgentVisualization({
+  visualization,
+}: {
+  visualization: IrisVisualization;
+}) {
+  const chartData = visualization.points.map((point) => ({
+    name: point.label,
+    value: point.value,
+    secondaryValue: point.secondaryValue,
+  }));
+  const hasSecondary =
+    Boolean(visualization.secondaryLabel) &&
+    visualization.points.some((point) => point.secondaryValue !== 0);
+  const icon =
+    visualization.kind === "kpi" ? <GaugeIcon /> : <BarChart3 size={15} />;
+
+  return (
+    <section className="iris-visualization">
+      <header className="iris-visualization-header">
+        <span className="iris-visualization-icon" aria-hidden="true">
+          {icon}
+        </span>
+        <div>
+          <strong>{visualization.title}</strong>
+          <small>{visualization.description}</small>
+        </div>
+      </header>
+      {visualization.kind === "kpi" ? (
+        <div className="iris-kpi-grid">
+          {visualization.points.map((point) => (
+            <div className="iris-kpi-card" key={point.label}>
+              <span>{point.label}</span>
+              <strong>
+                {visualizationValue(point.value, visualization.unit)}
+              </strong>
+            </div>
+          ))}
+        </div>
+      ) : visualization.kind === "table" ? (
+        <div className="iris-table-scroll">
+          <table className="iris-data-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>{visualization.primaryLabel || "Valor"}</th>
+                {hasSecondary && <th>{visualization.secondaryLabel}</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {visualization.points.map((point) => (
+                <tr key={point.label}>
+                  <td title={point.detail}>{point.label}</td>
+                  <td>{visualizationValue(point.value, visualization.unit)}</td>
+                  {hasSecondary && (
+                    <td>
+                      {visualizationValue(
+                        point.secondaryValue,
+                        visualization.unit,
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="iris-visualization-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            {visualization.kind === "line" ? (
+              <LineChart
+                data={chartData}
+                margin={{ top: 8, right: 8, left: -24, bottom: 0 }}
+              >
+                <CartesianGrid
+                  vertical={false}
+                  stroke="#d8e8e6"
+                  strokeDasharray="4 4"
+                />
+                <XAxis
+                  dataKey="name"
+                  tickLine={false}
+                  axisLine={false}
+                  fontSize={9}
+                />
+                <YAxis tickLine={false} axisLine={false} fontSize={9} />
+                <Tooltip
+                  formatter={(value) =>
+                    visualizationTooltipValue(value, visualization.unit)
+                  }
+                />
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  name={visualization.primaryLabel || "Valor"}
+                  stroke="#168476"
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
+                {hasSecondary && (
+                  <Line
+                    type="monotone"
+                    dataKey="secondaryValue"
+                    name={visualization.secondaryLabel}
+                    stroke="#d77a66"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                  />
+                )}
+              </LineChart>
+            ) : (
+              <BarChart
+                data={chartData}
+                margin={{ top: 8, right: 8, left: -24, bottom: 0 }}
+              >
+                <CartesianGrid
+                  vertical={false}
+                  stroke="#d8e8e6"
+                  strokeDasharray="4 4"
+                />
+                <XAxis
+                  dataKey="name"
+                  tickLine={false}
+                  axisLine={false}
+                  fontSize={9}
+                />
+                <YAxis tickLine={false} axisLine={false} fontSize={9} />
+                <Tooltip
+                  formatter={(value) =>
+                    visualizationTooltipValue(value, visualization.unit)
+                  }
+                />
+                <Bar
+                  dataKey="value"
+                  name={visualization.primaryLabel || "Valor"}
+                  fill="#168476"
+                  radius={[4, 4, 0, 0]}
+                />
+                {hasSecondary && (
+                  <Bar
+                    dataKey="secondaryValue"
+                    name={visualization.secondaryLabel}
+                    fill="#d77a66"
+                    radius={[4, 4, 0, 0]}
+                  />
+                )}
+              </BarChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function GaugeIcon() {
+  return <span className="iris-gauge-icon">%</span>;
+}
+
 function contextLabel(context: IrisContext) {
+  if (context.technicalTerm) return `termo técnico ${context.technicalTerm}`;
   if (context.ticketId) return `ticket ${context.ticketId}`;
   if (context.problemId) return `problema ${context.problemId}`;
   if (context.customerId) return `cliente ${context.customerId}`;
@@ -93,7 +292,7 @@ function contextLabel(context: IrisContext) {
 function welcomeMessage(view: string, context: IrisContext): IrisMessage {
   return {
     role: "assistant",
-    content: `Sou a Íris. Estou olhando a página ${viewLabels[view] ?? "atual"} e o ${contextLabel(context)}. Posso cruzar dados de clientes, inventário, telemetria, diagnósticos, chamados, topologia e operação pelo MCP. O que você quer investigar?`,
+    content: `Sou o Agente IA. Estou olhando a página ${viewLabels[view] ?? "atual"} e o ${contextLabel(context)}. Posso cruzar dados de clientes, inventário, telemetria, diagnósticos, chamados, topologia e operação pelo MCP. O que você quer investigar?`,
   };
 }
 
@@ -118,17 +317,39 @@ export function IrisAssistant({
     welcomeMessage(view, initialContext),
   ]);
 
-  const suggestions = useMemo(
-    () =>
-      initialContext.ticketId || initialContext.problemId
+  const suggestions = useMemo(() => {
+    const contextual = initialContext.technicalTerm
+      ? [
+          `Explique ${initialContext.technicalTerm} nesta tela.`,
+          "Quais sinais devo conferir junto com este dado?",
+          "Que erro de interpretação devo evitar?",
+        ]
+      : initialContext.ticketId || initialContext.problemId
         ? [
             "Qual é a hipótese mais provável para este caso?",
             "Quais evidências do MCP sustentam essa hipótese?",
             "Qual é a próxima verificação segura?",
           ]
-        : (suggestionsByView[view] ?? suggestionsByView.dashboard),
-    [initialContext.problemId, initialContext.ticketId, view],
-  );
+        : (suggestionsByView[view] ?? suggestionsByView.dashboard);
+    return Array.from(new Set([...contextual, ...openEndedSuggestions])).slice(
+      0,
+      6,
+    );
+  }, [
+    initialContext.problemId,
+    initialContext.technicalTerm,
+    initialContext.ticketId,
+    view,
+  ]);
+
+  const generatedSuggestions = useMemo(() => {
+    const latestReply = [...messages]
+      .reverse()
+      .find((message) => message.reply)?.reply;
+    return Array.from(
+      new Set([...(latestReply?.suggestedQuestions ?? []), ...suggestions]),
+    ).slice(0, 6);
+  }, [messages, suggestions]);
 
   useEffect(() => {
     if (!enabled) setOpen(false);
@@ -144,6 +365,12 @@ export function IrisAssistant({
     if (requestKey > 0) setOpen(true);
   }, [requestKey]);
 
+  useEffect(() => {
+    if (requestKey <= 0 || !initialContext.technicalTerm) return;
+    const prompt = `Explique o termo técnico ${initialContext.technicalTerm} em linguagem simples, diga por que ele importa nesta tela e quais sinais devo conferir junto com ele.`;
+    void sendMessage(prompt, [welcomeMessage(view, initialContext)]);
+  }, [requestKey]);
+
   if (!enabled) return null;
 
   function openAssistant() {
@@ -151,11 +378,11 @@ export function IrisAssistant({
     setError("");
   }
 
-  async function sendMessage(value: string) {
+  async function sendMessage(value: string, seedMessages = messages) {
     const message = value.trim().slice(0, 600);
     if (!message || busy) return;
     const nextMessages: IrisMessage[] = [
-      ...messages,
+      ...seedMessages,
       { role: "user", content: message },
     ];
     setMessages(nextMessages);
@@ -180,7 +407,7 @@ export function IrisAssistant({
       setError(
         reason instanceof Error
           ? reason.message
-          : "Não foi possível consultar a Íris agora.",
+          : "Não foi possível consultar o Agente IA agora.",
       );
     } finally {
       setBusy(false);
@@ -195,23 +422,23 @@ export function IrisAssistant({
   return (
     <>
       {open && (
-        <aside className="iris-drawer" aria-label="Assistente Íris">
+        <aside className="iris-drawer" aria-label="Agente IA">
           <header className="iris-drawer-header">
             <div className="iris-identity">
               <span className="iris-avatar" aria-hidden="true">
                 <Sparkles size={18} />
               </span>
               <div>
-                <strong>Íris</strong>
-                <span>Inteligência de Rede, Inventário e Suporte</span>
+                <strong>Agente IA</strong>
+                <span>Explicações técnicas com contexto operacional</span>
               </div>
             </div>
             <button
               className="iris-close"
               type="button"
               onClick={() => setOpen(false)}
-              aria-label="Fechar Íris"
-              title="Fechar Íris"
+              aria-label="Fechar Agente IA"
+              title="Fechar Agente IA"
             >
               <X size={18} />
             </button>
@@ -235,6 +462,10 @@ export function IrisAssistant({
             )}
             <small>
               <Database size={12} /> 7 contextos MCP · dados sob demanda
+            </small>
+            <small className="iris-capability-note">
+              <BarChart3 size={12} /> Peça indicadores, ranking, tendência ou
+              tabela
             </small>
           </div>
 
@@ -266,6 +497,18 @@ export function IrisAssistant({
                           ))}
                         </ul>
                       )}
+                      {(message.reply.visualizations ?? []).length > 0 && (
+                        <div className="iris-visualizations">
+                          {(message.reply.visualizations ?? []).map(
+                            (visualization) => (
+                              <AgentVisualization
+                                key={`${visualization.kind}-${visualization.title}`}
+                                visualization={visualization}
+                              />
+                            ),
+                          )}
+                        </div>
+                      )}
                       <div className="iris-response-meta">
                         <span>
                           <Database size={11} /> {modelLabel(message.reply)}
@@ -291,8 +534,8 @@ export function IrisAssistant({
           </div>
 
           <div className="iris-suggestions">
-            <span>Perguntas rápidas</span>
-            {suggestions.map((suggestion) => (
+            <span>Explore os dados</span>
+            {generatedSuggestions.map((suggestion) => (
               <button
                 type="button"
                 key={suggestion}
@@ -308,8 +551,8 @@ export function IrisAssistant({
             <input
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Pergunte à Íris…"
-              aria-label="Pergunta para a Íris"
+              placeholder="Pergunte ao Agente IA…"
+              aria-label="Pergunta para o Agente IA"
               maxLength={600}
               disabled={busy}
             />
@@ -324,8 +567,8 @@ export function IrisAssistant({
             </p>
           )}
           <p className="iris-note">
-            A Íris mostra evidências e incertezas. Ela não executa mudanças nem
-            substitui a decisão do operador.
+            O Agente IA mostra evidências e incertezas. Ele não executa mudanças
+            nem substitui a decisão do operador.
           </p>
         </aside>
       )}
@@ -340,11 +583,11 @@ export function IrisAssistant({
           }
         }}
         aria-expanded={open}
-        aria-label={open ? "Fechar Íris" : "Abrir Íris"}
-        title="Perguntar à Íris"
+        aria-label={open ? "Fechar Agente IA" : "Abrir Agente IA"}
+        title="Explicar com o Agente IA"
       >
         {open ? <X size={20} /> : <Sparkles size={20} />}
-        <span>{open ? "Fechar" : "Perguntar à Íris"}</span>
+        <span>{open ? "Fechar" : "Agente IA"}</span>
       </button>
     </>
   );

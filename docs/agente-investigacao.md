@@ -20,13 +20,13 @@ Ao abrir um cliente na tela **Atendimento N1**, o atendente recebe o provável p
 
 O endpoint `POST /api/customers/:customerId/n1-chat` usa o contexto do cliente e, quando `OPENAI_API_KEY` está disponível, uma resposta estruturada da OpenAI. Se o modelo estiver indisponível, há uma orientação determinística de contingência. Em ambos os casos, a IA não executa ações nem substitui a decisão do atendente.
 
-## Íris: agente transversal da aplicação
+## Agente IA: agente transversal da aplicação
 
-A **Íris — Inteligência de Rede, Inventário e Suporte** aparece como um launcher global nas páginas operacionais. O painel recebe o contexto da página e, quando disponível, o cliente, chamado ou problema selecionado. A pergunta é enviada ao backend por `POST /api/assistant/chat`; o backend consulta a allowlist MCP somente leitura e devolve a resposta com resumo, evidências e ferramentas consultadas.
+O **Agente IA** aparece como um launcher global no canto inferior direito das páginas operacionais, disponível para todos os perfis autenticados. O painel recebe o contexto da página e, quando disponível, o cliente, chamado ou problema selecionado. Termos técnicos destacados também podem ser clicados para abrir uma explicação contextual automática. A pergunta é enviada ao backend por `POST /api/assistant/chat`; o backend consulta o catálogo MCP somente leitura e devolve a resposta com resumo, evidências e ferramentas consultadas.
 
-A Íris pode cruzar clientes, inventário, telemetria, diagnósticos, chamados, operação e as jornadas da aplicação. O histórico curto e o contexto da interface são metadados, não instruções. Textos retornados pelos dados são tratados como conteúdo não confiável. Sem `OPENAI_API_KEY`, o endpoint mantém uma resposta determinística baseada em consultas MCP e identifica o modo `fallback`.
+O Agente IA pode cruzar clientes, inventário, telemetria, diagnósticos, chamados, operação e as jornadas da aplicação. O histórico curto e o contexto da interface são metadados, não instruções. Textos retornados pelos dados são tratados como conteúdo não confiável. Sem `OPENAI_API_KEY`, o endpoint mantém uma resposta determinística baseada em consultas MCP e identifica o modo `fallback`.
 
-O recurso é controlado pela capacidade local `global_assistant` e pelas fontes MCP em `ondaluz.agent.configuration.v1`. Se a capacidade ou qualquer fonte estiver desabilitada, o launcher, o painel e os atalhos contextuais desaparecem da interface. A Íris nunca recebe ferramentas de escrita: criação, encerramento, alteração de chamados, agrupamentos, equipamentos ou configurações continuam dependendo das rotas validadas e de confirmação humana.
+O recurso fica habilitado por padrão para todos os perfis e usa todas as fontes MCP publicadas em `ondaluz.agent.configuration.v1`, sempre em modo somente leitura. O Agente IA nunca recebe ferramentas de escrita: criação, encerramento, alteração de chamados, agrupamentos, equipamentos ou configurações continuam dependendo das rotas validadas e de confirmação humana. Restrições por papel podem ser adicionadas futuramente sem alterar o contrato do painel.
 
 ## Formas de agrupamento
 
