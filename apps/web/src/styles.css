@@ -13571,6 +13571,17 @@ main {
   color: #7891a6 !important;
 }
 
+.grouping-detail-scope-value .grouping-scope-segment {
+  color: #153f46 !important;
+  background: #dcefed !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+}
+
+.grouping-detail-scope-value .grouping-scope-separator {
+  color: #5d777e !important;
+}
+
 .investigation-card-open > footer,
 .active-grouping-card-open > footer {
   color: var(--ixc-accent) !important;
