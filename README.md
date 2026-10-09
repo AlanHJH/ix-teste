@@ -19,6 +19,9 @@ Protótipo de decisão operacional para a Ondaluz Telecom. A aplicação cruza i
 | Experimento de organização DDD         | [`docs/arquitetura-ddd.md`](docs/arquitetura-ddd.md)               |
 | Agente OpenAI e revisão humana         | [`docs/agente-investigacao.md`](docs/agente-investigacao.md)       |
 | Cobertura integral do enunciado        | [`docs/conformidade-enunciado.md`](docs/conformidade-enunciado.md) |
+| Caso detalhado OLT-2/PON 1/7           | [`docs/caso-pon-1-7.md`](docs/caso-pon-1-7.md)                     |
+| Roteiro para apresentação              | [`docs/roteiro-apresentacao.md`](docs/roteiro-apresentacao.md)     |
+| Registro de implementação              | [`docs/registro-implementacao.md`](docs/registro-implementacao.md) |
 | Execução integral com um único comando | `docker compose up --build`                                        |
 
 ## Estrutura da entrega

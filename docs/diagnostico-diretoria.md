@@ -4,6 +4,12 @@
 
 **Público:** Ricardo, CEO
 
+> Para a demonstração atual do fluxo N1 → NOC, consulte também o [registro
+> detalhado da OLT-2/PON 1/7](caso-pon-1-7.md) e o [roteiro de
+> apresentação](roteiro-apresentacao.md). Este documento mantém a visão
+> executiva do período completo; o registro novo detalha a investigação
+> operacional e a decisão humana feita sobre uma PON específica.
+
 **Conclusão:** o aumento de chamados não tem uma causa única. Há três problemas independentes, com tratamentos diferentes. A prioridade é corrigir o trecho compartilhado de fibra no Jardim Aurora, conter o firmware Kestrel 2.4.1 e bloquear novas ativações incompatíveis do Turbo 500. Trocar todos os Tuim e reiniciar todo o parque diariamente custaria caro sem atacar as causas observadas.
 
 ## O que mudou
