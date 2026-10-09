@@ -189,6 +189,43 @@ describe("TicketsService.create", () => {
 });
 
 describe("TicketsService.updateNocStatus", () => {
+  it("preserva a transição completa de recebido a encerrado", async () => {
+    let currentStatus = "pending";
+    const database = {
+      async query(text: string, params: unknown[]) {
+        if (text.includes("UPDATE tickets")) {
+          const expectedStatus = text.includes("noc_status='pending'")
+            ? "pending"
+            : "in_progress";
+          if (currentStatus !== expectedStatus) return { rows: [] };
+          currentStatus = String(params[1]);
+          return {
+            rows: [
+              {
+                ticket_id: params[0],
+                noc_status: currentStatus,
+                closed_at: currentStatus === "closed" ? "now" : null,
+              },
+            ],
+          };
+        }
+        throw new Error("consulta inesperada");
+      },
+    } as unknown as DatabaseService;
+    const service = new TicketsService(new PostgresTicketsRepository(database));
+
+    const inProgress = await service.updateNocStatus(
+      "tn1-transicao",
+      "in_progress",
+    );
+    const closed = await service.updateNocStatus("tn1-transicao", "closed");
+
+    assert.equal(inProgress.noc_status, "in_progress");
+    assert.equal(closed.noc_status, "closed");
+    assert.equal(closed.closed_at, "now");
+    assert.equal(currentStatus, "closed");
+  });
+
   it("move um chamado recebido para em andamento", async () => {
     const queries: Array<{ text: string; params: unknown[] }> = [];
     const database = {

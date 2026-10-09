@@ -47,7 +47,6 @@ import {
   TicketTriageRetryDto,
 } from "../contracts/input.dto";
 import { TicketIdParamDto } from "../contracts/params.dto";
-import { ticketCategories } from "./domain/ticket";
 
 const ticketFilterKinds = new Set<TicketFilterKind>([
   "ticket",
@@ -79,7 +78,7 @@ export function parseTicketFilters(
   });
 }
 
-const ticketSchema = {
+export const ticketSchema = {
   type: "object" as const,
   description:
     "Chamado de atendimento enriquecido com localização e topologia.",
@@ -88,10 +87,10 @@ const ticketSchema = {
     opened_at: apiDateTime("Data e hora de abertura."),
     customer_id: apiString("Código do cliente.", "C169781"),
     channel: apiString("Canal de entrada.", "Telefone"),
-    category: {
-      ...apiString("Categoria.", "Sem conexão"),
-      enum: [...ticketCategories],
-    },
+    category: apiString(
+      "Categoria registrada no histórico ou no atendimento N1.",
+      "Sem conexão",
+    ),
     description: apiString("Relato registrado."),
     resolution: apiString("Desfecho registrado.", "Escalado para NOC"),
     closed_at: { ...apiDateTime("Data de encerramento."), nullable: true },
