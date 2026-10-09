@@ -503,10 +503,10 @@ export class CustomersService {
         optical_rx_min_dbm: number | null;
         optical_low_days: number;
         wifi_signal_raw: number | null;
-        last_day: string;
+        last_day: string | null;
       }>(
         `
-        WITH b AS (SELECT max(day) max_day FROM daily_cpe_metrics)
+        WITH b AS (SELECT max(day) max_day FROM daily_cpe_metrics WHERE serial=$1)
         SELECT round(min(mem_min_pct)::numeric,1) AS mem_min_pct,
           sum(reboot_count)::int AS reboot_count, min(lan_min_mbps)::int AS lan_min_mbps,
           round(min(optical_rx_min_dbm)::numeric,1) AS optical_rx_min_dbm,
@@ -560,6 +560,16 @@ export class CustomersService {
 
     const metrics = metricsResult.rows[0];
     const diagnostic = diagnosticsResult.rows[0] ?? null;
+    const normalizedMetrics = {
+      mem_min_pct: metrics.mem_min_pct,
+      reboot_count: metrics.reboot_count ?? 0,
+      lan_min_mbps: metrics.lan_min_mbps,
+      optical_rx_min_dbm: metrics.optical_rx_min_dbm,
+      optical_low_days: metrics.optical_low_days ?? 0,
+      wifi_signal_raw: metrics.wifi_signal_raw,
+      last_day: metrics.last_day,
+      diagnostic,
+    };
     const signals: CustomerSignals = {
       vendor: equipment.vendor,
       model: equipment.model,
@@ -570,10 +580,10 @@ export class CustomersService {
       olt: equipment.olt,
       ponPort: equipment.pon_port,
       memMinPct: metrics.mem_min_pct,
-      rebootCount: metrics.reboot_count ?? 0,
+      rebootCount: normalizedMetrics.reboot_count,
       lanMinMbps: metrics.lan_min_mbps,
       opticalRxMinDbm: metrics.optical_rx_min_dbm,
-      opticalLowDays: metrics.optical_low_days ?? 0,
+      opticalLowDays: normalizedMetrics.optical_low_days,
       wifiSignalRaw: metrics.wifi_signal_raw,
       diagnosticRatio: diagnostic?.ratio ?? null,
     };
@@ -653,7 +663,7 @@ export class CustomersService {
         planSince: equipment.plan_since,
         network: `${equipment.olt} · PON ${equipment.pon_port} · ${equipment.cto}`,
       },
-      metrics: { ...metrics, diagnostic },
+      metrics: normalizedMetrics,
       decision,
       preflight: {
         infrastructureChecked: true,

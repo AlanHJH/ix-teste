@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Clock3,
+  FlaskConical,
   Gauge,
   GitBranch,
   Headphones,
@@ -49,6 +50,7 @@ import { DynamicDashboard } from "./DynamicDashboard";
 import { OfflineDiagnosis } from "./OfflineDiagnosis";
 import { CustomersDirectory } from "./CustomersDirectory";
 import { PhysicalTopology } from "./PhysicalTopology";
+import { DataLabPage } from "./DataLabPage";
 import { topologyFocusFromSupport } from "./topologyFocus";
 import { connectScreenUpdates, useScreenDataUpdates } from "./realtime";
 import ixcLogo from "./assets/ixc-logo.svg";
@@ -1506,6 +1508,17 @@ function OperationsApp({
               Clientes
             </button>
           )}
+          {canAccessView(user.role, "data-lab") && (
+            <button
+              className={view === "data-lab" ? "active" : ""}
+              aria-current={view === "data-lab" ? "page" : undefined}
+              title="Gere cenários de dados para validar a arquitetura e a detecção."
+              onClick={() => navigate("data-lab")}
+            >
+              <FlaskConical size={17} />
+              Laboratório de dados
+            </button>
+          )}
         </nav>
         <div className="sidebar-user">
           <span className={`sidebar-avatar ${user.role}`}>{user.initials}</span>
@@ -1561,6 +1574,8 @@ function OperationsApp({
             />
           ) : view === "agent-config" ? (
             <AgentConfiguration />
+          ) : view === "data-lab" ? (
+            <DataLabPage />
           ) : view === "topology" ? (
             <TopologyMap onOpenNoc={() => navigate("noc")} />
           ) : view === "tickets" ? (

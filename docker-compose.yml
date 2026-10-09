@@ -28,7 +28,34 @@ services:
         condition: service_healthy
     volumes:
       - ./ondaluz-pack/data:/dataset:ro
-    restart: "no"
+
+  redpanda:
+    image: redpandadata/redpanda:v24.3.9
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 512M
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --api-urls 127.0.0.1:9644"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
 
   api:
     build:
@@ -57,15 +84,31 @@ services:
       AGENT_SCHEDULE_ENABLED: ${AGENT_SCHEDULE_ENABLED:-false}
       AGENT_SCHEDULE_INTERVAL_MS: ${AGENT_SCHEDULE_INTERVAL_MS:-3600000}
       AGENT_METRIC_TRIGGER_ENABLED: ${AGENT_METRIC_TRIGGER_ENABLED:-true}
-      AGENT_METRIC_TRIGGER_INTERVAL_MS: ${AGENT_METRIC_TRIGGER_INTERVAL_MS:-300000}
+      AGENT_METRIC_TRIGGER_INTERVAL_MS: ${AGENT_METRIC_TRIGGER_INTERVAL_MS:-900000}
+      TELEMETRY_INGEST_CONCURRENCY: ${TELEMETRY_INGEST_CONCURRENCY:-8}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-20}
+      DATABASE_STATEMENT_TIMEOUT_MS: ${DATABASE_STATEMENT_TIMEOUT_MS:-30000}
+      API_JSON_LIMIT: ${API_JSON_LIMIT:-8mb}
+      DATA_LAB_MAX_ROWS: ${DATA_LAB_MAX_ROWS:-5000000}
+      AGENT_DAILY_SCHEDULE_INTERVAL_MS: ${AGENT_DAILY_SCHEDULE_INTERVAL_MS:-86400000}
+      AGENT_WEEKLY_SCHEDULE_INTERVAL_MS: ${AGENT_WEEKLY_SCHEDULE_INTERVAL_MS:-604800000}
       TICKET_TRIAGE_SCHEDULE_ENABLED: ${TICKET_TRIAGE_SCHEDULE_ENABLED:-true}
       TICKET_TRIAGE_INTERVAL_MS: ${TICKET_TRIAGE_INTERVAL_MS:-900000}
       TICKET_TRIAGE_BATCH_SIZE: ${TICKET_TRIAGE_BATCH_SIZE:-10}
       TICKET_TRIAGE_MIN_CONFIDENCE: ${TICKET_TRIAGE_MIN_CONFIDENCE:-0.9}
       TICKET_TRIAGE_AUTO_CLOSE: ${TICKET_TRIAGE_AUTO_CLOSE:-false}
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-true}
+      KAFKA_BROKERS: ${KAFKA_BROKERS:-redpanda:9092}
+      KAFKA_CLIENT_ID: ${KAFKA_CLIENT_ID:-ondaluz-api}
+      KAFKA_TELEMETRY_TOPIC: ${KAFKA_TELEMETRY_TOPIC:-ondaluz.informs.v1}
+      KAFKA_GROUP_ID: ${KAFKA_GROUP_ID:-ondaluz-telemetry-normalizer}
+      KAFKA_PARTITIONS: ${KAFKA_PARTITIONS:-3}
+      KAFKAJS_NO_PARTITIONER_WARNING: ${KAFKAJS_NO_PARTITIONER_WARNING:-1}
     depends_on:
       data-loader:
         condition: service_completed_successfully
+      redpanda:
+        condition: service_healthy
     init: true
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]

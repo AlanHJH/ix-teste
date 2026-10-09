@@ -1,12 +1,12 @@
 export type Incident = {
   id: string;
-  severity: "critical" | "high" | "medium";
+  severity: "critical" | "high" | "medium" | "low";
   scope: "firmware" | "network" | "equipment" | "customer";
   title: string;
   location: string;
   affected: number;
   score: number;
-  confidence: "Alta" | "Média";
+  confidence: "Alta" | "Média" | "Baixa";
   signal: string;
   evidence: string[];
   recommendation: string;
@@ -222,7 +222,7 @@ export type SupportProfile = {
     optical_rx_min_dbm: number | null;
     optical_low_days: number;
     wifi_signal_raw: number | null;
-    last_day: string;
+    last_day: string | null;
     diagnostic: null | {
       ts: string;
       state: string;
@@ -688,8 +688,10 @@ export type TicketTriageConfig = {
   scheduleEnabled: boolean;
   intervalMs: number;
   batchSize: number;
+  concurrency: number;
   minConfidence: number;
   autoClose: boolean;
+  autoEscalateNoc: boolean;
   automaticActions: string[];
   humanReviewActions: string[];
 };

@@ -49,6 +49,36 @@ SELECT
 FROM dashboard_preferences
 ON CONFLICT (dashboard_id) DO NOTHING;
 
+-- Jobs do laboratório de dados. O identificador permite acompanhar progresso,
+-- repetir cenários e remover somente os dados sintéticos produzidos pelo job.
+CREATE TABLE IF NOT EXISTS data_lab_jobs (
+  job_id uuid PRIMARY KEY,
+  scenario text NOT NULL CHECK (scenario IN (
+    'baseline', 'optical', 'fec', 'firmware', 'capacity', 'missing-inform', 'mixed'
+  )),
+  status text NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed', 'cancelled')),
+  cpe_count integer NOT NULL,
+  days integer NOT NULL,
+  informs_per_day integer NOT NULL,
+  batch_size integer NOT NULL,
+  target_rows bigint NOT NULL,
+  processed_cpes integer NOT NULL DEFAULT 0,
+  generated_rows bigint NOT NULL DEFAULT 0,
+  include_tickets boolean NOT NULL DEFAULT true,
+  include_diagnostics boolean NOT NULL DEFAULT true,
+  route_tickets_through_n1 boolean NOT NULL DEFAULT true,
+  error text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  started_at timestamptz,
+  completed_at timestamptz
+);
+
+ALTER TABLE data_lab_jobs
+  ADD COLUMN IF NOT EXISTS route_tickets_through_n1 boolean NOT NULL DEFAULT true;
+
+CREATE INDEX IF NOT EXISTS data_lab_jobs_status_created_idx
+  ON data_lab_jobs(status, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS inventory (
   serial text PRIMARY KEY,
   customer_id text NOT NULL,
@@ -69,8 +99,12 @@ CREATE TABLE IF NOT EXISTS inventory (
   neighborhood text NOT NULL,
   installed_at date NOT NULL,
   status text NOT NULL,
-  removed_at date
+  removed_at date,
+  data_lab_job_id text
 );
+
+ALTER TABLE inventory
+  ADD COLUMN IF NOT EXISTS data_lab_job_id text;
 
 CREATE TABLE IF NOT EXISTS tickets (
   ticket_id text PRIMARY KEY,
@@ -94,6 +128,10 @@ CREATE INDEX IF NOT EXISTS inventory_active_equipment_idx
 
 CREATE INDEX IF NOT EXISTS inventory_active_region_idx
   ON inventory (city, neighborhood) WHERE status='active';
+
+CREATE INDEX IF NOT EXISTS inventory_data_lab_job_idx
+  ON inventory(data_lab_job_id, serial)
+  WHERE data_lab_job_id IS NOT NULL;
 
 ALTER TABLE tickets
   ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'dataset'
@@ -265,6 +303,21 @@ CREATE TABLE IF NOT EXISTS detected_group_states (
   resolved_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS grouping_detection_states (
+  candidate_key text PRIMARY KEY,
+  status text NOT NULL CHECK (status IN ('candidate', 'cooldown', 'resolved')),
+  first_seen_at timestamptz NOT NULL DEFAULT now(),
+  last_seen_at timestamptz NOT NULL DEFAULT now(),
+  cooldown_until timestamptz,
+  score integer NOT NULL,
+  confidence double precision NOT NULL,
+  rule_version text NOT NULL,
+  score_components jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS grouping_detection_states_status_idx
+  ON grouping_detection_states(status, last_seen_at DESC);
+
 -- Relações lógicas derivadas exclusivamente do inventário. Não representam
 -- códigos físicos de campo e são recriadas a cada atualização do dataset.
 CREATE TABLE IF NOT EXISTS generated_logical_drops (
@@ -300,5 +353,46 @@ CREATE UNLOGGED TABLE IF NOT EXISTS informs (
   lan1_bit_rate integer,
   wifi_clients_24g integer,
   wifi_clients_5g integer,
-  wifi_rssi_avg double precision
+  wifi_rssi_avg double precision,
+  provider_id text NOT NULL DEFAULT 'dataset',
+  event_time timestamptz,
+  received_at timestamptz NOT NULL DEFAULT now(),
+  schema_version text NOT NULL DEFAULT '1.0',
+  ingestion_key text,
+  normalization_status text NOT NULL DEFAULT 'accepted'
+    CHECK (normalization_status IN ('accepted', 'quarantined')),
+  raw_payload jsonb NOT NULL DEFAULT '{}'::jsonb
 );
+
+ALTER TABLE informs
+  ADD COLUMN IF NOT EXISTS provider_id text NOT NULL DEFAULT 'dataset',
+  ADD COLUMN IF NOT EXISTS event_time timestamptz,
+  ADD COLUMN IF NOT EXISTS received_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS schema_version text NOT NULL DEFAULT '1.0',
+  ADD COLUMN IF NOT EXISTS ingestion_key text,
+  ADD COLUMN IF NOT EXISTS normalization_status text NOT NULL DEFAULT 'accepted',
+  ADD COLUMN IF NOT EXISTS raw_payload jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+UPDATE informs SET event_time=ts WHERE event_time IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS informs_provider_ingestion_key_idx
+  ON informs(provider_id, ingestion_key);
+
+CREATE INDEX IF NOT EXISTS informs_event_time_idx
+  ON informs(event_time DESC, serial);
+
+CREATE TABLE IF NOT EXISTS inform_quarantine (
+  quarantine_id uuid PRIMARY KEY,
+  provider_id text NOT NULL,
+  serial text NOT NULL,
+  event_time timestamptz NOT NULL,
+  received_at timestamptz NOT NULL,
+  schema_version text NOT NULL,
+  ingestion_key text NOT NULL,
+  reason text NOT NULL,
+  raw_payload jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS inform_quarantine_received_idx
+  ON inform_quarantine(received_at DESC);

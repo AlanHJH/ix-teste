@@ -6,11 +6,15 @@ import {
   IsDefined,
   IsIn,
   IsInt,
+  IsNumber,
+  IsDateString,
   IsObject,
   IsOptional,
   IsString,
   Length,
+  Max,
   MaxLength,
+  Min,
   ValidateNested,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
@@ -272,6 +276,194 @@ export class NocStatusDto {
   @IsString()
   @MaxLength(600)
   customerContactNote?: string;
+}
+
+export class IngestInformDto {
+  @ApiProperty({ minLength: 1, maxLength: 80, example: "acs-demo" })
+  @IsDefined()
+  @IsString()
+  @Length(1, 80)
+  providerId!: string;
+
+  @ApiProperty({ example: "KSTLD199FB78" })
+  @IsDefined()
+  @IsString()
+  @Length(1, 120)
+  serial!: string;
+
+  @ApiProperty({
+    format: "date-time",
+    example: "2026-08-31T01:27:50.000Z",
+  })
+  @IsDefined()
+  @IsDateString()
+  eventTime!: string;
+
+  @ApiProperty({ example: "2 PERIODIC" })
+  @IsDefined()
+  @IsString()
+  @Length(1, 240)
+  eventCodes!: string;
+
+  @ApiProperty({ example: "2.4.1" })
+  @IsDefined()
+  @IsString()
+  @Length(1, 120)
+  softwareVersion!: string;
+
+  @ApiPropertyOptional({ default: "1.0" })
+  @IsOptional()
+  @IsString()
+  @Length(1, 20)
+  schemaVersion = "1.0";
+
+  @ApiPropertyOptional({ example: 128860 })
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  uptimeS?: number;
+
+  @ApiPropertyOptional({ example: 131072 })
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  memTotalKb?: number;
+
+  @ApiPropertyOptional({ example: 35160 })
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  memFreeKb?: number;
+
+  @ApiPropertyOptional({ example: -27231 })
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  opticalRxPower?: number;
+
+  @ApiPropertyOptional({ example: 2359 })
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  opticalTxPower?: number;
+
+  @ApiPropertyOptional({ example: 212163 })
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  ponFecUncorrectable?: number;
+
+  @ApiPropertyOptional({ example: 1000 })
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  lan1BitRate?: number;
+
+  @ApiPropertyOptional({ example: 3 })
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  wifiClients24g?: number;
+
+  @ApiPropertyOptional({ example: 4 })
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  wifiClients5g?: number;
+
+  @ApiPropertyOptional({ example: -70 })
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  wifiRssiAvg?: number;
+
+  @ApiPropertyOptional({
+    type: "object",
+    additionalProperties: true,
+    description: "Registro bruto preservado para auditoria.",
+  })
+  @IsOptional()
+  @IsObject()
+  rawPayload?: Record<string, unknown>;
+}
+
+export class BulkIngestInformsDto {
+  @ApiProperty({
+    type: [IngestInformDto],
+    minItems: 1,
+    maxItems: 2_000,
+    description:
+      "Lote limitado de Informs canônicos. O cliente deve enviar lotes menores para controlar backpressure.",
+  })
+  @IsDefined()
+  @IsArray()
+  @ArrayMaxSize(2_000)
+  @ValidateNested({ each: true })
+  @Type(() => IngestInformDto)
+  informs!: IngestInformDto[];
+}
+
+export class CreateDataLabJobDto {
+  @ApiProperty({
+    enum: [
+      "baseline",
+      "optical",
+      "fec",
+      "firmware",
+      "capacity",
+      "missing_inform",
+      "mixed",
+    ],
+    example: "mixed",
+  })
+  @IsDefined()
+  @IsIn([
+    "baseline",
+    "optical",
+    "fec",
+    "firmware",
+    "capacity",
+    "missing_inform",
+    "mixed",
+  ])
+  scenario!: string;
+
+  @ApiProperty({ minimum: 1, maximum: 300_000, example: 2_000 })
+  @IsDefined()
+  @IsInt()
+  @Min(1)
+  @Max(300_000)
+  cpeCount!: number;
+
+  @ApiProperty({ minimum: 1, maximum: 30, example: 3 })
+  @IsDefined()
+  @IsInt()
+  @Min(1)
+  @Max(30)
+  days!: number;
+
+  @ApiProperty({ minimum: 1, maximum: 48, example: 6 })
+  @IsDefined()
+  @IsInt()
+  @Min(1)
+  @Max(48)
+  informsPerDay!: number;
+
+  @ApiPropertyOptional({ minimum: 50, maximum: 2_000, default: 250 })
+  @IsOptional()
+  @IsInt()
+  @Min(50)
+  @Max(2_000)
+  batchSize = 250;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  includeTickets = true;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  includeDiagnostics = true;
+
+  @ApiPropertyOptional({
+    default: true,
+    description:
+      "Coloca os chamados sintéticos no fluxo do atendimento N1 para triagem automática.",
+  })
+  @IsOptional()
+  @IsBoolean()
+  routeTicketsThroughN1 = true;
 }
 
 export class TicketTriageRetryDto {

@@ -149,6 +149,67 @@ function statusDetails(response: ServerResponse) {
   };
 }
 
+type RequestBody = {
+  raw: string;
+  parsed: unknown;
+  parseError?: Error;
+};
+
+function readRequestBody(request: IncomingMessage): Promise<RequestBody> {
+  const requestWithBody = request as IncomingMessage & { body?: unknown };
+  if (Object.prototype.hasOwnProperty.call(requestWithBody, "body")) {
+    const parsed = requestWithBody.body;
+    return Promise.resolve({
+      raw: parsed === undefined ? "" : JSON.stringify(parsed),
+      parsed,
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const bodyChunks: Buffer[] = [];
+    let bodyBytes = 0;
+    let settled = false;
+
+    const finish = (body: RequestBody) => {
+      if (settled) return;
+      settled = true;
+      resolve(body);
+    };
+
+    request.on("data", (chunk: Buffer | string) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      bodyBytes += buffer.length;
+      if (bodyBytes > 64_000) {
+        finish({
+          raw: Buffer.concat(bodyChunks).toString("utf8"),
+          parsed: undefined,
+          parseError: new Error("MCP request body exceeds 64 KiB."),
+        });
+        request.pause();
+        return;
+      }
+      bodyChunks.push(buffer);
+    });
+    request.on("end", () => {
+      const raw = Buffer.concat(bodyChunks).toString("utf8");
+      if (!raw.trim()) {
+        finish({ raw, parsed: undefined });
+        return;
+      }
+      try {
+        finish({ raw, parsed: JSON.parse(raw) as unknown });
+      } catch (error) {
+        finish({
+          raw,
+          parsed: undefined,
+          parseError: error instanceof Error ? error : new Error(String(error)),
+        });
+      }
+    });
+    request.on("error", reject);
+  });
+}
+
 export class McpGateway {
   private readonly handlers: ReadonlyArray<readonly [string, McpHandler]>;
   private readonly routes: ReadonlyMap<
@@ -258,15 +319,8 @@ export class McpGateway {
     const requestId = headerValue(request, "x-request-id") ?? newMcpRequestId();
     const correlationId = headerValue(request, "x-correlation-id") ?? requestId;
     const sessionId = headerValue(request, "mcp-session-id");
-    const bodyChunks: Buffer[] = [];
-    let bodyBytes = 0;
-    request.on("data", (chunk: Buffer | string) => {
-      if (bodyBytes >= 64_000) return;
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      const remaining = 64_000 - bodyBytes;
-      bodyChunks.push(buffer.subarray(0, remaining));
-      bodyBytes += Math.min(buffer.length, remaining);
-    });
+    const requestBody = await readRequestBody(request);
+    const bodyBytes = Buffer.byteLength(requestBody.raw);
 
     const baseContext: McpRequestLogContext = {
       requestId,
@@ -282,18 +336,13 @@ export class McpGateway {
       startedAt,
       logger: this.logger,
     };
-    request.on("end", () => {
-      const rpc = rpcDetails(Buffer.concat(bodyChunks).toString("utf8"));
-      baseContext.rpcMethod = rpc.method;
-      baseContext.rpcId = rpc.id;
-      baseContext.tool = rpc.tool;
-      baseContext.resourceUri = rpc.resourceUri;
-    });
+    const rpc = rpcDetails(requestBody.raw);
+    baseContext.rpcMethod = rpc.method;
+    baseContext.rpcId = rpc.id;
+    baseContext.tool = rpc.tool;
+    baseContext.resourceUri = rpc.resourceUri;
     const logContext = () => {
-      const details = requestDetails(
-        request,
-        Buffer.concat(bodyChunks).toString("utf8"),
-      );
+      const details = requestDetails(request, requestBody.raw);
       return {
         request_id: requestId,
         correlation_id: correlationId,
@@ -314,6 +363,21 @@ export class McpGateway {
     });
 
     return mcpRequestContext.run(baseContext, async () => {
+      if (requestBody.parseError) {
+        writeJson(response, 400, {
+          jsonrpc: "2.0",
+          error: {
+            code: -32_700,
+            message: `Parse error: ${requestBody.parseError.message}`,
+          },
+          id: null,
+        });
+        this.logger.warn("mcp.request.rejected", {
+          ...logContext(),
+          reason: "invalid_json",
+        });
+        return true;
+      }
       if (
         !this.validateHost(request, response) ||
         !this.validateOrigin(request, response)
@@ -349,7 +413,7 @@ export class McpGateway {
       }
 
       try {
-        await route(request, response);
+        await route(request, response, requestBody.parsed);
         this.logger.info("mcp.request.completed", logContext());
         return true;
       } catch (error) {

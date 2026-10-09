@@ -234,7 +234,10 @@ const supportProfileSchema = {
           ...apiNumber("Sinal Wi-Fi médio na unidade bruta.", -70),
           nullable: true,
         },
-        last_day: apiDate("Último dia disponível."),
+        last_day: {
+          ...apiDate("Último dia disponível."),
+          nullable: true,
+        },
         diagnostic: {
           type: "object",
           nullable: true,

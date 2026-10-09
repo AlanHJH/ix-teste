@@ -2,7 +2,7 @@ DROP MATERIALIZED VIEW IF EXISTS daily_cpe_metrics CASCADE;
 
 CREATE MATERIALIZED VIEW daily_cpe_metrics AS
 SELECT
-  (i.ts AT TIME ZONE 'America/Sao_Paulo')::date AS day,
+  (coalesce(i.event_time, i.ts) AT TIME ZONE 'America/Sao_Paulo')::date AS day,
   i.serial,
   inv.customer_id,
   inv.vendor,
@@ -42,7 +42,7 @@ SELECT
 FROM informs i
 JOIN inventory inv USING (serial)
 GROUP BY
-  (i.ts AT TIME ZONE 'America/Sao_Paulo')::date,
+  (coalesce(i.event_time, i.ts) AT TIME ZONE 'America/Sao_Paulo')::date,
   i.serial, inv.customer_id, inv.vendor, inv.model, inv.hw_revision,
   i.software_version, inv.plan_mbps, inv.previous_plan_mbps, inv.plan_since,
   inv.olt, inv.pon_port, inv.cto, inv.city, inv.neighborhood;

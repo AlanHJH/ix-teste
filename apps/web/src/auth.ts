@@ -10,6 +10,7 @@ export type AppView =
   | "topology"
   | "inventory"
   | "customers"
+  | "data-lab"
   | "agent-config";
 
 export type DemoUser = {
@@ -64,6 +65,7 @@ const viewsByRole: Record<UserRole, readonly AppView[]> = {
     "topology",
     "inventory",
     "customers",
+    "data-lab",
   ],
   n1: [
     "support",
@@ -72,6 +74,7 @@ const viewsByRole: Record<UserRole, readonly AppView[]> = {
     "diagnostics",
     "inventory",
     "customers",
+    "data-lab",
   ],
   noc: [
     "dashboard",
@@ -82,6 +85,7 @@ const viewsByRole: Record<UserRole, readonly AppView[]> = {
     "topology",
     "inventory",
     "customers",
+    "data-lab",
   ],
 };
 

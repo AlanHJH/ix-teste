@@ -458,7 +458,7 @@ export class InvestigationsController {
   )
   @Post("trigger/scheduled")
   triggerScheduled() {
-    return this.investigations.triggerScheduled();
+    return this.investigations.triggerScheduled("hourly");
   }
 
   @ApiWrite({

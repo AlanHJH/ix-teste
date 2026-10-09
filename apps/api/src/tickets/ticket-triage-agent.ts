@@ -87,6 +87,44 @@ const actions = new Set([
 ]);
 const scopes = new Set(["individual", "shared", "uncertain"]);
 
+export function parseStructuredResponse(output: string): unknown {
+  const trimmed = output.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch (firstError) {
+    const start = trimmed.indexOf("{");
+    if (start >= 0) {
+      let depth = 0;
+      let inString = false;
+      let escaped = false;
+      for (let index = start; index < trimmed.length; index += 1) {
+        const character = trimmed[index];
+        if (inString) {
+          if (escaped) escaped = false;
+          else if (character === "\\") escaped = true;
+          else if (character === '"') inString = false;
+          continue;
+        }
+        if (character === '"') {
+          inString = true;
+          continue;
+        }
+        if (character === "{") depth += 1;
+        if (character === "}") depth -= 1;
+        if (depth === 0) {
+          try {
+            return JSON.parse(trimmed.slice(start, index + 1));
+          } catch {
+            break;
+          }
+        }
+      }
+    }
+    // Mantém o erro original quando a resposta não contém JSON válido.
+    throw firstError;
+  }
+}
+
 export function validateTicketTriageDecision(
   value: unknown,
 ): TicketTriageDecision {
@@ -197,7 +235,9 @@ export class TicketTriageAgent {
       },
     });
     return {
-      decision: validateTicketTriageDecision(JSON.parse(response.output_text)),
+      decision: validateTicketTriageDecision(
+        parseStructuredResponse(response.output_text),
+      ),
       model: this.model,
       responseId: response.id,
     };

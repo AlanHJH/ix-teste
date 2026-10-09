@@ -94,6 +94,14 @@ export function apiNumber(description: string, example?: number): SchemaObject {
   };
 }
 
+export function apiBoolean(description: string, example = true): SchemaObject {
+  return {
+    type: "boolean",
+    description,
+    example,
+  };
+}
+
 export function apiNullableString(
   description: string,
   example?: string,

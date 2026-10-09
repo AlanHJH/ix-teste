@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { CustomersModule } from "./customers/customers.module";
+import { DataLabModule } from "./data-lab/data-lab.module";
 import { AuthModule } from "./auth/auth.module";
 import { AssistantModule } from "./assistant/assistant.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
@@ -23,6 +24,7 @@ import { RealtimeModule } from "./realtime/realtime.module";
     InfrastructureModule,
     SystemModule,
     CustomersModule,
+    DataLabModule,
     TicketsModule,
     DiagnosticsModule,
     NetworkModule,

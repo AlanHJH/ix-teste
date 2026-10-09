@@ -24,6 +24,7 @@
     "ajv-formats": "^3.0.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
+    "kafkajs": "^2.2.4",
     "openai": "^6.49.0",
     "pg": "^8.13.3",
     "pg-copy-streams": "^7.0.0",

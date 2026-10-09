@@ -72,4 +72,24 @@ describe("decideTicketTriagePolicy", () => {
     assert.equal(result.status, "needs_review");
     assert.equal(result.close, false);
   });
+
+  it("permite desligar o encaminhamento automático para o NOC", () => {
+    const result = decideTicketTriagePolicy(
+      {
+        ...baseDecision,
+        categoryCorrect: true,
+        caseScope: "shared",
+        nocCandidate: true,
+        action: "escalate_noc",
+      },
+      "Sem conexão",
+      true,
+      {
+        TICKET_TRIAGE_MIN_CONFIDENCE: "0.9",
+        TICKET_TRIAGE_AUTO_ESCALATE_NOC: "false",
+      },
+    );
+    assert.equal(result.actionApplied, "review");
+    assert.equal(result.escalateNoc, false);
+  });
 });
