@@ -619,6 +619,42 @@ describe("api client", () => {
     }
   });
 
+  it("avança o estado operacional de um agrupamento usando PATCH", async () => {
+    const payload = { incident_id: "INC-TESTE123", status: "mitigating" };
+    const calls: Array<{
+      path: string;
+      method?: string;
+      body?: string | null;
+    }> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (
+      path: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      calls.push({
+        path: String(path),
+        method: init?.method,
+        body: typeof init?.body === "string" ? init.body : null,
+      });
+      return { ok: true, json: async () => payload } as Response;
+    }) as typeof fetch;
+    try {
+      assert.deepEqual(
+        await api.updateOperationalIncidentStatus("INC-TESTE123", "mitigating"),
+        payload,
+      );
+      assert.deepEqual(calls, [
+        {
+          path: "/api/incidents/INC-TESTE123/status",
+          method: "PATCH",
+          body: JSON.stringify({ status: "mitigating" }),
+        },
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("encerra um chamado N1 em andamento usando PATCH", async () => {
     const payload = { ticket_id: "TN1-TESTE123", noc_status: "closed" };
     const calls: Array<{

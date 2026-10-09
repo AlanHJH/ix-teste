@@ -2138,6 +2138,28 @@ h3 {
   cursor: wait;
   opacity: 0.55;
 }
+.advance-grouping {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid #9ed4c8;
+  border-radius: 7px;
+  color: #126d61;
+  background: #ecfaf6;
+  font-size: 10px;
+  font-weight: 800;
+}
+.advance-grouping:hover:not(:disabled) {
+  border-color: #4ba994;
+  color: #fff;
+  background: #238b78;
+}
+.advance-grouping:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
 .grouping-card-footer {
   display: flex;
   align-items: flex-end;
@@ -8076,6 +8098,22 @@ h3 {
   color: #13715e;
   background: #ddf5ed;
 }
+.active-grouping-status {
+  color: #356b73;
+  background: #e8f1f1;
+}
+.active-grouping-status.open {
+  color: #3d6370;
+  background: #e8f1f7;
+}
+.active-grouping-status.mitigating {
+  color: #8a5c1b;
+  background: #fff0d9;
+}
+.active-grouping-status.monitoring {
+  color: #176f64;
+  background: #dff3ed;
+}
 .grouping-detail-backdrop {
   z-index: 130;
 }
@@ -8539,6 +8577,8 @@ h3 {
   display: flex;
   flex: none;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 10px;
 }
 .grouping-topology-open {
@@ -13207,7 +13247,8 @@ main {
 .noc-open-incident,
 .noc-escalated-action,
 .noc-ticket-actions .close-ticket,
-.close-grouping {
+.close-grouping,
+.advance-grouping {
   color: #c8edff !important;
   border-color: rgba(94, 192, 237, 0.3) !important;
   background: rgba(94, 192, 237, 0.08) !important;
@@ -13370,6 +13411,21 @@ main {
 
 .investigation-status.approved,
 .active-grouping-severity.low {
+  color: #91efd4 !important;
+  background: rgba(94, 225, 189, 0.14) !important;
+}
+
+.active-grouping-status.open {
+  color: #c9e7f4 !important;
+  background: rgba(94, 192, 237, 0.12) !important;
+}
+
+.active-grouping-status.mitigating {
+  color: #f2d28b !important;
+  background: rgba(234, 196, 108, 0.14) !important;
+}
+
+.active-grouping-status.monitoring {
   color: #91efd4 !important;
   background: rgba(94, 225, 189, 0.14) !important;
 }

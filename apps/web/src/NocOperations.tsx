@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -88,8 +88,36 @@ const severityLabels = {
   low: "Baixo",
 };
 
+const operationalStatusLabels: Record<OperationalIncident["status"], string> = {
+  open: "Aberto",
+  mitigating: "Em mitigação",
+  monitoring: "Em monitoramento",
+  resolved: "Resolvido",
+};
+
+const nextOperationalStatus: Record<
+  "open" | "mitigating",
+  {
+    status: "mitigating" | "monitoring";
+    label: string;
+    pendingLabel: string;
+  }
+> = {
+  open: {
+    status: "mitigating",
+    label: "Iniciar mitigação",
+    pendingLabel: "Iniciando mitigação…",
+  },
+  mitigating: {
+    status: "monitoring",
+    label: "Marcar monitoramento",
+    pendingLabel: "Marcando monitoramento…",
+  },
+};
+
 type GroupingCardData = {
   id: string;
+  status: OperationalIncident["status"];
   severity: "critical" | "high" | "medium" | "low";
   title: string;
   location: string;
@@ -192,6 +220,7 @@ function operationalGrouping(incident: OperationalIncident): GroupingCardData {
 
   return {
     id: incident.incident_id,
+    status: incident.status,
     severity: incident.severity,
     title: incident.title,
     location: incident.scope.identifier,
@@ -419,6 +448,9 @@ function GroupingCard({
         <header>
           <div className="investigation-tags">
             <span>Agrupamento ativo</span>
+            <span className={"active-grouping-status " + grouping.status}>
+              {operationalStatusLabels[grouping.status]}
+            </span>
             <span className={`active-grouping-severity ${grouping.severity}`}>
               {severityLabels[grouping.severity]}
             </span>
@@ -483,8 +515,16 @@ export function NocOperations({
     incidentId: string;
     closedTickets: number;
   } | null>(null);
+  const [statusUpdated, setStatusUpdated] = useState<{
+    incidentId: string;
+    status: "mitigating" | "monitoring";
+  } | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [closingGrouping, setClosingGrouping] = useState("");
+  const [updatingStatus, setUpdatingStatus] = useState<{
+    incidentId: string;
+    status: "mitigating" | "monitoring";
+  } | null>(null);
   const [selectedGroupingId, setSelectedGroupingId] = useState("");
   const [topologyGrouping, setTopologyGrouping] =
     useState<TopologyFocus | null>(null);
@@ -492,12 +532,28 @@ export function NocOperations({
     useState<Investigation | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
+  const refreshRevision = useRef(0);
+  const statusUpdateInFlight = useRef(false);
+
   async function refresh() {
+    const revision = ++refreshRevision.current;
     try {
       const nextIncidents = await api.operationalIncidents();
+      if (
+        revision !== refreshRevision.current ||
+        statusUpdateInFlight.current
+      ) {
+        return;
+      }
       setIncidents(nextIncidents);
       setError("");
     } catch (reason) {
+      if (
+        revision !== refreshRevision.current ||
+        statusUpdateInFlight.current
+      ) {
+        return;
+      }
       setError(
         reason instanceof Error ? reason.message : "Falha ao consultar o NOC",
       );
@@ -514,6 +570,7 @@ export function NocOperations({
     setCreated("");
     setError("");
     setClosedGrouping(null);
+    setStatusUpdated(null);
     setForm((current) => ({ ...initialForm, openedBy: current.openedBy }));
     setModalOpen(true);
   }
@@ -538,6 +595,7 @@ export function NocOperations({
 
     setCreated("");
     setClosedGrouping(null);
+    setStatusUpdated(null);
     setError("");
     setForm((current) => ({
       ...initialForm,
@@ -750,15 +808,48 @@ export function NocOperations({
     );
   }
 
+  async function updateOperationalGroupingStatus(
+    incident: OperationalIncident,
+    status: "mitigating" | "monitoring",
+  ) {
+    if (updatingStatus || closingGrouping) return;
+
+    statusUpdateInFlight.current = true;
+    refreshRevision.current += 1;
+    setUpdatingStatus({ incidentId: incident.incident_id, status });
+    setStatusUpdated(null);
+    setClosedGrouping(null);
+    setError("");
+    try {
+      await api.updateOperationalIncidentStatus(incident.incident_id, status);
+      statusUpdateInFlight.current = false;
+      await refresh();
+      setStatusUpdated({ incidentId: incident.incident_id, status });
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Falha ao atualizar o estado do agrupamento",
+      );
+    } finally {
+      statusUpdateInFlight.current = false;
+      setUpdatingStatus(null);
+    }
+  }
+
   async function closeOperationalGrouping(incident: OperationalIncident) {
     if (!confirmGroupingClosure(incident.title)) return;
 
+    statusUpdateInFlight.current = true;
+    refreshRevision.current += 1;
     setClosingGrouping(incident.incident_id);
     setError("");
     setCreated("");
     setClosedGrouping(null);
+    setStatusUpdated(null);
     try {
       const result = await api.closeOperationalIncident(incident.incident_id);
+      statusUpdateInFlight.current = false;
       setClosedGrouping({
         incidentId: incident.incident_id,
         closedTickets: result.closed_tickets,
@@ -772,6 +863,7 @@ export function NocOperations({
           : "Falha ao encerrar o agrupamento",
       );
     } finally {
+      statusUpdateInFlight.current = false;
       setClosingGrouping("");
     }
   }
@@ -849,6 +941,12 @@ export function NocOperations({
   const selectedGroupingData = selectedGrouping
     ? operationalGrouping(selectedGrouping)
     : null;
+  const selectedGroupingTransition =
+    selectedGrouping &&
+    (selectedGrouping.status === "open" ||
+      selectedGrouping.status === "mitigating")
+      ? nextOperationalStatus[selectedGrouping.status]
+      : null;
   return (
     <>
       <section className="incidents-section">
@@ -901,6 +999,15 @@ export function NocOperations({
           </p>
         )}
 
+        {statusUpdated && (
+          <p className="noc-form-success" aria-live="polite">
+            <CheckCircle2 size={15} /> Agrupamento {statusUpdated.incidentId}{" "}
+            atualizado manualmente para{" "}
+            <strong>{operationalStatusLabels[statusUpdated.status]}</strong>.
+            Nenhuma ação técnica foi executada automaticamente.
+          </p>
+        )}
+
         {showGroupingAgent && (
           <InvestigationReview
             onGroupingChanged={() => void refresh()}
@@ -929,13 +1036,20 @@ export function NocOperations({
           backdropClassName="grouping-detail-backdrop"
           labelledBy="grouping-detail-title"
           closeLabel="Fechar detalhes do agrupamento"
-          closeDisabled={Boolean(closingGrouping)}
+          closeDisabled={Boolean(closingGrouping || updatingStatus)}
           onClose={() => setSelectedGroupingId("")}
         >
           <header className="grouping-detail-header">
             <div>
               <div className="investigation-tags">
                 <span>Agrupamento ativo</span>
+                <span
+                  className={
+                    "active-grouping-status " + selectedGroupingData.status
+                  }
+                >
+                  {operationalStatusLabels[selectedGroupingData.status]}
+                </span>
                 <span
                   className={`active-grouping-severity ${selectedGroupingData.severity}`}
                 >
@@ -1058,6 +1172,7 @@ export function NocOperations({
 
             <footer className="grouping-detail-actions">
               <p>
+                As transições são registradas por ação explícita do operador.
                 Encerrar remove o agrupamento das visões ativas do NOC e do N1,
                 mantendo o histórico para auditoria.
               </p>
@@ -1092,17 +1207,57 @@ export function NocOperations({
                   type="button"
                   className="text-button"
                   onClick={() => setSelectedGroupingId("")}
-                  disabled={Boolean(closingGrouping)}
+                  disabled={Boolean(closingGrouping || updatingStatus)}
                 >
                   Fechar
                 </button>
+                {selectedGroupingTransition && (
+                  <button
+                    type="button"
+                    className="advance-grouping"
+                    onClick={() =>
+                      void updateOperationalGroupingStatus(
+                        selectedGrouping,
+                        selectedGroupingTransition.status,
+                      )
+                    }
+                    disabled={
+                      Boolean(closingGrouping) ||
+                      updatingStatus?.incidentId ===
+                        selectedGrouping.incident_id
+                    }
+                    aria-busy={
+                      updatingStatus?.incidentId ===
+                      selectedGrouping.incident_id
+                    }
+                  >
+                    {updatingStatus?.incidentId ===
+                      selectedGrouping.incident_id && (
+                      <LoaderCircle
+                        size={15}
+                        className="spin"
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span>
+                      {updatingStatus?.incidentId ===
+                      selectedGrouping.incident_id
+                        ? selectedGroupingTransition.pendingLabel
+                        : selectedGroupingTransition.label}
+                    </span>
+                  </button>
+                )}
                 <button
                   type="button"
                   className="close-grouping"
                   onClick={() =>
                     void closeOperationalGrouping(selectedGrouping)
                   }
-                  disabled={closingGrouping === selectedGrouping.incident_id}
+                  disabled={
+                    closingGrouping === selectedGrouping.incident_id ||
+                    Boolean(updatingStatus)
+                  }
+                  aria-busy={closingGrouping === selectedGrouping.incident_id}
                 >
                   <CheckCircle2 size={15} aria-hidden="true" />
                   <span>
