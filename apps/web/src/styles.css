@@ -13582,6 +13582,59 @@ main {
   color: #5d777e !important;
 }
 
+/* The grouping detail mixes a dark drawer shell with light reading cards.
+   Keep every value legible on the surface where it is rendered. */
+.grouping-detail-header > div > small {
+  color: #a9c7d5 !important;
+}
+
+.grouping-detail-header .investigation-confidence {
+  border-color: #cfe3df !important;
+  background: #f6faf9 !important;
+}
+
+.grouping-detail-header .investigation-confidence strong {
+  color: #155f54 !important;
+}
+
+.grouping-detail-header .investigation-confidence span {
+  color: #3f6765 !important;
+}
+
+.grouping-detail-header .investigation-confidence small {
+  color: #6c8386 !important;
+}
+
+.grouping-detail-evidence {
+  color: #23464f !important;
+  border-color: #d8e6e6 !important;
+  background: #f4f8f8 !important;
+}
+
+.grouping-detail-evidence > div > span {
+  color: #5d777e !important;
+}
+
+.grouping-detail-evidence > div > p {
+  color: #607a80 !important;
+}
+
+.grouping-detail-evidence li {
+  color: #17796d !important;
+}
+
+.grouping-detail-evidence li strong {
+  color: #315159 !important;
+}
+
+.grouping-detail-evidence li p {
+  color: #49676e !important;
+}
+
+.grouping-detail-evidence li small {
+  color: #758b91 !important;
+}
+
 .investigation-card-open > footer,
 .active-grouping-card-open > footer {
   color: var(--ixc-accent) !important;
