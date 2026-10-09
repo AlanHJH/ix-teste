@@ -13364,6 +13364,73 @@ main {
   font-weight: 800 !important;
 }
 
+.grouping-detail-actions > div .open-iris-context-button,
+.grouping-detail-actions > div .grouping-topology-open,
+.grouping-detail-actions > div .text-button,
+.grouping-detail-actions > div .advance-grouping,
+.grouping-detail-actions > div .close-grouping {
+  opacity: 1 !important;
+}
+
+.grouping-detail-actions > div .open-iris-context-button,
+.grouping-detail-actions > div .grouping-topology-open {
+  color: #0c5d64 !important;
+  border-color: #8fc9c3 !important;
+  background: #e5f7f3 !important;
+}
+
+.grouping-detail-actions > div .open-iris-context-button:hover:not(:disabled),
+.grouping-detail-actions > div .open-iris-context-button:focus-visible,
+.grouping-detail-actions > div .grouping-topology-open:hover:not(:disabled),
+.grouping-detail-actions > div .grouping-topology-open:focus-visible {
+  color: #ffffff !important;
+  border-color: #087f78 !important;
+  background: #087f78 !important;
+}
+
+.grouping-detail-actions > div .text-button {
+  min-height: 34px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #0b6e69 !important;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.grouping-detail-actions > div .text-button:hover:not(:disabled),
+.grouping-detail-actions > div .text-button:focus-visible {
+  border-color: #9bd8d0 !important;
+  color: #075750 !important;
+  background: #e7f7f4 !important;
+}
+
+.grouping-detail-actions > div .advance-grouping {
+  color: #0e6c5f !important;
+  border-color: #79c7b7 !important;
+  background: #e1f5ed !important;
+}
+
+.grouping-detail-actions > div .advance-grouping:hover:not(:disabled),
+.grouping-detail-actions > div .advance-grouping:focus-visible {
+  color: #ffffff !important;
+  border-color: #177966 !important;
+  background: #177966 !important;
+}
+
+.grouping-detail-actions > div .close-grouping {
+  color: #974c38 !important;
+  border-color: #d8a89a !important;
+  background: #fff3ef !important;
+}
+
+.grouping-detail-actions > div .close-grouping:hover:not(:disabled),
+.grouping-detail-actions > div .close-grouping:focus-visible {
+  color: #ffffff !important;
+  border-color: #a7432d !important;
+  background: #a7432d !important;
+}
+
 .noc-authenticated-operator {
   display: grid;
   align-content: start;
