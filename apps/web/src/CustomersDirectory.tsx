@@ -8,6 +8,7 @@ import {
   Wifi,
 } from "lucide-react";
 import { api } from "./api";
+import { useScreenDataUpdates } from "./realtime";
 import { CustomerDetailDrawer } from "./CustomerDetailDrawer";
 import { FacetFilterSelect } from "./FacetFilterSelect";
 import type {
@@ -101,6 +102,11 @@ export function CustomersDirectory({
   canOpenSupport: boolean;
   onOpenSupport: (customerId: string) => void;
 }) {
+  const screenUpdateRevision = useScreenDataUpdates([
+    "customers",
+    "inventory",
+    "tickets",
+  ]);
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [filters, setFilters] = useState<InventoryFilter[]>([]);
@@ -136,7 +142,7 @@ export function CustomersDirectory({
     return () => {
       cancelled = true;
     };
-  }, [filters, page, status, submittedQuery]);
+  }, [filters, page, status, submittedQuery, screenUpdateRevision]);
 
   const loadCustomerOptions = useCallback(
     (search: string): Promise<InventoryFilterOption[]> => {

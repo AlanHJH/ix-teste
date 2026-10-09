@@ -1,7 +1,9 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   Bot,
   CheckCircle2,
   ChevronRight,
@@ -13,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "./api";
+import { useScreenDataUpdates } from "./realtime";
 import { HelpTooltip } from "./HelpTooltip";
 import { InvestigationReview } from "./InvestigationReview";
 import { OpenIrisChatButton } from "./OpenIrisChatButton";
@@ -32,6 +35,11 @@ import type {
 } from "./types";
 
 type IncidentOption = { value: string; label: string };
+
+type GroupingChange = {
+  kind: "new" | "increase" | "decrease" | "none";
+  delta: number;
+};
 
 const emptyCatalogOptions = (): Record<
   IncidentOptionType,
@@ -502,8 +510,17 @@ export function NocOperations({
   onOriginTicketConsumed?: () => void;
 }) {
   const agentPolicy = useAgentPolicy();
+  const screenUpdateRevision = useScreenDataUpdates([
+    "incidents",
+    "investigations",
+    "tickets",
+    "network",
+  ]);
   const showGroupingAgent = groupingAgentEnabled(agentPolicy);
   const [incidents, setIncidents] = useState<OperationalIncidentPage | null>(
+    null,
+  );
+  const [groupingChange, setGroupingChange] = useState<GroupingChange | null>(
     null,
   );
   const [catalogOptions, setCatalogOptions] = useState(emptyCatalogOptions);
@@ -538,6 +555,7 @@ export function NocOperations({
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const refreshRevision = useRef(0);
+  const incidentsRef = useRef<OperationalIncidentPage | null>(null);
   const statusUpdateInFlight = useRef(false);
 
   async function refresh() {
@@ -550,6 +568,29 @@ export function NocOperations({
       ) {
         return;
       }
+      const previousIncidents = incidentsRef.current;
+      if (previousIncidents) {
+        const previousIds = new Set(
+          previousIncidents.data.map((incident) => incident.incident_id),
+        );
+        const newCount = nextIncidents.data.filter(
+          (incident) => !previousIds.has(incident.incident_id),
+        ).length;
+        const totalDelta =
+          nextIncidents.totalItems - previousIncidents.totalItems;
+        setGroupingChange(
+          newCount > 0
+            ? { kind: "new", delta: newCount }
+            : totalDelta > 0
+              ? { kind: "increase", delta: totalDelta }
+              : totalDelta < 0
+                ? { kind: "decrease", delta: Math.abs(totalDelta) }
+                : { kind: "none", delta: 0 },
+        );
+      } else {
+        setGroupingChange({ kind: "none", delta: 0 });
+      }
+      incidentsRef.current = nextIncidents;
       setIncidents(nextIncidents);
       setError("");
     } catch (reason) {
@@ -570,6 +611,10 @@ export function NocOperations({
     const timer = window.setInterval(() => void refresh(), 10_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [screenUpdateRevision]);
 
   function openCreateGrouping() {
     setCreated("");
@@ -958,6 +1003,14 @@ export function NocOperations({
       selectedGrouping.status === "mitigating")
       ? nextOperationalStatus[selectedGrouping.status]
       : null;
+  const groupingChangeLabel =
+    groupingChange?.kind === "new"
+      ? `${groupingChange.delta} novo${groupingChange.delta === 1 ? "" : "s"} grupo${groupingChange.delta === 1 ? "" : "s"}`
+      : groupingChange?.kind === "increase"
+        ? `+${groupingChange.delta} grupo${groupingChange.delta === 1 ? "" : "s"}`
+        : groupingChange?.kind === "decrease"
+          ? `−${groupingChange.delta} grupo${groupingChange.delta === 1 ? "" : "s"}`
+          : "Sem novidade";
   return (
     <>
       <section className="incidents-section">
@@ -987,6 +1040,23 @@ export function NocOperations({
               <ArrowRight size={15} aria-hidden="true" />
             </button>
             <span>{incidents?.totalItems ?? 0} grupos ativos</span>
+            {groupingChange && (
+              <span
+                className={`grouping-live-counter ${groupingChange.kind}`}
+                role="status"
+                aria-live="polite"
+                title="Variação confirmada na última atualização REST após o evento Socket.IO."
+              >
+                {groupingChange.kind === "new" ? (
+                  <ArrowUp size={13} aria-hidden="true" />
+                ) : groupingChange.kind === "increase" ? (
+                  <ArrowUp size={13} aria-hidden="true" />
+                ) : groupingChange.kind === "decrease" ? (
+                  <ArrowDown size={13} aria-hidden="true" />
+                ) : null}
+                <strong>{groupingChangeLabel}</strong>
+              </span>
+            )}
             <button className="noc-open-incident" onClick={openCreateGrouping}>
               <Plus size={16} /> Criar agrupamento
             </button>

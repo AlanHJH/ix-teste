@@ -35,6 +35,7 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "./api";
+import { useScreenDataUpdates } from "./realtime";
 import {
   BarWidget,
   formulaMetricValue,
@@ -734,6 +735,18 @@ export function DynamicDashboard({
   onOpenOfflineDiagnosis,
   fallback,
 }: DynamicDashboardProps) {
+  const screenUpdateRevision = useScreenDataUpdates([
+    "dashboard",
+    "network",
+    "tickets",
+    "incidents",
+    "inventory",
+    "diagnostics",
+    "operations",
+    "investigations",
+    "customers",
+    "telemetry",
+  ]);
   const [dashboards, setDashboards] = useState<DashboardSummary[]>([]);
   const [activeDashboardId, setActiveDashboardId] = useState<string | null>(
     null,
@@ -1108,6 +1121,17 @@ export function DynamicDashboard({
       void loadRuntimeData(activeDashboardId);
     }
   }, [activeDashboardId, filters, loadRuntimeData, period]);
+
+  useEffect(() => {
+    if (!screenUpdateRevision || !activeDashboardId) return;
+    void loadOfflineAlerts();
+    void loadRuntimeData(activeDashboardId);
+  }, [
+    activeDashboardId,
+    loadOfflineAlerts,
+    loadRuntimeData,
+    screenUpdateRevision,
+  ]);
 
   useEffect(() => {
     if (!plan || !activeDashboardId) return;

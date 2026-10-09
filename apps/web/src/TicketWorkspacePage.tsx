@@ -18,6 +18,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { api } from "./api";
+import { useScreenDataUpdates } from "./realtime";
 import { OpenIrisChatButton } from "./OpenIrisChatButton";
 import { TechnicalText } from "./ProviderGlossary";
 import { readTicketFieldWork } from "./ticketFieldWork";
@@ -205,6 +206,12 @@ export function TicketWorkspacePage({
   onNocQueueChanged?: () => void | Promise<void>;
   onOpenGrouping?: (ticket: SupportTicket) => void;
 }) {
+  const screenUpdateRevision = useScreenDataUpdates([
+    "tickets",
+    "customers",
+    "incidents",
+    "investigations",
+  ]);
   const [currentTicket, setCurrentTicket] = useState(ticket);
   const [profile, setProfile] = useState<SupportProfile | null>(null);
   const [customer, setCustomer] = useState<CustomerDetail | null>(null);
@@ -292,7 +299,7 @@ export function TicketWorkspacePage({
     return () => {
       canceled = true;
     };
-  }, [ticket]);
+  }, [ticket, screenUpdateRevision]);
 
   async function updateNocStatus(
     status: "in_progress" | "closed",

@@ -1939,6 +1939,38 @@ h3 {
   color: #6f858b;
   font-size: 10px;
 }
+.grouping-live-counter {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid rgba(94, 192, 237, 0.28);
+  border-radius: 999px;
+  color: var(--ixc-accent, #168f89) !important;
+  background: var(--ixc-accent-soft, #eefafa);
+  font-size: 10px !important;
+  font-weight: 800;
+}
+.grouping-live-counter strong {
+  color: inherit !important;
+}
+.grouping-live-counter.new,
+.grouping-live-counter.increase {
+  color: #178d88 !important;
+  border-color: rgba(23, 141, 136, 0.3);
+  background: rgba(23, 141, 136, 0.1);
+}
+.grouping-live-counter.decrease {
+  color: #b94d42 !important;
+  border-color: rgba(185, 77, 66, 0.28);
+  background: rgba(185, 77, 66, 0.09);
+}
+.grouping-live-counter.none {
+  color: #71858c !important;
+  border-color: rgba(113, 133, 140, 0.22);
+  background: rgba(113, 133, 140, 0.08);
+}
 .noc-ticket-counter {
   display: inline-flex;
   min-height: 34px;

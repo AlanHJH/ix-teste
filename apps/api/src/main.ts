@@ -7,6 +7,8 @@ import { McpGatewayService } from "./mcp-gateway.service";
 import { configureOpenApi } from "./openapi";
 import { OpenApiResponseValidationInterceptor } from "./contracts/openapi-response-validation.interceptor";
 import { InvestigationSchedulerService } from "./investigations/investigation-scheduler.service";
+import { ScreenUpdateInterceptor } from "./realtime/screen-update.interceptor";
+import { ScreenUpdatesService } from "./realtime/screen-updates.service";
 
 type Next = (error?: unknown) => void;
 
@@ -34,7 +36,9 @@ async function bootstrap(): Promise<void> {
   });
   app.setGlobalPrefix("api", { exclude: ["health"] });
   const openApiDocument = configureOpenApi(app);
+  const screenUpdates = app.get(ScreenUpdatesService);
   app.useGlobalInterceptors(
+    new ScreenUpdateInterceptor(screenUpdates),
     new OpenApiResponseValidationInterceptor(openApiDocument),
   );
   await app.listen(Number(process.env.PORT ?? 3000), "0.0.0.0");

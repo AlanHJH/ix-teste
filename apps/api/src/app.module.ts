@@ -14,6 +14,7 @@ import { OperationsModule } from "./operations/operations.module";
 import { SystemModule } from "./system/system.module";
 import { TelemetryModule } from "./telemetry/telemetry.module";
 import { TicketsModule } from "./tickets/tickets.module";
+import { RealtimeModule } from "./realtime/realtime.module";
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { TicketsModule } from "./tickets/tickets.module";
     InvestigationsModule,
     DashboardModule,
     McpModule,
+    RealtimeModule,
   ],
 })
 export class AppModule {}

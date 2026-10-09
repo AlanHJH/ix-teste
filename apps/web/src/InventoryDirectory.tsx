@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, MapPin, Server } from "lucide-react";
 import { api } from "./api";
+import { useScreenDataUpdates } from "./realtime";
 import { HelpTooltip } from "./HelpTooltip";
 import {
   InventoryContextModal,
@@ -50,6 +51,11 @@ export function InventoryDirectory({
   onOpenSupport: (customerId: string) => void;
   canOpenSupport: boolean;
 }) {
+  const screenUpdateRevision = useScreenDataUpdates([
+    "inventory",
+    "network",
+    "customers",
+  ]);
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [status, setStatus] = useState<InventoryStatus>("active");
@@ -68,7 +74,7 @@ export function InventoryDirectory({
 
   useEffect(() => {
     void load();
-  }, [submittedQuery, page, status, filters, sort]);
+  }, [submittedQuery, page, status, filters, sort, screenUpdateRevision]);
 
   useEffect(() => {
     api
@@ -81,7 +87,7 @@ export function InventoryDirectory({
             : "Não foi possível carregar as OLTs",
         ),
       );
-  }, []);
+  }, [screenUpdateRevision]);
 
   async function load() {
     setLoading(true);

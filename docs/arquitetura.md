@@ -22,6 +22,8 @@ O dashboard usa IA no plano de apresentação, não no transporte contínuo dos 
 4. o frontend busca os valores reais por REST em `/api/network/overview`, `/api/incidents` e `/api/tickets/noc-queue`;
 5. o layout é reutilizado durante o dia e os dados são renovados no intervalo definido, sem nova chamada ao modelo.
 
+Para atualização entre telas, o backend publica em `/socket.io` somente um evento autenticado de invalidação depois de uma mutação REST concluída. O navegador reage fazendo novas leituras `GET` REST; Socket.IO não grava dados e não substitui os contratos de escrita REST.
+
 Essa separação evita transformar telemetria, tickets ou listas de clientes em tokens. O Swagger UI em `/api/docs` atende pessoas, enquanto `/api/openapi.json` é o contrato canônico consumível pelo editor e por geradores. Também reduz a superfície para alucinação: o modelo não escreve números e não cria uma URL arbitrária; ele escolhe apenas bindings compatíveis validados pelo backend. Uma nova chamada OpenAI ocorre somente quando o usuário pede outra composição. Sem chave configurada, o backend retorna uma composição determinística identificada como demonstração, sem simular uso de IA.
 
 ## Protótipo entregue

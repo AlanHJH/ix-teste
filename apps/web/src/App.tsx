@@ -50,6 +50,7 @@ import { OfflineDiagnosis } from "./OfflineDiagnosis";
 import { CustomersDirectory } from "./CustomersDirectory";
 import { PhysicalTopology } from "./PhysicalTopology";
 import { topologyFocusFromSupport } from "./topologyFocus";
+import { connectScreenUpdates, useScreenDataUpdates } from "./realtime";
 import ixcLogo from "./assets/ixc-logo.svg";
 import {
   fieldWorkLayerLabels,
@@ -292,6 +293,12 @@ function SupportDesk({
   operatorName?: string;
 }) {
   const agentPolicy = useAgentPolicy();
+  const screenUpdateRevision = useScreenDataUpdates([
+    "tickets",
+    "customers",
+    "incidents",
+    "network",
+  ]);
   const showN1Advisor = n1GuidanceEnabled(agentPolicy);
   const [query, setQuery] = useState("");
   const [profile, setProfile] = useState<SupportProfile | null>(null);
@@ -383,6 +390,10 @@ function SupportDesk({
   useEffect(() => {
     if (initialCustomer) void load(initialCustomer);
   }, [initialCustomer]);
+
+  useEffect(() => {
+    if (query.trim()) void load(query);
+  }, [screenUpdateRevision]);
 
   useEffect(() => {
     if (operatorName) {
@@ -1233,6 +1244,24 @@ function OperationsApp({
   onLogout: () => void;
 }) {
   const agentPolicy = useAgentPolicy();
+  const screenUpdateRevision = useScreenDataUpdates([
+    "tickets",
+    "network",
+    "customers",
+    "inventory",
+    "diagnostics",
+    "telemetry",
+    "incidents",
+    "investigations",
+    "operations",
+  ]);
+  useEffect(() => {
+    return connectScreenUpdates((update) => {
+      window.dispatchEvent(
+        new CustomEvent("ondaluz:screen-data-updated", { detail: update }),
+      );
+    });
+  }, []);
   const [view, setView] = useState<View>(() => defaultViewFor(user.role));
   const assistantEnabled = globalAssistantEnabled(agentPolicy);
   const showGlobalAssistant = view === "noc" && assistantEnabled;
@@ -1291,7 +1320,7 @@ function OperationsApp({
       .catch((reason) =>
         setError(reason instanceof Error ? reason.message : "Erro ao carregar"),
       );
-  }, []);
+  }, [screenUpdateRevision]);
 
   async function refreshNocTicketCount() {
     if (!canAccessView(user.role, "noc")) return;
@@ -1311,6 +1340,10 @@ function OperationsApp({
     );
     return () => window.clearInterval(timer);
   }, [user.role]);
+
+  useEffect(() => {
+    if (screenUpdateRevision > 0) void refreshNocTicketCount();
+  }, [screenUpdateRevision, user.role]);
 
   function openNocTickets() {
     setTicketPreset({

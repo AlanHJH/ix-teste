@@ -11,6 +11,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { api } from "./api";
+import { useScreenDataUpdates } from "./realtime";
 import { DateRangeFilter, type DateRange } from "./DateRangeFilter";
 import { HelpTooltip } from "./HelpTooltip";
 import { OpenIrisChatButton } from "./OpenIrisChatButton";
@@ -86,6 +87,11 @@ export function SupportTickets({
   onOpenAssistant?: (context: IrisContext) => void;
   preset?: { key: number; filters: TicketFilter[] } | null;
 }) {
+  const screenUpdateRevision = useScreenDataUpdates([
+    "tickets",
+    "customers",
+    "inventory",
+  ]);
   const [filters, setFilters] = useState<TicketFilter[]>([]);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<TicketSort>("opened_at_desc");
@@ -124,7 +130,7 @@ export function SupportTickets({
     return () => {
       canceled = true;
     };
-  }, [page, filters, sort, range]);
+  }, [page, filters, sort, range, screenUpdateRevision]);
 
   useEffect(() => {
     if (!preset) {

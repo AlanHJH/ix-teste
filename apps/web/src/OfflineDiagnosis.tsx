@@ -11,6 +11,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { api } from "./api";
+import { useScreenDataUpdates } from "./realtime";
 import { n1GuidanceEnabled, useAgentPolicy } from "./agentPolicy";
 import { N1AdvisorChat } from "./N1AdvisorChat";
 import type { SupportProfile } from "./types";
@@ -30,6 +31,12 @@ export function OfflineDiagnosis({
   onOpenSupport,
 }: Props) {
   const policy = useAgentPolicy();
+  const screenUpdateRevision = useScreenDataUpdates([
+    "customers",
+    "tickets",
+    "incidents",
+    "network",
+  ]);
   const [profile, setProfile] = useState<SupportProfile | null>(null);
   const [loading, setLoading] = useState(Boolean(customerId));
   const [error, setError] = useState("");
@@ -66,7 +73,7 @@ export function OfflineDiagnosis({
     return () => {
       cancelled = true;
     };
-  }, [customerId]);
+  }, [customerId, screenUpdateRevision]);
 
   const analysisStatus = profile
     ? profile.activeIncidents.length > 0

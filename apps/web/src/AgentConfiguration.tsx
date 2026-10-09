@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { api } from "./api";
+import { useScreenDataUpdates } from "./realtime";
 import { HelpTooltip } from "./HelpTooltip";
 import {
   loadAgentPolicy,
@@ -177,6 +178,10 @@ function formatConfidence(value: number) {
 }
 
 export function AgentConfiguration() {
+  const screenUpdateRevision = useScreenDataUpdates([
+    "tickets",
+    "investigations",
+  ]);
   const [capabilities, setCapabilities] = useState(defaultCapabilities);
   const [resources, setResources] = useState(defaultResources);
   const [feedback, setFeedback] = useState("");
@@ -210,6 +215,10 @@ export function AgentConfiguration() {
     }
     void refreshRuntime();
   }, []);
+
+  useEffect(() => {
+    if (screenUpdateRevision > 0) void refreshRuntime();
+  }, [screenUpdateRevision]);
 
   useEffect(() => {
     if (skipRetrySearchRef.current) {

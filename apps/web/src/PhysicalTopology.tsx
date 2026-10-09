@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { api } from "./api";
+import { useScreenDataUpdates } from "./realtime";
 import { NetworkEntityModal } from "./NetworkEntityModal";
 import type { NetworkEntity } from "./NetworkEntityModal";
 import { NetworkExplorerGraph } from "./NetworkExplorerGraph";
@@ -250,6 +251,12 @@ export function PhysicalTopology({
   onClose?: () => void;
   onOpenNoc?: () => void;
 }) {
+  const screenUpdateRevision = useScreenDataUpdates([
+    "network",
+    "inventory",
+    "diagnostics",
+    "investigations",
+  ]);
   const [topology, setTopology] = useState<TopologySnapshot | null>(null);
   const [selectedOlt, setSelectedOlt] = useState("");
   const [selectedPon, setSelectedPon] = useState("");
@@ -508,6 +515,11 @@ export function PhysicalTopology({
       setRefreshing(false);
     }
   }
+
+  useEffect(() => {
+    if (!screenUpdateRevision) return;
+    void refreshCurrentBranch();
+  }, [screenUpdateRevision]);
 
   const directChildren = modalEntity
     ? modalEntity.kind === "olt"

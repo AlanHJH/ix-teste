@@ -122,6 +122,8 @@ O PostgreSQL guarda os dados do protótipo e produz uma visão materializada di�
 
 A aplicação NestJS publica REST e MCP na mesma porta e compartilha o mesmo pool PostgreSQL. Os seis domínios de dados MCP permanecem somente leitura; o domínio `application` espelha as jornadas REST, inclusive mutações validadas. O agente de investigação carrega apenas uma allowlist de consultas e não recebe essas ferramentas de escrita. Consulte o [contrato e as instruções de conexão](docs/mcp.md). A interface usa JWT para proteger as rotas REST operacionais e continua destinada ao ambiente local do protótipo.
 
+As telas autenticadas também mantêm uma conexão Socket.IO para receber somente eventos de invalidação após uma mutação REST bem-sucedida. O evento não carrega a gravação nem aceita comandos: a tela faz um novo `GET` REST para buscar os dados atualizados. O endpoint de socket é `/socket.io` e exige o mesmo JWT da sessão.
+
 A documentação REST é publicada em três formatos sincronizados: Swagger UI em [`/api/docs`](http://localhost:8080/api/docs), OpenAPI JSON em [`/api/openapi.json`](http://localhost:8080/api/openapi.json) e OpenAPI YAML em [`/api/openapi.yaml`](http://localhost:8080/api/openapi.yaml). O bridge [`/mcp/openapi`](http://localhost:8080/mcp/openapi) transforma automaticamente cada `operationId` desse contrato em uma ferramenta MCP e publica um recurso compacto apenas com as rotas permitidas ao dashboard. Descrições, parâmetros, corpos e validações continuam declarados no controller, junto do endpoint correspondente, evitando uma segunda fonte de verdade.
 
 Principais rotas:

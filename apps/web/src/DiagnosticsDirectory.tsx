@@ -9,6 +9,7 @@ import {
   Wifi,
 } from "lucide-react";
 import { api } from "./api";
+import { useScreenDataUpdates } from "./realtime";
 import { DateRangeFilter, type DateRange } from "./DateRangeFilter";
 import { DiagnosticFilterSelect } from "./DiagnosticFilterSelect";
 import { HelpTooltip } from "./HelpTooltip";
@@ -69,6 +70,11 @@ function Metric({
 }
 
 export function DiagnosticsDirectory() {
+  const screenUpdateRevision = useScreenDataUpdates([
+    "diagnostics",
+    "inventory",
+    "network",
+  ]);
   const [filters, setFilters] = useState<DiagnosticFilter[]>([]);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<DiagnosticSort>("ts_desc");
@@ -106,7 +112,7 @@ export function DiagnosticsDirectory() {
     return () => {
       canceled = true;
     };
-  }, [page, filters, sort, range]);
+  }, [page, filters, sort, range, screenUpdateRevision]);
 
   async function openEquipment(serial: string) {
     const request = ++equipmentRequest.current;
