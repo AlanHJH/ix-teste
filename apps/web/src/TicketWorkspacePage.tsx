@@ -25,6 +25,7 @@ import type {
   IrisContext,
   SupportProfile,
   SupportTicket,
+  TicketTriageRun,
   TicketFilter,
 } from "./types";
 
@@ -165,6 +166,7 @@ export function TicketWorkspacePage({
   const [profile, setProfile] = useState<SupportProfile | null>(null);
   const [customer, setCustomer] = useState<CustomerDetail | null>(null);
   const [allTickets, setAllTickets] = useState<SupportTicket[]>([]);
+  const [triageRuns, setTriageRuns] = useState<TicketTriageRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -177,19 +179,30 @@ export function TicketWorkspacePage({
     setProfile(null);
     setCustomer(null);
     setAllTickets([]);
+    setTriageRuns([]);
     void Promise.all([
       api.support(ticket.customer_id),
       api.customer(ticket.customer_id),
       loadAllCustomerTickets(ticket.customer_id),
       api.ticket(ticket.ticket_id),
+      api.ticketTriage(ticket.ticket_id),
     ])
-      .then(([nextProfile, nextCustomer, nextTickets, detailedTicket]) => {
-        if (canceled) return;
-        setProfile(nextProfile);
-        setCustomer(nextCustomer);
-        setAllTickets(nextTickets);
-        setCurrentTicket(detailedTicket);
-      })
+      .then(
+        ([
+          nextProfile,
+          nextCustomer,
+          nextTickets,
+          detailedTicket,
+          nextTriageRuns,
+        ]) => {
+          if (canceled) return;
+          setProfile(nextProfile);
+          setCustomer(nextCustomer);
+          setAllTickets(nextTickets);
+          setCurrentTicket(detailedTicket);
+          setTriageRuns(nextTriageRuns);
+        },
+      )
       .catch((reason) => {
         if (!canceled) {
           setError(
@@ -516,6 +529,80 @@ export function TicketWorkspacePage({
               </ol>
             </aside>
           </section>
+
+          {currentTicket.ai_triage_status !== "unprocessed" && (
+            <section className="ticket-workspace-section ticket-workspace-ai-triage">
+              <header className="ticket-workspace-section-heading">
+                <div>
+                  <span className="section-label">Triagem automática</span>
+                  <h2>Leitura do atendimento e separação N1/NOC</h2>
+                </div>
+                <ShieldCheck size={21} />
+              </header>
+              <div className="ticket-workspace-ai-summary">
+                <div>
+                  <span>Status da análise</span>
+                  <strong>
+                    {currentTicket.ai_triage_status === "completed"
+                      ? "Concluída"
+                      : currentTicket.ai_triage_status === "needs_review"
+                        ? "Aguardando revisão humana"
+                        : currentTicket.ai_triage_status === "failed"
+                          ? "Falhou"
+                          : "Em análise"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Categoria do atendimento</span>
+                  <strong>
+                    {currentTicket.ai_triage_category ??
+                      "Ainda não classificada"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Destino operacional</span>
+                  <strong>
+                    {triageRuns[0]?.case_scope === "shared" ||
+                    triageRuns[0]?.noc_candidate
+                      ? "Candidato a problema NOC"
+                      : "Atendimento individual N1"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Confiança</span>
+                  <strong>
+                    {currentTicket.ai_triage_confidence == null
+                      ? "Não informada"
+                      : `${Math.round(currentTicket.ai_triage_confidence * 100)}%`}
+                  </strong>
+                </div>
+              </div>
+              {currentTicket.ai_triage_reason && (
+                <p className="ticket-workspace-ai-reason">
+                  {currentTicket.ai_triage_reason}
+                </p>
+              )}
+              {triageRuns[0]?.noc_reason && (
+                <p className="ticket-workspace-ai-noc-reason">
+                  <strong>Leitura para o NOC:</strong>{" "}
+                  {triageRuns[0].noc_reason}
+                </p>
+              )}
+              {triageRuns[0]?.evidence?.length > 0 && (
+                <ul className="ticket-workspace-ai-evidence">
+                  {triageRuns[0].evidence.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              )}
+              <p className="ticket-workspace-ai-footnote">
+                O ticket continua sendo do atendimento N1. Quando houver
+                evidência compartilhada, ele apenas entra na fila do NOC; a
+                confirmação do incidente e o agrupamento de outros tickets são
+                decisões do NOC.
+              </p>
+            </section>
+          )}
 
           <section className="ticket-workspace-section">
             <header className="ticket-workspace-section-heading">

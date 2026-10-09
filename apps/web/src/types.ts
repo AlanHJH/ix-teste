@@ -512,11 +512,56 @@ export type SupportTicket = {
   source_payload?: Record<string, unknown>;
   noc_status:
     "not_applicable" | "pending" | "in_progress" | "linked" | "closed";
+  ai_triage_status:
+    "unprocessed" | "running" | "completed" | "needs_review" | "failed";
+  ai_triage_run_id: string | null;
+  ai_triage_category: string | null;
+  ai_triage_confidence: number | null;
+  ai_triage_action: string | null;
+  ai_triage_reason: string | null;
+  ai_triage_review_required: boolean;
+  ai_triage_at: string | null;
   city: string | null;
   neighborhood: string | null;
   olt: string | null;
   pon: string | null;
   cto: string | null;
+};
+
+export type TicketTriageRun = {
+  triage_id: string;
+  ticket_id: string;
+  status: "running" | "completed" | "needs_review" | "failed";
+  observed_category: string;
+  suggested_category: string | null;
+  category_correct: boolean | null;
+  confidence: number | null;
+  action: string;
+  reason: string;
+  case_scope: "individual" | "shared" | "uncertain";
+  noc_candidate: boolean;
+  noc_reason: string | null;
+  evidence: string[];
+  input_snapshot: Record<string, unknown>;
+  decision: Record<string, unknown> | null;
+  model: string | null;
+  response_id: string | null;
+  action_applied: string;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
+export type TicketTriageConfig = {
+  openaiConfigured: boolean;
+  model: string;
+  scheduleEnabled: boolean;
+  intervalMs: number;
+  batchSize: number;
+  minConfidence: number;
+  autoClose: boolean;
+  automaticActions: string[];
+  humanReviewActions: string[];
 };
 
 export type TicketFilterKind =

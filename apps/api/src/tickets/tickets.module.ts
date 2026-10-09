@@ -5,6 +5,9 @@ import { TICKETS_REPOSITORY } from "./application/ticket-repository";
 import { TicketsController } from "./tickets.controller";
 import { TicketsService } from "./tickets.service";
 import { PostgresTicketsRepository } from "./infrastructure/postgres-tickets.repository";
+import { TicketTriageAgent } from "./ticket-triage-agent";
+import { TicketTriageSchedulerService } from "./ticket-triage-scheduler.service";
+import { TicketTriageService } from "./ticket-triage.service";
 
 /**
  * Bounded context piloto: Atendimento/Tickets.
@@ -24,7 +27,10 @@ import { PostgresTicketsRepository } from "./infrastructure/postgres-tickets.rep
       useFactory: (database: DatabaseService) =>
         new PostgresTicketsRepository(database),
     },
+    TicketTriageAgent,
+    TicketTriageService,
+    TicketTriageSchedulerService,
   ],
-  exports: [TicketsService],
+  exports: [TicketsService, TicketTriageService],
 })
 export class TicketsModule {}

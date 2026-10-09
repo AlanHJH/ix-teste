@@ -20,7 +20,7 @@ import {
   resetAgentPolicy,
   saveAgentPolicy,
 } from "./agentPolicy";
-import type { AiConfigurationSnapshot } from "./types";
+import type { AiConfigurationSnapshot, TicketTriageConfig } from "./types";
 
 type ConfigurationOption = {
   id: string;
@@ -180,6 +180,9 @@ export function AgentConfiguration() {
   const [snapshot, setSnapshot] = useState<AiConfigurationSnapshot | null>(
     null,
   );
+  const [triageConfig, setTriageConfig] = useState<TicketTriageConfig | null>(
+    null,
+  );
   const [runtimeError, setRuntimeError] = useState("");
   const [refreshing, setRefreshing] = useState(true);
 
@@ -198,8 +201,12 @@ export function AgentConfiguration() {
     setRefreshing(true);
     setRuntimeError("");
     try {
-      const current = await api.aiConfiguration();
+      const [current, currentTriage] = await Promise.all([
+        api.aiConfiguration(),
+        api.ticketTriageConfig(),
+      ]);
       setSnapshot(current);
+      setTriageConfig(currentTriage);
       setResources((resourcesValue) =>
         effectiveResourceOptions(
           current.runtime.mcpPolicy.domains,
@@ -502,6 +509,67 @@ export function AgentConfiguration() {
               </span>
             ))}
           </div>
+        </section>
+
+        <section className="panel agent-settings-runtime-card">
+          <header className="agent-settings-card-heading">
+            <div>
+              <span className="section-label">Atendimento N1</span>
+              <h2>Triagem recorrente de tickets</h2>
+            </div>
+            <History size={23} />
+          </header>
+          {triageConfig ? (
+            <>
+              <div className="agent-settings-runtime-status">
+                <span
+                  className={
+                    triageConfig.openaiConfigured &&
+                    triageConfig.scheduleEnabled
+                      ? "ready"
+                      : "warning"
+                  }
+                >
+                  {triageConfig.scheduleEnabled
+                    ? triageConfig.openaiConfigured
+                      ? "Triagem ativa"
+                      : "Aguardando chave OpenAI"
+                    : "Triagem pausada"}
+                </span>
+                <code>{triageConfig.model}</code>
+              </div>
+              <dl className="agent-settings-runtime-facts">
+                <div>
+                  <dt>Frequência</dt>
+                  <dd>{Math.round(triageConfig.intervalMs / 60_000)} min</dd>
+                </div>
+                <div>
+                  <dt>Lote por ciclo</dt>
+                  <dd>{triageConfig.batchSize} tickets</dd>
+                </div>
+                <div>
+                  <dt>Confiança mínima</dt>
+                  <dd>{formatConfidence(triageConfig.minConfidence)}</dd>
+                </div>
+                <div>
+                  <dt>Encerramento automático</dt>
+                  <dd>{triageConfig.autoClose ? "Ativo" : "Bloqueado"}</dd>
+                </div>
+              </dl>
+              <div className="agent-settings-runtime-flags">
+                <span>
+                  Ações automáticas: {triageConfig.automaticActions.join(" · ")}
+                </span>
+                <span>
+                  Revisão humana: {triageConfig.humanReviewActions.join(" · ")}
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="agent-settings-runtime-loading">
+              <RefreshCw size={17} /> Consultando a triagem de tickets…
+            </div>
+          )}
         </section>
       </div>
 

@@ -269,6 +269,74 @@
 .ticket-workspace-section {
   padding: 21px;
 }
+.ticket-workspace-ai-triage {
+  border-color: #c9e0dd;
+  background: linear-gradient(135deg, #fbfefe, #f2faf8);
+}
+.ticket-workspace-ai-triage .ticket-workspace-section-heading {
+  margin-bottom: 16px;
+}
+.ticket-workspace-ai-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+.ticket-workspace-ai-summary > div {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid #d7e8e5;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+}
+.ticket-workspace-ai-summary span,
+.ticket-workspace-ai-summary strong {
+  display: block;
+}
+.ticket-workspace-ai-summary span {
+  color: #71878d;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.ticket-workspace-ai-summary strong {
+  margin-top: 5px;
+  overflow: hidden;
+  color: #284c55;
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ticket-workspace-ai-reason,
+.ticket-workspace-ai-noc-reason,
+.ticket-workspace-ai-footnote {
+  margin: 14px 0 0;
+  color: #46656c;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.ticket-workspace-ai-noc-reason {
+  padding: 11px 13px;
+  border-left: 3px solid #d9a04d;
+  border-radius: 0 9px 9px 0;
+  background: #fff8ef;
+}
+.ticket-workspace-ai-evidence {
+  display: grid;
+  gap: 6px;
+  margin: 13px 0 0;
+  padding-left: 20px;
+  color: #46656c;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.ticket-workspace-ai-footnote {
+  padding-top: 12px;
+  border-top: 1px solid #dcebea;
+  color: #71878d;
+  font-size: 10px;
+}
 .ticket-workspace-section-heading {
   justify-content: space-between;
   gap: 16px;
@@ -657,6 +725,9 @@
   .ticket-workspace-equipment-list article {
     grid-template-columns: 30px minmax(0, 1fr) minmax(160px, 0.7fr) auto;
   }
+  .ticket-workspace-ai-summary {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 @media (max-width: 700px) {
   .ticket-workspace-toolbar {
@@ -695,5 +766,8 @@
   .ticket-workspace-equipment-status {
     grid-column: 3;
     grid-row: 1;
+  }
+  .ticket-workspace-ai-summary {
+    grid-template-columns: 1fr;
   }
 }

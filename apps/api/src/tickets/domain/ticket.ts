@@ -34,6 +34,15 @@ export type TicketRow = {
   related_problem_id: string | null;
   noc_status: TicketNocStatus;
   source_payload?: Record<string, unknown>;
+  ai_triage_status:
+    "unprocessed" | "running" | "completed" | "needs_review" | "failed";
+  ai_triage_run_id: string | null;
+  ai_triage_category: string | null;
+  ai_triage_confidence: number | null;
+  ai_triage_action: string | null;
+  ai_triage_reason: string | null;
+  ai_triage_review_required: boolean;
+  ai_triage_at: string | null;
   city: string | null;
   neighborhood: string | null;
   olt: string | null;

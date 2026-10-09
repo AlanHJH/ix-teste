@@ -1,2 +1,2 @@
 export const datasetResetSql =
-  "TRUNCATE operational_incidents, inventory, tickets, diagnostics, informs";
+  "TRUNCATE ticket_ai_triage_runs, operational_incidents, inventory, tickets, diagnostics, informs";

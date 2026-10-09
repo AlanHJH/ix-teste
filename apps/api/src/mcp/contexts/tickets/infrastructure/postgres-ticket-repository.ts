@@ -8,6 +8,9 @@ const ticketColumns = `
   round(extract(epoch FROM (t.closed_at - t.opened_at)) / 60)::int AS handling_minutes,
   t.source, t.opened_by, t.related_problem_id, t.noc_status,
   t.source_payload,
+  t.ai_triage_status, t.ai_triage_run_id, t.ai_triage_category,
+  t.ai_triage_confidence, t.ai_triage_action, t.ai_triage_reason,
+  t.ai_triage_review_required, t.ai_triage_at::text,
   equipment.serial, equipment.olt, equipment.pon_port, equipment.cto,
   equipment.city, equipment.neighborhood`;
 

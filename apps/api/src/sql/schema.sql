@@ -105,6 +105,23 @@ ALTER TABLE tickets
     CHECK (noc_status IN ('not_applicable', 'pending', 'in_progress', 'linked', 'closed'));
 
 ALTER TABLE tickets
+  ADD COLUMN IF NOT EXISTS ai_triage_status text NOT NULL DEFAULT 'unprocessed',
+  ADD COLUMN IF NOT EXISTS ai_triage_run_id text,
+  ADD COLUMN IF NOT EXISTS ai_triage_category text,
+  ADD COLUMN IF NOT EXISTS ai_triage_confidence double precision,
+  ADD COLUMN IF NOT EXISTS ai_triage_action text,
+  ADD COLUMN IF NOT EXISTS ai_triage_reason text,
+  ADD COLUMN IF NOT EXISTS ai_triage_review_required boolean NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS ai_triage_at timestamptz;
+
+ALTER TABLE tickets
+  DROP CONSTRAINT IF EXISTS tickets_ai_triage_status_check;
+
+ALTER TABLE tickets
+  ADD CONSTRAINT tickets_ai_triage_status_check
+  CHECK (ai_triage_status IN ('unprocessed', 'running', 'completed', 'needs_review', 'failed'));
+
+ALTER TABLE tickets
   DROP CONSTRAINT IF EXISTS tickets_noc_status_check;
 
 ALTER TABLE tickets
@@ -142,6 +159,37 @@ CREATE INDEX IF NOT EXISTS tickets_related_problem_idx
 CREATE INDEX IF NOT EXISTS tickets_noc_status_opened_idx
   ON tickets (noc_status, opened_at ASC)
   WHERE source='n1' AND resolution='Escalado para NOC';
+
+CREATE INDEX IF NOT EXISTS tickets_ai_triage_queue_idx
+  ON tickets (ai_triage_status, opened_at ASC)
+  WHERE source='n1';
+
+CREATE TABLE IF NOT EXISTS ticket_ai_triage_runs (
+  triage_id text PRIMARY KEY,
+  ticket_id text NOT NULL REFERENCES tickets(ticket_id) ON DELETE CASCADE,
+  status text NOT NULL CHECK (status IN ('running', 'completed', 'needs_review', 'failed')),
+  observed_category text NOT NULL,
+  suggested_category text,
+  category_correct boolean,
+  confidence double precision,
+  action text NOT NULL CHECK (action IN ('keep_category', 'reclassify', 'escalate_noc', 'schedule_visit', 'close', 'review')),
+  reason text NOT NULL,
+  case_scope text NOT NULL DEFAULT 'uncertain' CHECK (case_scope IN ('individual', 'shared', 'uncertain')),
+  noc_candidate boolean NOT NULL DEFAULT false,
+  noc_reason text,
+  evidence jsonb NOT NULL DEFAULT '[]'::jsonb,
+  input_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
+  decision jsonb,
+  model text,
+  response_id text,
+  action_applied text NOT NULL DEFAULT 'none',
+  error text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS ticket_ai_triage_runs_ticket_created_idx
+  ON ticket_ai_triage_runs (ticket_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS diagnostics (
   ts timestamptz NOT NULL,

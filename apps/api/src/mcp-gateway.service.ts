@@ -12,6 +12,7 @@ import { DashboardService } from "./dashboard/dashboard.service";
 import { paginate } from "./pagination";
 import { CreateIncidentInput } from "./incidents/incidents.service";
 import { OpenApiCatalogService } from "./openapi-catalog.service";
+import { TicketTriageService } from "./tickets/ticket-triage.service";
 
 @Injectable()
 export class McpGatewayService implements OnModuleDestroy {
@@ -23,6 +24,7 @@ export class McpGatewayService implements OnModuleDestroy {
     customers: CustomersService,
     n1Advisor: N1AdvisorService,
     tickets: TicketsService,
+    ticketTriage: TicketTriageService,
     incidents: IncidentsService,
     investigations: InvestigationsService,
     dashboard: DashboardService,
@@ -129,6 +131,8 @@ export class McpGatewayService implements OnModuleDestroy {
           n1Advisor.chat(input.customerId, input.message, input.history),
         nocQueue: (input) =>
           tickets.nocQueue(input.page, input.pageSize, input.sort),
+        ticketTriage: (ticketId) => ticketTriage.listRuns(ticketId),
+        ticketTriageConfig: () => ticketTriage.config(),
         createTicket: (input) => tickets.create(input as never),
         updateTicketStatus: (ticketId, status) =>
           tickets.updateNocStatus(ticketId, status),

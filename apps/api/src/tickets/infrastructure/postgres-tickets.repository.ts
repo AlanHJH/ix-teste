@@ -65,7 +65,9 @@ export class PostgresTicketsRepository implements TicketsRepository {
          CASE WHEN closed_at IS NULL THEN NULL
            ELSE round(extract(epoch FROM (closed_at-opened_at))/60)::int END AS handling_minutes,
          source, opened_by, related_problem_id, noc_status,
-         source_payload,
+         source_payload, ai_triage_status, ai_triage_run_id,
+         ai_triage_category, ai_triage_confidence, ai_triage_action,
+         ai_triage_reason, ai_triage_review_required, ai_triage_at,
          NULL::text AS city, NULL::text AS neighborhood, NULL::text AS olt,
          NULL::text AS pon, NULL::text AS cto`,
       [
@@ -111,8 +113,11 @@ export class PostgresTicketsRepository implements TicketsRepository {
       SELECT t.ticket_id, t.opened_at::text, t.customer_id, t.channel,
         t.category, t.description, t.resolution, t.closed_at::text,
         NULL::int AS handling_minutes, t.source, t.opened_by,
-        t.related_problem_id, t.noc_status,
-        equipment.city, equipment.neighborhood, equipment.olt,
+         t.related_problem_id, t.noc_status, t.source_payload,
+         t.ai_triage_status, t.ai_triage_run_id, t.ai_triage_category,
+         t.ai_triage_confidence, t.ai_triage_action, t.ai_triage_reason,
+         t.ai_triage_review_required, t.ai_triage_at::text,
+         equipment.city, equipment.neighborhood, equipment.olt,
         equipment.pon_port AS pon, equipment.cto
       FROM tickets t
       LEFT JOIN LATERAL (
@@ -145,7 +150,9 @@ export class PostgresTicketsRepository implements TicketsRepository {
         t.category, t.description, t.resolution, t.closed_at::text,
         round(extract(epoch FROM (t.closed_at - t.opened_at)) / 60)::int AS handling_minutes,
         t.source, t.opened_by, t.related_problem_id, t.noc_status,
-        t.source_payload,
+        t.source_payload, t.ai_triage_status, t.ai_triage_run_id,
+        t.ai_triage_category, t.ai_triage_confidence, t.ai_triage_action,
+        t.ai_triage_reason, t.ai_triage_review_required, t.ai_triage_at::text,
         equipment.city, equipment.neighborhood, equipment.olt,
         equipment.pon_port AS pon, equipment.cto
        FROM tickets t
@@ -176,8 +183,10 @@ export class PostgresTicketsRepository implements TicketsRepository {
        RETURNING ticket_id, opened_at::text, customer_id, channel, category,
          description, resolution, closed_at::text,
          NULL::int AS handling_minutes, source, opened_by,
-         related_problem_id, noc_status,
-         source_payload,
+         related_problem_id, noc_status, source_payload,
+         ai_triage_status, ai_triage_run_id, ai_triage_category,
+         ai_triage_confidence, ai_triage_action, ai_triage_reason,
+         ai_triage_review_required, ai_triage_at::text,
          NULL::text AS city, NULL::text AS neighborhood,
          NULL::text AS olt, NULL::text AS pon, NULL::text AS cto`,
       [ticketId, status],
@@ -290,6 +299,9 @@ export class PostgresTicketsRepository implements TicketsRepository {
             t.category, t.description, t.resolution, t.closed_at::text,
             round(extract(epoch FROM (t.closed_at - t.opened_at)) / 60)::int AS handling_minutes,
             t.source, t.opened_by, t.related_problem_id, t.noc_status,
+            t.source_payload, t.ai_triage_status, t.ai_triage_run_id,
+            t.ai_triage_category, t.ai_triage_confidence, t.ai_triage_action,
+            t.ai_triage_reason, t.ai_triage_review_required, t.ai_triage_at::text,
             equipment.city, equipment.neighborhood, equipment.olt,
             equipment.pon_port AS pon, equipment.cto
           FROM tickets t

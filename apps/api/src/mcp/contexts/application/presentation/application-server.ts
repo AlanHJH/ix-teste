@@ -63,6 +63,8 @@ export type ApplicationApi = {
     pageSize: number;
     sort: string;
   }): Promise<unknown>;
+  ticketTriage(ticketId: string): Promise<unknown>;
+  ticketTriageConfig(): unknown;
   createTicket(input: Record<string, unknown>): Promise<unknown>;
   updateTicketStatus(
     ticketId: string,
@@ -135,6 +137,8 @@ export function createApplicationServer(api: ApplicationApi): McpServer {
       "customers_list_filter_options",
       "customers_n1_chat",
       "tickets_list_noc_queue",
+      "tickets_get_triage",
+      "tickets_get_triage_config",
       "tickets_create",
       "tickets_update_noc_status",
       "incidents_list_active",
@@ -343,6 +347,26 @@ export function createApplicationServer(api: ApplicationApi): McpServer {
       annotations: readOnlyAnnotations,
     },
     async (input) => mcpJson(await api.nocQueue(input)),
+  );
+  server.registerTool(
+    "tickets_get_triage",
+    {
+      description:
+        "Retorna o histórico da triagem automática de um ticket N1, incluindo categoria sugerida, escopo individual ou compartilhado, confiança e ações aplicadas.",
+      inputSchema: z.object({ ticketId: z.string().min(1).max(120) }),
+      annotations: readOnlyAnnotations,
+    },
+    async ({ ticketId }) => mcpJson(await api.ticketTriage(ticketId)),
+  );
+  server.registerTool(
+    "tickets_get_triage_config",
+    {
+      description:
+        "Retorna a configuração não secreta da triagem automática e separa ações automáticas das que exigem revisão humana.",
+      inputSchema: z.object({}),
+      annotations: readOnlyAnnotations,
+    },
+    async () => mcpJson(await api.ticketTriageConfig()),
   );
   server.registerTool(
     "tickets_create",

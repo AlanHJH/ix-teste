@@ -43,6 +43,14 @@ O agente deve escolher o menor alcance que ainda explique a evidência. Problema
 
 O modelo não recebe ferramentas de escrita. Ele não cria o agrupamento diretamente e não executa reboot, rollback, configuração, visita ou ordem de serviço. Mesmo no modo automático, a criação é uma decisão do backend, com limiar explícito e escopo recalculado no inventário; o modelo apenas devolve a proposta estruturada.
 
+## Triagem recorrente de tickets N1
+
+A triagem de tickets é um fluxo separado do agente que investiga agrupamentos já detectados. O serviço `TicketTriageSchedulerService` executa a cada 15 minutos por padrão e seleciona somente tickets de origem `n1` com estado `unprocessed` ou `failed`. A análise recebe o relato do cliente e o `source_payload` completo, além do equipamento ativo, firmware, revisão, plano, topologia OLT/PON/CTO, métricas diárias, logs de Inform, diagnósticos recentes e os últimos chamados do mesmo cliente.
+
+O modelo precisa decidir entre atendimento individual N1 e candidato compartilhado para o NOC. Um ticket isolado não é incidente: mesmo quando há indício de falha coletiva, a ação automática permitida é apenas corrigir a categoria ou encaminhar o ticket individual para a fila do NOC. O NOC confirma a abrangência e cria ou vincula o agrupamento. Categoria ambígua, baixa confiança, visita técnica e encerramento permanecem em revisão humana; `TICKET_TRIAGE_AUTO_CLOSE=false` é o padrão.
+
+Cada execução é registrada em `ticket_ai_triage_runs` com snapshot de entrada, decisão estruturada, evidências, confiança, modelo, resposta, ação aplicada e erro. O detalhe REST `GET /api/tickets/:ticketId/triage` e as ferramentas MCP `tickets_get_triage` e `tickets_get_triage_config` permitem auditar o caminho sem expor a chave do modelo. A tela do ticket mantém visível o atendimento normal, os dados do equipamento e o histórico; a triagem aparece como contexto adicional, não como substituição do atendente.
+
 ## Configuração local
 
 Copie `.env.example` para `.env`, informe `OPENAI_API_KEY` e reinicie o Compose. As variáveis `AGENT_*` controlam concorrência, raciocínio, número máximo de ferramentas, paginação, contexto e o tempo máximo de cada chamada externa (`AGENT_OPENAI_TIMEOUT_MS`, padrão de 90 segundos). `AGENT_GROUPING_MAX_CANDIDATES` limita quantos candidatos cada varredura pode encaminhar ao agente. `AGENT_AUTO_APPROVE_GROUPINGS` permanece `false` por padrão; quando explicitamente habilitada, `AGENT_AUTO_APPROVE_MIN_CONFIDENCE` controla o limiar. Sem a chave, o atendimento N1 usa a orientação determinística e a fila do NOC não simula uma proposta do modelo. O detector consulta apenas as tabelas já carregadas no banco; não há busca externa de dados operacionais.

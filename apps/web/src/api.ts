@@ -33,6 +33,8 @@ import type {
   TicketPage,
   TicketSort,
   SupportTicket,
+  TicketTriageRun,
+  TicketTriageConfig,
   TopologySnapshot,
   AgentRuntimeConfiguration,
   AiConfigurationSnapshot,
@@ -362,6 +364,13 @@ export const api = {
   },
   ticket: (ticketId: string) =>
     request<SupportTicket>(`/api/tickets/${encodeURIComponent(ticketId)}`),
+  ticketTriage: (ticketId: string) =>
+    request<TicketTriageRun[]>(
+      `/api/tickets/${encodeURIComponent(ticketId)}/triage`,
+      "no-store",
+    ),
+  ticketTriageConfig: () =>
+    request<TicketTriageConfig>("/api/tickets/triage/config", "no-store"),
   createTicket: (input: {
     customerId: string;
     openedBy: string;

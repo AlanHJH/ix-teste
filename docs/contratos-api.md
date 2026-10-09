@@ -114,7 +114,7 @@ Todas as rotas abaixo têm parâmetros, sucesso e erros detalhados no OpenAPI. A
 | Inventário    | `GET /api/inventory`, `/topology`, `/:serial`                                                                                                                                                         |
 | Telemetria    | `GET /api/telemetry/informs`, `/daily-metrics`                                                                                                                                                        |
 | Diagnósticos  | `GET /api/diagnostics`, `/filter-options`                                                                                                                                                             |
-| Chamados      | `GET /api/tickets`, `/filter-options`, `/noc-queue`, `/:ticketId`; `POST /api/tickets`; `PATCH /api/tickets/:ticketId/noc-status`                                                                     |
+| Chamados      | `GET /api/tickets`, `/filter-options`, `/noc-queue`, `/:ticketId`, `/:ticketId/triage`, `/triage/config`; `POST /api/tickets`, `/triage/run`; `PATCH /api/tickets/:ticketId/noc-status`               |
 | Incidentes    | `GET /api/incidents`, `/options`; `POST /api/incidents`; `PATCH /api/incidents/:incidentId/status`                                                                                                    |
 | Operação      | `GET /api/operations/dataset-loads`, `/grouping-candidates`, `/active-groupings`                                                                                                                      |
 | Investigações | `GET /api/investigations`, `/config`; `POST /api/investigations/trigger/metrics`, `/trigger/groupings`, `/trigger/scheduled`, `/trigger/manual`, `/:id/retry`; `PATCH /api/investigations/:id/review` |
@@ -136,7 +136,7 @@ O bridge `/mcp/openapi` transforma cada `operationId` documentado em ferramenta.
 - `diagnostics`: `diagnostics_list`.
 - `tickets`: `tickets_list`, `tickets_get`.
 - `operations`: `operations_list_dataset_loads`, `operations_list_grouping_candidates`, `operations_list_active_groupings`.
-- `application`: saúde, dashboard, topologia, suporte N1, fila NOC, incidentes, agrupamentos detectados e investigações, incluindo as mutações interativas validadas.
+- `application`: saúde, dashboard, topologia, suporte N1, fila NOC, histórico/configuração da triagem automática, incidentes, agrupamentos detectados e investigações, incluindo as mutações interativas validadas.
 - `openapi`: uma ferramenta por `operationId` REST, com o mesmo contrato do OpenAPI.
 
 Recursos MCP publicados incluem `ondaluz://<domain>/about`, recursos de cliente, dispositivo, chamado, suporte, agrupamento, documento OpenAPI e rotas do dashboard. Recursos são leitura; escritas continuam sendo ferramentas explicitamente identificadas.

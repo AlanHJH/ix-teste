@@ -20,6 +20,7 @@ import {
   type TicketFilter,
   type TicketFilterKind,
 } from "./tickets.service";
+import { TicketTriageService } from "./ticket-triage.service";
 import { parsePageQuery } from "../pagination";
 import {
   ApiInvalidRequest,
@@ -99,6 +100,32 @@ const ticketSchema = {
       description:
         "Payload bruto/contextual da origem, disponível no detalhe do chamado.",
     },
+    ai_triage_status: apiString("Estado da triagem automática.", "completed"),
+    ai_triage_run_id: {
+      ...apiString("Identificador da execução de triagem."),
+      nullable: true,
+    },
+    ai_triage_category: {
+      ...apiString("Categoria sugerida pela IA."),
+      nullable: true,
+    },
+    ai_triage_confidence: {
+      ...apiNumber("Confiança da classificação."),
+      nullable: true,
+    },
+    ai_triage_action: {
+      ...apiString("Ação sugerida pela IA."),
+      nullable: true,
+    },
+    ai_triage_reason: {
+      ...apiString("Justificativa da triagem."),
+      nullable: true,
+    },
+    ai_triage_review_required: {
+      type: "boolean",
+      description: "Indica se a revisão humana continua necessária.",
+    },
+    ai_triage_at: { ...apiDateTime("Data da última triagem."), nullable: true },
     olt: apiString("OLT atual do cliente.", "OLT-2"),
     pon: apiString("PON atual.", "1/7"),
     cto: apiString("CTO atual.", "CTO-2-17-03"),
@@ -117,6 +144,14 @@ const ticketSchema = {
     "opened_by",
     "related_problem_id",
     "noc_status",
+    "ai_triage_status",
+    "ai_triage_run_id",
+    "ai_triage_category",
+    "ai_triage_confidence",
+    "ai_triage_action",
+    "ai_triage_reason",
+    "ai_triage_review_required",
+    "ai_triage_at",
     "olt",
     "pon",
     "cto",
@@ -159,7 +194,34 @@ const ticketFilterMetaSchema = {
 @ApiTags("Chamados")
 @Controller("tickets")
 export class TicketsController {
-  constructor(private readonly tickets: TicketsService) {}
+  constructor(
+    private readonly tickets: TicketsService,
+    private readonly triage: TicketTriageService,
+  ) {}
+
+  @ApiRead({
+    summary: "Consultar a configuração da triagem automática",
+    description:
+      "Expõe os parâmetros não secretos da análise recorrente de tickets N1 e as ações que continuam exigindo revisão humana.",
+    responseDescription: "Configuração operacional da triagem.",
+    schema: { type: "object", additionalProperties: true },
+  })
+  @Get("triage/config")
+  triageConfig() {
+    return this.triage.config();
+  }
+
+  @ApiWrite({
+    summary: "Executar a triagem pendente de tickets",
+    description:
+      "Processa tickets N1 ainda não analisados. O mesmo fluxo é executado automaticamente pelo agendamento recorrente.",
+    responseDescription: "Resumo da execução.",
+    schema: { type: "object", additionalProperties: true },
+  })
+  @Post("triage/run")
+  runTriage() {
+    return this.triage.runPending();
+  }
 
   @ApiRead({
     summary: "Listar chamados escalados ao NOC",
@@ -380,6 +442,21 @@ export class TicketsController {
       pagination.sort,
       params.kind as TicketFilterKind | "",
     );
+  }
+
+  @ApiRead({
+    summary: "Consultar histórico de triagem automática do ticket",
+    description:
+      "Retorna as execuções da IA, evidências, confiança e ação aplicada ou enviada para revisão humana.",
+    responseDescription: "Histórico de triagens do ticket.",
+    schema: {
+      type: "array",
+      items: { type: "object", additionalProperties: true },
+    },
+  })
+  @Get(":ticketId/triage")
+  triageRuns(@Param() params: TicketIdParamDto) {
+    return this.triage.listRuns(params.ticketId);
   }
 
   @ApiRead({
