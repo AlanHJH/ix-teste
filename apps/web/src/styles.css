@@ -14721,6 +14721,18 @@ main {
   background: #177966 !important;
 }
 
+/* The N1 result is a layout wrapper; its child cards already provide the
+   visual surfaces and should not sit on a second full-width panel. */
+.support-result {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.support-layout {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 /* Keep browser focus/annotation scrolling from hiding the inventory toolbar. */
 .inventory-panel {
   overflow: clip;
